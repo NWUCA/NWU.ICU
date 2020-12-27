@@ -8,7 +8,6 @@ django = "*"
 pycryptodome = "*"
 requests = "*"
 beautifulsoup4 = "*"
-django-bootstrap4 = "*"
 
 [dev-packages]
 

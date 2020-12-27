@@ -1,18 +1,12 @@
-{% load bootstrap4 %}
+{% extends "base.html" %}
 
-{# Load CSS and JavaScript #}
-{% bootstrap_css %}
-{% bootstrap_javascript jquery='full' %}
-
-{# Display django.contrib.messages as Bootstrap alerts #}
-{% bootstrap_messages %}
-
-{# Display a form #}
-<form action="/url/to/submit/" method="post" class="form">
-  {% csrf_token %}
-  {% buttons %}
-    <button type="submit" class="btn btn-primary">
-      Submit
-    </button>
-  {% endbuttons %}
-</form>
+{%  block content %}
+<div class="card" style="width: 18rem;">
+  <img src="..." class="card-img-top" alt="...">
+  <div class="card-body">
+    <h5 class="card-title">Card title</h5>
+    <p class="card-text">Some quick example text to build on the card title and make up the bulk of the card's content.</p>
+    <a href="#" class="btn btn-primary">Go somewhere</a>
+  </div>
+</div>
+{% endblock %}
