@@ -60,7 +60,7 @@
                     {% if review.anonymous %}
                         <td>匿名</td>
                     {% else %}
-                        <td>{{ review.created_by }}</td>
+                        <td>{{ review.created_by.name }}</td>
                     {% endif %}
                 </tr>
             {% endfor %}

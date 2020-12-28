@@ -10,62 +10,54 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
         body {
-          padding-top: 5rem;
+            padding-top: 5rem;
         }
     </style>
 </head>
 
 <body>
-<div id="sidebar">
-    {% block sidebar %}
-        <nav class="navbar navbar-expand-md navbar-dark bg-dark fixed-top">
-            <div class="container-fluid">
-                <a class="navbar-brand" href="/">西北大学课程评价</a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
-                        data-bs-target="#navbarsExampleDefault" aria-controls="navbarsExampleDefault"
-                        aria-expanded="false" aria-label="Toggle navigation">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
+<div id="navbar">
+    <nav class="navbar navbar-expand-md navbar-dark bg-dark fixed-top">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">西北大学课程评价</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+                    data-bs-target="#navbarsExampleDefault" aria-controls="navbarsExampleDefault"
+                    aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
 
-                <div class="collapse navbar-collapse" id="navbarsExampleDefault">
-                    <ul class="navbar-nav me-auto mb-2 mb-md-0">
-                        <li class="nav-item active">
-                            <a class="nav-link" aria-current="page" href="/">主页</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/course/">添加课程</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/teacher/">添加教师</a>
-                        </li>
-                        <li class="nav-item">
-                            <form class="d-flex">
-                                <input class="form-control me-2" type="search" placeholder="Search" aria-label="Search">
-                                <button class="btn btn-outline-success" type="submit">Search</button>
-                            </form>
-                        </li>
-                    </ul>
-                    {% if user.is_authenticated %}
-                        <label style="color: rgba(255,255,255,.55)">{{ user.name }}, </label>
+            <div class="collapse navbar-collapse" id="navbarsExampleDefault">
+                <ul class="navbar-nav me-auto mb-2 mb-md-0">
+                    <li class="nav-item active">
+                        <a class="nav-link" aria-current="page" href="/">主页</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/course/">添加课程</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/teacher/">添加教师</a>
+                    </li>
+                </ul>
+                {% if user.is_authenticated %}
+                    <label style="color: rgba(255,255,255,.55)">{{ user.name }}, </label>
                     <a class="nav-link" href="/logout/" style="color: rgba(255,255,255,.55)">注销</a>
-                    {% else %}
+                {% else %}
                     <a class="nav-link" href="/login/" style="color: rgba(255,255,255,.55)">登录</a>
                     {#FIXME: 为什么颜色没有继承其他 nav-link?#}
-                    {% endif %}
-                </div>
+                {% endif %}
             </div>
-        </nav>
-    {% endblock %}
+        </div>
+    </nav>
     <div class="container">
         {% block messages %}
             {% if messages %}
                 {% for message in messages %}
                     <div
-                        {% if message.tags == 'error' %} class="alert alert-danger"
-                        {% else %} class="alert alert-success"
-                        {% endif %}
-                        role="alert">
-                      {{ message }}
+                            {% if message.tags == 'error' %} class="alert alert-danger"
+                            {% else %} class="alert alert-success"
+                            {% endif %}
+                                                             role="alert">
+                        {{ message }}
                     </div>
                 {% endfor %}
             {% endif %}
@@ -76,5 +68,19 @@
 <div id="content">
     {% block content %}{% endblock %}
 </div>
+
+
+<footer class="footer mt-auto py-3 bg-light">
+    <div class="container">
+        <div>
+            <span>2020 西北大学计算机学会 Source Code On</span>
+            <a href="https://github.com/NWUCA/course_assessment">Github</a>
+        </div>
+        <div>
+            意见反馈: <a href="mailto:admin@nwu.icu">admin@nwu.icu</a>
+        </div>
+    </div>
+</footer>
+
 </body>
 </html>

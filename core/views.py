@@ -59,7 +59,7 @@ class CourseAddView(View):
 class CourseView(View):
     def get(self, request, course_id):
         context = {
-            'reviews': Review.objects.filter(course_id=course_id),
+            'reviews': Review.objects.filter(course_id=course_id).select_related('created_by'),
             'rating': Review.objects.filter(course_id=course_id).aggregate(Avg('rating'))['rating__avg']
         }
         return render(request, 'course_detail.html', context=context)
