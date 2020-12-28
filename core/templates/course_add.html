@@ -28,7 +28,7 @@
                     <select class="form-select" name="teacher" aria-label="Default select example">
                         <option selected>选择教师</option>
                         {% for teacher in teachers %}
-                            <option value="{{ teacher.id }}">{{ teacher.name }}</option>
+                            <option value="{{ teacher.id }}">{{ teacher.name }}-{{ teacher.school.name }}</option>
                         {% endfor %}
                     </select>
                 </div>
