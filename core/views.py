@@ -3,7 +3,6 @@ from django.views import View
 from django.contrib import messages
 from django.db.models import Avg
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.contrib.auth.decorators import login_required
 
 from core.models import School, Teacher, Course, Review
 
