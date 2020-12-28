@@ -5,7 +5,6 @@ from user.models import User
 class School(models.Model):
     """院系"""
     name = models.TextField(unique=True)
-    created_by = models.ForeignKey(User, on_delete=models.CASCADE)
 
     def __str__(self):
         return self.name
