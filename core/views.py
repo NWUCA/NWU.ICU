@@ -2,11 +2,13 @@ from django.shortcuts import render, redirect
 from django.views import View
 from django.contrib import messages
 from django.db.models import Avg
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.decorators import login_required
 
 from core.models import School, Teacher, Course, Review
 
 
-class Index(View):
+class Index(LoginRequiredMixin, View):
     def get(self, request):
         context = {
             'courses': Course.objects.all()
@@ -18,11 +20,10 @@ class Index(View):
         return redirect('/')
 
 
-class TeacherView(View):
+class TeacherView(LoginRequiredMixin, View):
     def get(self, request):
         return render(request, 'teacher.html', context={'schools': School.objects.all()})
 
-    # TODO: 仅限登录用户
     def post(self, request):
         name = request.POST['name']
         school = request.POST['school']
@@ -31,7 +32,7 @@ class TeacherView(View):
         return redirect('/teacher')
 
 
-class CourseAddView(View):
+class CourseAddView(LoginRequiredMixin, View):
     def get(self, request):
         context = {
             'classification_choices': Course.classification_choices,
@@ -56,7 +57,7 @@ class CourseAddView(View):
         return redirect('/course/')
 
 
-class CourseView(View):
+class CourseView(LoginRequiredMixin, View):
     def get(self, request, course_id):
         context = {
             'reviews': Review.objects.filter(course_id=course_id).select_related('created_by'),
