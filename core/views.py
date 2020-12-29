@@ -2,6 +2,7 @@ from django.shortcuts import render, redirect
 from django.views import View
 from django.contrib import messages
 from django.db.models import Avg
+from django.db import IntegrityError
 from django.contrib.auth.mixins import LoginRequiredMixin
 
 from core.models import School, Teacher, Course, Review
@@ -70,12 +71,15 @@ class CourseView(LoginRequiredMixin, View):
         anonymous = request.POST.get('anonymous', False)
         if anonymous == 'on':
             anonymous = True
-        Review.objects.create(
-            course_id=course_id,
-            content=content,
-            rating=rating,
-            created_by=request.user,
-            anonymous=anonymous
-        )
-        messages.success(request, '添加成功')
+        try:
+            Review.objects.create(
+                course_id=course_id,
+                content=content,
+                rating=rating,
+                created_by=request.user,
+                anonymous=anonymous
+            )
+            messages.success(request, '添加成功')
+        except IntegrityError:
+            messages.error(request, '你已经评价过本课程了')
         return redirect(f'/course/{course_id}/')

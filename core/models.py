@@ -43,3 +43,11 @@ class Review(models.Model):
     rating = models.SmallIntegerField()
     created_by = models.ForeignKey(User, on_delete=models.CASCADE)
     anonymous = models.BooleanField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['course', 'created_by'],
+                name='unique_review'
+            )
+        ]
