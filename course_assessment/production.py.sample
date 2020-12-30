@@ -1,4 +1,4 @@
-from settings import *
+from .settings import *
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'z78br0-l7^vz&ms1ugi(s^ea=-y9-6*wb&^$^my-vig#qj_9v%'
@@ -6,4 +6,6 @@ SECRET_KEY = 'z78br0-l7^vz&ms1ugi(s^ea=-y9-6*wb&^$^my-vig#qj_9v%'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
 
-STATIC_ROOT = '/www/wwwroot/course.nwu.icu/'
+STATIC_ROOT = '/www/wwwroot/course.nwu.icu/static/'
+
+ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
