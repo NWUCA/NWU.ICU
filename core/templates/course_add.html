@@ -1,50 +1,48 @@
 {% extends "base.html" %}
 
 {% block content %}
-    <div class="container">
-        <h2>添加课程</h2>
-        <form method="POST">
-            <div class="mb-3 row">
-                {% csrf_token %}
-                <div class="col-4 mb-3">
-                    <label for="name" class="form-label">课程名称</label>
-                    <input type="text" name="name" id="name" class="form-control">
-                </div>
+<h2>添加课程</h2>
+<form method="POST">
+    <div class="mb-3 row">
+        {% csrf_token %}
+        <div class="col-4 mb-3">
+            <label for="name" class="form-label">课程名称</label>
+            <input type="text" name="name" id="name" class="form-control">
+        </div>
 
-                <div class="w-100"></div>
-                <div class="col-4 mb-3">
-                    <label class="form-label">分类</label>
-                    <select class="form-select" name="classification" aria-label="Default select example">
-                        <option selected>选择分类</option>
-                        {% for v, n in classification_choices %}
-                            <option value="{{ v }}">{{ n }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
+        <div class="w-100"></div>
+        <div class="col-4 mb-3">
+            <label class="form-label">分类</label>
+            <select class="form-select" name="classification" aria-label="Default select example">
+                <option selected>选择分类</option>
+                {% for v, n in classification_choices %}
+                <option value="{{ v }}">{{ n }}</option>
+                {% endfor %}
+            </select>
+        </div>
 
-                <div class="w-100"></div>
-                <div class="col-4 mb-3">
-                    <label class="form-label">教师</label>
-                    <select class="form-select" name="teacher" aria-label="Default select example">
-                        <option selected>选择教师</option>
-                        {% for teacher in teachers %}
-                            <option value="{{ teacher.id }}">{{ teacher.name }}-{{ teacher.school.name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
+        <div class="w-100"></div>
+        <div class="col-4 mb-3">
+            <label class="form-label">教师</label>
+            <select class="form-select" name="teacher" aria-label="Default select example">
+                <option selected>选择教师</option>
+                {% for teacher in teachers %}
+                <option value="{{ teacher.id }}">{{ teacher.name }}-{{ teacher.school.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
 
-                <div class="w-100"></div>
-                <div class="col-4 mb-3">
-                    <label class="form-label">院系</label>
-                    <select class="form-select" name="school" aria-label="Default select example">
-                        <option selected>选择院系</option>
-                        {% for school in schools %}
-                            <option value="{{ school.id }}">{{ school.name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-            </div>
-            <button type="submit" class="btn btn-primary">添加</button>
-        </form>
+        <div class="w-100"></div>
+        <div class="col-4 mb-3">
+            <label class="form-label">院系</label>
+            <select class="form-select" name="school" aria-label="Default select example">
+                <option selected>选择院系</option>
+                {% for school in schools %}
+                <option value="{{ school.id }}">{{ school.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
     </div>
+    <button type="submit" class="btn btn-primary">添加</button>
+</form>
 {% endblock %}

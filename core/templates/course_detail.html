@@ -1,70 +1,63 @@
 {% extends "base.html" %}
 
 {% block content %}
-    <div class="container">
-        <h2>总体评价: {{ rating }}</h2>
-        <div class="row">
-            <h2 class="col">评价列表</h2>
-            <button
-                    type="button"
-                    class="btn btn-primary col-1"
-                    data-bs-toggle="modal"
-                    data-bs-target="#add_review"
-            >
-                新增评价
-            </button>
-        </div>
+<h2>总体评价: {{ rating }}</h2>
+<div class="row">
+    <h2 class="col">评价列表</h2>
+    <button type="button" class="btn btn-primary col-1" data-bs-toggle="modal" data-bs-target="#add_review">
+        新增评价
+    </button>
+</div>
 
-        <div class="modal fade" id="add_review" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="exampleModalLabel">新增评价</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                    </div>
-                    <form method="POST">
-                        <div class="modal-body">
-                            {% csrf_token %}
-                            <label for="content" class="form-label">内容</label>
-                            <textarea class="form-control" id="content" name="content" rows="5"></textarea>
-
-                            <label for="rating" class="form-label mt-2">打分 (最低 1 分, 最高 5 分)</label>
-                            <input type="range" name="rating" class="form-range" value="5" min="1" max="5" id="rating">
-
-                            <input class="form-check-input mt-2" type="checkbox" name="anonymous" id="anonymous">
-                            <label class="form-check-label" for="anonymous">匿名评价</label>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="submit" class="btn btn-primary">提交</button>
-                        </div>
-                    </form>
-                </div>
+<div class="modal fade" id="add_review" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="exampleModalLabel">新增评价</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-        </div>
+            <form method="POST">
+                <div class="modal-body">
+                    {% csrf_token %}
+                    <label for="content" class="form-label">内容</label>
+                    <textarea class="form-control" id="content" name="content" rows="5"></textarea>
 
-        <table class="table table-hover">
-            <thead>
-            <tr>
-                <th scope="col">#</th>
-                <th scope="col">内容</th>
-                <th scope="col">打分</th>
-                <th scope="col">姓名</th>
-            </tr>
-            </thead>
-            <tbody>
-            {% for review in reviews %}
-                <tr>
-                    <th scope="row">{{ review.id }}</th>
-                    <td>{{ review.content }}</td>
-                    <td>{{ review.rating }}</td>
-                    {% if review.anonymous %}
-                        <td>匿名</td>
-                    {% else %}
-                        <td>{{ review.created_by.name }}</td>
-                    {% endif %}
-                </tr>
-            {% endfor %}
-            </tbody>
-        </table>
+                    <label for="rating" class="form-label mt-2">打分 (最低 1 分, 最高 5 分)</label>
+                    <input type="range" name="rating" class="form-range" value="5" min="1" max="5" id="rating">
+
+                    <input class="form-check-input mt-2" type="checkbox" name="anonymous" id="anonymous">
+                    <label class="form-check-label" for="anonymous">匿名评价</label>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-primary">提交</button>
+                </div>
+            </form>
+        </div>
     </div>
+</div>
+
+<table class="table table-hover">
+    <thead>
+        <tr>
+            <th scope="col">#</th>
+            <th scope="col">内容</th>
+            <th scope="col">打分</th>
+            <th scope="col">姓名</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for review in reviews %}
+        <tr>
+            <th scope="row">{{ review.id }}</th>
+            <td>{{ review.content }}</td>
+            <td>{{ review.rating }}</td>
+            {% if review.anonymous %}
+            <td>匿名</td>
+            {% else %}
+            <td>{{ review.created_by.name }}</td>
+            {% endif %}
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
 {% endblock %}
