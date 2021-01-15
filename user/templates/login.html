@@ -4,17 +4,14 @@
 <h2>登录</h2>
 <label class="mb-3">请使用西北大学统一身份认证登录</label>
 <form method="POST">
-    <div class="mb-3 row">
-        {% csrf_token %}
-        <div class="col-4 mb-3">
+    {% csrf_token %}
+    <div class="mb-3">
             <label for="username" class="form-label">用户名</label>
             <input type="text" name="username" id="username" class="form-control">
-        </div>
-        <div class="w-100"></div>
-        <div class="col-4">
+    </div>
+    <div class="mb-3">
             <label for="password" class="form-label">密码</label>
             <input type="password" name="password" id="password" class="form-control">
-        </div>
     </div>
     <div class="form-check mb-3">
         <input class="form-check-input" type="checkbox" value="" id="invalidCheck" required>
