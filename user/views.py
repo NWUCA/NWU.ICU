@@ -99,7 +99,7 @@ def unified_login(username, raw_password):
             return [False, '账号或密码错误', None]
         elif success == -2:
             # print("需要验证码!")
-            return [False, '需要验证码', None]
+            return [False, '需要验证码, 请手动在统一身份认证登录一次', None]
     return [False, '网络错误', None]
 
 
