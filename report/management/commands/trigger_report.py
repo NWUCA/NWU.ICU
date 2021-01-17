@@ -1,4 +1,5 @@
 from concurrent import futures
+from time import sleep, strftime
 
 from django.core.management.base import BaseCommand
 import requests
@@ -15,8 +16,9 @@ class Command(BaseCommand):
         report_list = Report.objects.filter(status=True)
         workers = min(MAX_WORKERS, len(report_list))
         with futures.ThreadPoolExecutor(workers) as executor:
-            res = executor.map(self.do_report, report_list)
-        print(res)
+            results = executor.map(self.do_report, report_list)
+        for i, result in results:
+            print(f"{strftime('[%H:%M:%S]')} result {i}: {result.text}")
 
     def do_report(self, report: Report):
         url = 'https://app.nwu.edu.cn/ncov/wap/open-report/save'
