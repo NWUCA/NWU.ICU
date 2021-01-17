@@ -1,5 +1,5 @@
 from concurrent import futures
-from time import sleep, strftime
+from time import strftime
 
 from django.core.management.base import BaseCommand
 import requests
@@ -17,7 +17,7 @@ class Command(BaseCommand):
         workers = min(MAX_WORKERS, len(report_list))
         with futures.ThreadPoolExecutor(workers) as executor:
             results = executor.map(self.do_report, report_list)
-        for i, result in results:
+        for i, result in enumerate(results):
             print(f"{strftime('[%H:%M:%S]')} result {i}: {result.text}")
 
     def do_report(self, report: Report):
