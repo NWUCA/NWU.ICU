@@ -59,7 +59,9 @@
                         <div class="modal-body">
                             {% csrf_token %}
                             <input type="hidden" name="redirect" value="/report/">
-                            <label for="password" class="form-label">我们需要刷新您在统一身份认证的登录状态, 请输入您的密码以继续</label>
+                            <label for="password" class="form-label">
+                                我们需要刷新您在统一身份认证的登录状态, 请输入您的密码以继续
+                            </label>
                             <input type="password" name="password" class="form-control" id="password">
                         </div>
                         <div class="modal-footer">
@@ -81,6 +83,8 @@
                     </div>
                     <form method="POST">
                         <div class="modal-body">
+                            <p>注意: 广告拦截插件可能会拦截高德的位置服务, 建议关闭.</p>
+                            <p>若位置不准确, 可尝试更换设备或网络环境后重试.</p>
                             {% csrf_token %}
                             <input type="hidden" name="status" value="true">
                             <div class="mb-3">
@@ -90,7 +94,7 @@
                                 <label class="form-check-label" for="atSchool">
                                     在校
                                 </label>
-                                <input class="form-check-input" type="radio" name="sfzx" id="notAtSchool" value="true"
+                                <input class="form-check-input" type="radio" name="sfzx" id="notAtSchool" value="false"
                                        required>
                                 <label class="form-check-label" for="notAtSchool">
                                     不在校
@@ -165,19 +169,20 @@
                     document.getElementById('result').innerHTML = str.join('<br>');
 
                     document.getElementById('address').value = data.formattedAddress
-                    let geo_info = data.addressComponent
-                    console.log(geo_info)
-                    document.getElementById('area').value = `${geo_info.province} ${geo_info.city} ${geo_info.district}`;
-                    document.getElementById('province').value = geo_info.province;
-                    document.getElementById('city').value = geo_info.city;
-                    document.getElementById('geo_api_info').value = JSON.stringify(geo_info);
+                    let address_component = data.addressComponent
+                    console.log(address_component)
+                    document.getElementById('area').value =
+                        `${address_component.province} ${address_component.city} ${address_component.district}`;
+                    document.getElementById('province').value = address_component.province;
+                    document.getElementById('city').value = address_component.city;
+                    document.getElementById('geo_api_info').value = JSON.stringify(data);
 
                     document.getElementById('submit').disabled = false;
                 }
 
                 //解析定位错误信息
                 function onError(data) {
-                    document.getElementById('status').innerHTML = '定位失败, 请刷新重试, 多次失败请更换设备重试'
+                    document.getElementById('status').innerHTML = `定位失败, 请刷新重试, 多次失败请更换设备重试`
                     document.getElementById('result').innerHTML = '失败原因排查信息:' + data.message;
                 }
 
