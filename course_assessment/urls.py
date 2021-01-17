@@ -17,7 +17,8 @@ from django.contrib import admin
 from django.urls import path
 
 from core.views import Index, TeacherView, CourseAddView, CourseView
-from user.views import Login, Logout
+from user.views import Login, Logout, RefreshCookies
+from report.views import ReportIndex
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -27,4 +28,6 @@ urlpatterns = [
     path('teacher/', TeacherView.as_view()),
     path('course/', CourseAddView.as_view()),
     path('course/<int:course_id>/', CourseView.as_view()),
+    path('report/', ReportIndex.as_view()),
+    path('refresh_cookies/', RefreshCookies.as_view()),
 ]

@@ -1,8 +1,11 @@
 import base64
 import re
+from datetime import datetime
+from collections import namedtuple
 
 from django.shortcuts import render, redirect
 from django.views import View
+from django.http import HttpResponse
 from django.contrib.auth import login, logout
 from django.contrib import messages
 from django.utils.crypto import get_random_string
@@ -14,8 +17,11 @@ from Crypto.Util.Padding import pad
 from user.models import User
 
 
+LoginResult = namedtuple('LoginResult', 'success msg name cookies')
+
+
 def unified_login(username, raw_password):
-    login_page_url = "https://authserver.nwu.edu.cn/authserver/login"
+    login_page_url = "http://authserver.nwu.edu.cn/authserver/login"
     session = requests.session()
     response = session.get(login_page_url)
     ds = BeautifulSoup(response.text, "html.parser")
@@ -50,11 +56,11 @@ def unified_login(username, raw_password):
         span = soup.select('span[id="msg"]')
         if len(span) == 0:
             name = soup.find(class_='auth_username').span.span.text.strip()
-            return [True, '登陆成功', name]
+            return LoginResult(True, '登陆成功', name, session.cookies.get_dict())
         else:
             msg = span[0].text
-            return [False, msg, None]  # TODO: 需要验证码时的处理
-    return [False, '网络错误', None]
+            return LoginResult(False, msg, None, None)  # TODO: 需要验证码时的处理
+    return LoginResult(False, '网络错误', None, None)
 
 
 class Login(View):
@@ -64,18 +70,25 @@ class Login(View):
     def post(self, request):
         username = request.POST['username']
         password = request.POST['password']
-        success, msg, name = unified_login(username, password)
+        success, msg, name, cookies = unified_login(username, password)
         print(success, msg, name)  # TODO: log format
         if success:
             try:
                 user = User.objects.get(username=username)
             except User.DoesNotExist:
-                user = User.objects.create(username=username, name=name)
+                user = User.objects.create(
+                    username=username,
+                    name=name,
+                    cookie=cookies,
+                    cookie_last_update=datetime.now()
+                )
             login(request, user)
             messages.add_message(request, messages.SUCCESS, '登录成功')
             return redirect('/')
         else:
-            messages.add_message(request, messages.ERROR, msg)
+            messages.error(request, msg)
+            if '验证码' in msg:
+                messages.error(request, '请手动使用统一身份认证登录一次')
             return render(request, 'login.html')
 
 
@@ -84,3 +97,21 @@ class Logout(View):
         logout(request)
         messages.add_message(request, messages.SUCCESS, '注销成功')
         return redirect('/')
+
+
+class RefreshCookies(View):
+    def post(self, request):
+        user = request.user
+        password = request.POST['password']
+        redirect_url = request.POST.get('redirect')  # FIXME: 是否为最优的方案?
+        success, msg, name, cookies = unified_login(user.username, password)
+        if success:
+            user.cookie = cookies
+            user.cookie_last_update = datetime.now()
+            user.save()
+            messages.success(request, '刷新 Cookies 成功, 请重新开启填报')
+        else:
+            messages.error(request, msg)
+            if '验证码' in msg:
+                messages.error(request, '请手动使用统一身份认证登录一次')
+        return redirect(redirect_url)

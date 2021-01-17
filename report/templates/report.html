@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+
+{% block content %}
+    {% if status %}
+        <h2>当前填报状态: 开启</h2>
+        <p>
+            在校状态: {{ sfzx }}
+        </p>
+        <p>
+            地址: {{ address }}
+        </p>
+        <button
+                type="button"
+                class="btn btn-danger"
+                data-bs-toggle="modal"
+                data-bs-target="#turnOffAutoReport"
+        >
+            关闭填报
+        </button>
+
+        <div class="modal fade" id="turnOffAutoReport" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">确认关闭填报吗?</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <form method="POST">
+                        <div class="modal-body">
+                            {% csrf_token %}
+                            <input type="hidden" name="status" value="false">
+                        </div>
+                        <div class="modal-footer">
+                            <button type="submit" class="btn btn-primary">确认</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    {% else %}
+        <h2>当前填报状态: 关闭</h2>
+        <button
+                type="button"
+                class="btn btn-primary"
+                data-bs-toggle="modal"
+                data-bs-target="{% if cookie_status %}#turnOnAutoReport{% else %}#refreshCookie{% endif %}"
+        >
+            开启填报
+        </button>
+
+        <div class="modal fade" id="refreshCookie" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">请输入密码</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <form method="POST" action="/refresh_cookies/">
+                        <div class="modal-body">
+                            {% csrf_token %}
+                            <input type="hidden" name="redirect" value="/report/">
+                            <label for="password" class="form-label">我们需要刷新您在统一身份认证的登录状态, 请输入您的密码以继续</label>
+                            <input type="password" name="password" class="form-control" id="password">
+                        </div>
+                        <div class="modal-footer">
+                            <button type="submit" class="btn btn-primary">提交</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+
+        <div class="modal fade" id="turnOnAutoReport" tabindex="-1" aria-hidden="true">
+            <script src="https://webapi.amap.com/maps?v=1.4.5&key=7944c3383bd848044778911718589c01"></script>
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">开启填报</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <form method="POST">
+                        <div class="modal-body">
+                            {% csrf_token %}
+                            <input type="hidden" name="status" value="true">
+                            <div class="mb-3">
+                                <label class="form-label">在校状态</label>
+                                <input class="form-check-input" type="radio" name="sfzx" id="atSchool" value="true"
+                                       required>
+                                <label class="form-check-label" for="atSchool">
+                                    在校
+                                </label>
+                                <input class="form-check-input" type="radio" name="sfzx" id="notAtSchool" value="true"
+                                       required>
+                                <label class="form-check-label" for="notAtSchool">
+                                    不在校
+                                </label>
+                            </div>
+                            <div class="row">
+                                <label for="address" class="form-label">地址</label>
+                                <input class="form-control" id="address" name="address" readonly>
+                            </div>
+                            <div class="row mb-3">
+                                <label for="area" class="form-label">地区</label>
+                                <input class="form-control" id="area" name="area" readonly>
+                            </div>
+                            <div class="row mb-3">
+                                <label for="province" class="form-label">省份</label>
+                                <input class="form-control" id="province" name="province" readonly>
+                            </div>
+                            <div class="row mb-3">
+                                <label for="city" class="form-label">城市</label>
+                                <input class="form-control" id="city" name="city" readonly>
+                            </div>
+                            <div class="row mb-3">
+                                <label for="geo_api_info" class="form-label">geo_api_info</label>
+                                <textarea class="form-control" id="geo_api_info" name="geo_api_info" rows="2"
+                                          readonly></textarea>
+                            </div>
+                        </div>
+                        <div id="map"></div>
+                        <div class="info">
+                            <h4 id='status'></h4>
+                            <hr>
+                            <p id='result'></p>
+                            <hr>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="submit" class="btn btn-primary" id="submit" disabled>提交</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <script>
+                var map = new AMap.Map('map', {
+                    resizeEnable: true
+                });
+                AMap.plugin('AMap.Geolocation', function () {
+                    var geolocation = new AMap.Geolocation({
+                        enableHighAccuracy: true,//是否使用高精度定位，默认:true
+                        timeout: 10000,          //超过10秒后停止定位，默认：5s
+                        {#noIpLocate: 3,#}
+                    });
+                    map.addControl(geolocation);
+                    geolocation.getCurrentPosition(function (status, result) {
+                        if (status === 'complete') {
+                            onComplete(result)
+                        } else {
+                            onError(result)
+                        }
+                    });
+                });
+
+                //解析定位结果
+                function onComplete(data) {
+                    console.log(data)
+                    document.getElementById('status').innerHTML = '定位成功'
+                    let str = [];
+                    str.push('定位结果：' + data.position);
+                    str.push('定位类别：' + data.location_type);
+                    if (data.accuracy) {
+                        str.push('精度：' + data.accuracy + ' 米');
+                    }//如为IP精确定位结果则没有精度信息
+
+                    document.getElementById('result').innerHTML = str.join('<br>');
+
+                    document.getElementById('address').value = data.formattedAddress
+                    let geo_info = data.addressComponent
+                    console.log(geo_info)
+                    document.getElementById('area').value = `${geo_info.province} ${geo_info.city} ${geo_info.district}`;
+                    document.getElementById('province').value = geo_info.province;
+                    document.getElementById('city').value = geo_info.city;
+                    document.getElementById('geo_api_info').value = JSON.stringify(geo_info);
+
+                    document.getElementById('submit').disabled = false;
+                }
+
+                //解析定位错误信息
+                function onError(data) {
+                    document.getElementById('status').innerHTML = '定位失败, 请刷新重试, 多次失败请更换设备重试'
+                    document.getElementById('result').innerHTML = '失败原因排查信息:' + data.message;
+                }
+
+            </script>
+        </div>
+    {% endif %}
+
+
+
+
+{% endblock %}
