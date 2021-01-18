@@ -19,8 +19,7 @@ class Command(BaseCommand):
         with futures.ThreadPoolExecutor(workers) as executor:
             results = executor.map(self.do_report, report_list)
         for i, result in enumerate(results):
-            if result:
-                print(f"{strftime('[%H:%M:%S]')} result {i}: {result.text}")  # TODO: replace with log
+            print(f"{strftime('[%H:%M:%S]')} {i+1}/{len(report_list)} 已结束")  # TODO: replace with log
 
     def do_report(self, report: Report):
         url = 'https://app.nwu.edu.cn/ncov/wap/open-report/save'
@@ -62,6 +61,7 @@ class Command(BaseCommand):
             cookie_jar = {}
         try:
             r = requests.post(url, headers=headers, data=data, cookies=cookie_jar)
+            print(f"{strftime('[%H:%M:%S]')} {report.user.username}-{report.user.name} {r.text}")
             return r
         except ConnectionError as e:
             print(f"{strftime('[%H:%M:%S]')} {report.user.username}-{report.user.name} 连接失败")
