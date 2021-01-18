@@ -1,9 +1,9 @@
+import pickle
 from concurrent import futures
 from time import strftime
-import pickle
 
-from django.core.management.base import BaseCommand
 import requests
+from django.core.management.base import BaseCommand
 
 from report.models import Report
 
@@ -35,8 +35,8 @@ class Command(BaseCommand):
             "Connection": "keep-alive",
             "Content-Length": "1780",
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_6) AppleWebKit/605.1.15 (KHTML, like Gecko) "
-                          "Version/13.1 Safari/605.1.15",
-            "X-Requested-With": "XMLHttpRequest"
+            "Version/13.1 Safari/605.1.15",
+            "X-Requested-With": "XMLHttpRequest",
         }
 
         data = {
@@ -50,7 +50,7 @@ class Command(BaseCommand):
             "sfcyglq": "0",
             "sfyzz": "0",
             "qtqk": "",
-            "ymtys": ""
+            "ymtys": "",
         }
 
         # FIXME: 修复有些人无 cookie, 之后可以移除

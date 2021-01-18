@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from core.models import School, Course, Teacher, Review
+from core.models import Course, Review, School, Teacher
 
 admin.site.register(School)
 admin.site.register(Course)

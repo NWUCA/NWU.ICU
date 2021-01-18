@@ -1,9 +1,11 @@
 from django.db import models
+
 from user.models import User
 
 
 class School(models.Model):
     """院系"""
+
     name = models.TextField(unique=True)
 
     def __str__(self):
@@ -45,9 +47,4 @@ class Review(models.Model):
     anonymous = models.BooleanField()
 
     class Meta:
-        constraints = [
-            models.UniqueConstraint(
-                fields=['course', 'created_by'],
-                name='unique_review'
-            )
-        ]
+        constraints = [models.UniqueConstraint(fields=['course', 'created_by'], name='unique_review')]

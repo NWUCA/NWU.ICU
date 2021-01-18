@@ -1,9 +1,9 @@
 from datetime import datetime, timedelta
 
-from django.shortcuts import render, redirect
-from django.views import View
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.shortcuts import redirect, render
+from django.views import View
 
 from report.models import Report
 

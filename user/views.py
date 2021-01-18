@@ -1,21 +1,20 @@
 import base64
-import re
 import pickle
-from datetime import datetime
+import re
 from collections import namedtuple
+from datetime import datetime
 
-from django.shortcuts import render, redirect
-from django.views import View
-from django.contrib.auth import login, logout
-from django.contrib import messages
-from django.utils.crypto import get_random_string
 import requests
 from bs4 import BeautifulSoup
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad
+from django.contrib import messages
+from django.contrib.auth import login, logout
+from django.shortcuts import redirect, render
+from django.utils.crypto import get_random_string
+from django.views import View
 
 from user.models import User
-
 
 LoginResult = namedtuple('LoginResult', 'success msg name cookies')
 
@@ -87,10 +86,7 @@ class Login(View):
                 user = User.objects.get(username=username)
             except User.DoesNotExist:
                 user = User.objects.create(
-                    username=username,
-                    name=name,
-                    cookie=pickle.dumps(cookies),
-                    cookie_last_update=datetime.now()
+                    username=username, name=name, cookie=pickle.dumps(cookies), cookie_last_update=datetime.now()
                 )
             login(request, user)
             messages.add_message(request, messages.SUCCESS, '登录成功')
@@ -124,9 +120,5 @@ class RefreshCookies(View):
         else:
             messages.error(request, msg)
             if '验证码' in msg:
-                messages.error(
-                    request,
-                    '请手动使用统一身份认证登录一次, 入口在<a href="authserver.nwu.edu.cn">这里</a>',
-                    extra_tags='safe'
-                )
+                messages.error(request, '请手动使用统一身份认证登录一次, 入口在<a href="authserver.nwu.edu.cn">这里</a>', extra_tags='safe')
         return redirect(redirect_url)

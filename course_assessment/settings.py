@@ -34,7 +34,6 @@ INSTALLED_APPS = [
     'core',
     'user',
     'report',
-
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',

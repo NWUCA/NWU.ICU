@@ -1,11 +1,11 @@
-from django.shortcuts import render, redirect
-from django.views import View
 from django.contrib import messages
-from django.db.models import Avg
-from django.db import IntegrityError
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db import IntegrityError
+from django.db.models import Avg
+from django.shortcuts import redirect, render
+from django.views import View
 
-from core.models import School, Teacher, Course, Review
+from core.models import Course, Review, School, Teacher
 
 
 class Index(View):
@@ -15,9 +15,7 @@ class Index(View):
 
 class CourseList(LoginRequiredMixin, View):
     def get(self, request):
-        context = {
-            'courses': Course.objects.all()
-        }
+        context = {'courses': Course.objects.all()}
         return render(request, 'course_list.html', context=context)
 
     def post(self, request):
@@ -52,11 +50,7 @@ class CourseAddView(LoginRequiredMixin, View):
         school = request.POST['school']
         classification = request.POST['classification']
         Course.objects.create(
-            name=name,
-            school_id=school,
-            teacher_id=teacher,
-            classification=classification,
-            created_by=request.user
+            name=name, school_id=school, teacher_id=teacher, classification=classification, created_by=request.user
         )
         messages.success(request, '添加成功')
         return redirect('/course/')
@@ -66,7 +60,7 @@ class CourseView(LoginRequiredMixin, View):
     def get(self, request, course_id):
         context = {
             'reviews': Review.objects.filter(course_id=course_id).select_related('created_by'),
-            'rating': Review.objects.filter(course_id=course_id).aggregate(Avg('rating'))['rating__avg']
+            'rating': Review.objects.filter(course_id=course_id).aggregate(Avg('rating'))['rating__avg'],
         }
         return render(request, 'course_detail.html', context=context)
 
@@ -78,11 +72,7 @@ class CourseView(LoginRequiredMixin, View):
             anonymous = True
         try:
             Review.objects.create(
-                course_id=course_id,
-                content=content,
-                rating=rating,
-                created_by=request.user,
-                anonymous=anonymous
+                course_id=course_id, content=content, rating=rating, created_by=request.user, anonymous=anonymous
             )
             messages.success(request, '添加成功')
         except IntegrityError:
