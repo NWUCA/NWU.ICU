@@ -7,4 +7,4 @@ from report.models import Report
 class UserAdmin(admin.ModelAdmin):
     list_display = ('user', 'status')
     list_filter = ('status',)
-    search_fields = ('user',)
+    search_fields = ('user__username',)

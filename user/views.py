@@ -72,6 +72,16 @@ def unified_login(username, raw_password):
     return LoginResult(False, '网络错误', None, None)
 
 
+def handle_login_error(request, msg):
+    messages.error(request, msg)
+    if '验证码' in msg:
+        messages.error(
+            request,
+            '请手动使用统一身份认证登录一次, 入口在<a href="http://authserver.nwu.edu.cn">这里</a>',
+            extra_tags='safe',
+        )
+
+
 class Login(View):
     def get(self, request):
         return render(request, 'login.html')
@@ -96,9 +106,7 @@ class Login(View):
             next_url = request.GET.get('next')
             return redirect(next_url if next_url else '/')
         else:
-            messages.error(request, msg)
-            if '验证码' in msg:
-                messages.error(request, '请手动使用统一身份认证登录一次')
+            handle_login_error(request, msg)
             return render(request, 'login.html')
 
 
@@ -121,11 +129,5 @@ class RefreshCookies(View):
             user.save()
             messages.success(request, '刷新 Cookies 成功, 请重新开启填报')
         else:
-            messages.error(request, msg)
-            if '验证码' in msg:
-                messages.error(
-                    request,
-                    '请手动使用统一身份认证登录一次, 入口在<a href="authserver.nwu.edu.cn">这里</a>',
-                    extra_tags='safe',
-                )
+            handle_login_error(request, msg)
         return redirect(redirect_url)
