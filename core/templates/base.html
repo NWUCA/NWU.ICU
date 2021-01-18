@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-hans">
 <head>
-    <title>{% block title %}NWU.ICU{% endblock %}</title>
+    <title>NWU.ICU-{% block subtitle %}{% endblock %}</title>
 
     <!-- Global site tag (gtag.js) - Google Analytics -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-FDZ38PGVZ6"></script>
@@ -93,7 +93,7 @@
                             {% else %} class="alert alert-success"
                             {% endif %}
                                                              role="alert">
-                        {{ message }}
+                        {% if 'safe' in message.tags %}{{ message | safe }}{% else %}{{ message }}{% endif %}
                     </div>
                 {% endfor %}
             {% endif %}

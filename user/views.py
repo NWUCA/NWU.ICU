@@ -25,6 +25,10 @@ def unified_login(username, raw_password):
     session = requests.session()
     response = session.get(login_page_url)
     ds = BeautifulSoup(response.text, "html.parser")
+
+    if 'IP被冻结' in ds.text:
+        return LoginResult(False, '我们的服务器 IP 被统一身份认证冻结, 请稍后重试..', None, None)
+
     lt = ds.select('input[name="lt"]')[0].get('value')
     dllt = ds.select('input[name="dllt"]')[0].get('value')
     execution = ds.select('input[name="execution"]')[0].get('value')
@@ -116,5 +120,8 @@ class RefreshCookies(View):
         else:
             messages.error(request, msg)
             if '验证码' in msg:
-                messages.error(request, '请手动使用统一身份认证登录一次')
+                messages.error(
+                    request,
+                    '请手动使用统一身份认证登录一次, 入口在<a href="authserver.nwu.edu.cn">这里</a>', extra_tags='safe'
+                )
         return redirect(redirect_url)
