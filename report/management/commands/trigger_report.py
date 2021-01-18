@@ -19,7 +19,8 @@ class Command(BaseCommand):
         with futures.ThreadPoolExecutor(workers) as executor:
             results = executor.map(self.do_report, report_list)
         for i, result in enumerate(results):
-            print(f"{strftime('[%H:%M:%S]')} result {i}: {result.text}")
+            if result:
+                print(f"{strftime('[%H:%M:%S]')} result {i}: {result.text}")  # TODO: replace with log
 
     def do_report(self, report: Report):
         url = 'https://app.nwu.edu.cn/ncov/wap/open-report/save'
@@ -53,6 +54,16 @@ class Command(BaseCommand):
             "ymtys": ""
         }
 
-        cookie_jar = pickle.loads(report.user.cookie)
-        r = requests.post(url, headers=headers, data=data, cookies=cookie_jar)
-        return r
+        # FIXME: 修复有些人无 cookie, 之后可以移除
+        try:
+            cookie_jar = pickle.loads(report.user.cookie)
+        except EOFError:
+            print(f"{strftime('[%H:%M:%S]')} {report.user.username}-{report.user.name} 无 cookie")
+            cookie_jar = {}
+        try:
+            r = requests.post(url, headers=headers, data=data, cookies=cookie_jar)
+            return r
+        except ConnectionError as e:
+            print(f"{strftime('[%H:%M:%S]')} {report.user.username}-{report.user.name} 连接失败")
+            print(f"错误信息: {e}")
+        return None
