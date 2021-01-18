@@ -23,9 +23,12 @@ LoginResult = namedtuple('LoginResult', 'success msg name cookies')
 def unified_login(username, raw_password):
     login_page_url = "http://authserver.nwu.edu.cn/authserver/login"
     session = requests.session()
-    response = session.get(login_page_url)
-    ds = BeautifulSoup(response.text, "html.parser")
+    try:
+        response = session.get(login_page_url)
+    except ConnectionError:
+        return LoginResult(False, '连接统一身份认证服务失败, 请稍后重试..', None, None)
 
+    ds = BeautifulSoup(response.text, "html.parser")
     if 'IP被冻结' in ds.text:
         return LoginResult(False, '我们的服务器 IP 被统一身份认证冻结, 请稍后重试..', None, None)
 
@@ -122,6 +125,7 @@ class RefreshCookies(View):
             if '验证码' in msg:
                 messages.error(
                     request,
-                    '请手动使用统一身份认证登录一次, 入口在<a href="authserver.nwu.edu.cn">这里</a>', extra_tags='safe'
+                    '请手动使用统一身份认证登录一次, 入口在<a href="authserver.nwu.edu.cn">这里</a>',
+                    extra_tags='safe'
                 )
         return redirect(redirect_url)

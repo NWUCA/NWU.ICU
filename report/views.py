@@ -18,7 +18,7 @@ class ReportIndex(LoginRequiredMixin, View):
         context = {
             'status': report.status,
             'cookie_status': True if datetime.now() - user.cookie_last_update < timedelta(hours=24) else False,
-            'sfzx': report.sfzx,
+            'is_at_school': '在校' if report.sfzx else '不在校',
             'address': report.address,
         }
         return render(request, 'report.html', context=context)

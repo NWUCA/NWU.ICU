@@ -8,3 +8,6 @@ class User(AbstractUser):
     cookie_last_update = models.DateTimeField()
 
     REQUIRED_FIELDS = []
+
+    def __str__(self):
+        return f"{self.username}-{self.name}"
