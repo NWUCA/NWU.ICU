@@ -94,7 +94,8 @@ class Login(View):
                 )
             login(request, user)
             messages.add_message(request, messages.SUCCESS, '登录成功')
-            return redirect('/')
+            next_url = request.GET.get('next')
+            return redirect(next_url if next_url else '/')
         else:
             messages.error(request, msg)
             if '验证码' in msg:
