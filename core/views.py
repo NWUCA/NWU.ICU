@@ -8,12 +8,17 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from core.models import School, Teacher, Course, Review
 
 
-class Index(LoginRequiredMixin, View):
+class Index(View):
+    def get(self, request):
+        return render(request, 'index.html')
+
+
+class CourseList(LoginRequiredMixin, View):
     def get(self, request):
         context = {
             'courses': Course.objects.all()
         }
-        return render(request, 'index.html', context=context)
+        return render(request, 'course_list.html', context=context)
 
     def post(self, request):
         messages.success(request, 'a test message')
