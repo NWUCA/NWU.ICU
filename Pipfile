@@ -10,6 +10,7 @@ requests = "*"
 beautifulsoup4 = "*"
 
 [dev-packages]
+pre-commit = "*"
 
 [requires]
 python_version = "3"
