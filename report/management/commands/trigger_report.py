@@ -19,7 +19,9 @@ class Command(BaseCommand):
         with futures.ThreadPoolExecutor(workers) as executor:
             results = executor.map(self.do_report, report_list)
         for i, result in enumerate(results):
-            print(f"{strftime('[%H:%M:%S]')} {i+1}/{len(report_list)} 已结束")  # TODO: replace with log
+            print(
+                f"{strftime('[%H:%M:%S]')} {i+1}/{len(report_list)} 已结束"
+            )  # TODO: replace with log
 
     def do_report(self, report: Report):
         url = 'https://app.nwu.edu.cn/ncov/wap/open-report/save'
@@ -34,7 +36,8 @@ class Command(BaseCommand):
             "Referer": "https://app.nwu.edu.cn/site/ncov/dailyup",
             "Connection": "keep-alive",
             "Content-Length": "1780",
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_6) AppleWebKit/605.1.15 (KHTML, like Gecko) "
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_6) "
+            "AppleWebKit/605.1.15 (KHTML, like Gecko) "
             "Version/13.1 Safari/605.1.15",
             "X-Requested-With": "XMLHttpRequest",
         }
@@ -57,11 +60,15 @@ class Command(BaseCommand):
         try:
             cookie_jar = pickle.loads(report.user.cookie)
         except EOFError:
-            print(f"{strftime('[%H:%M:%S]')} {report.user.username}-{report.user.name} 无 cookie")
+            print(
+                f"{strftime('[%H:%M:%S]')} {report.user.username}-{report.user.name} 无 cookie"
+            )
             cookie_jar = {}
         try:
             r = requests.post(url, headers=headers, data=data, cookies=cookie_jar)
-            print(f"{strftime('[%H:%M:%S]')} {report.user.username}-{report.user.name} {r.text}")
+            print(
+                f"{strftime('[%H:%M:%S]')} {report.user.username}-{report.user.name} {r.text}"
+            )
             return r
         except ConnectionError as e:
             print(f"{strftime('[%H:%M:%S]')} {report.user.username}-{report.user.name} 连接失败")

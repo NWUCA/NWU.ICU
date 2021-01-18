@@ -50,7 +50,11 @@ class CourseAddView(LoginRequiredMixin, View):
         school = request.POST['school']
         classification = request.POST['classification']
         Course.objects.create(
-            name=name, school_id=school, teacher_id=teacher, classification=classification, created_by=request.user
+            name=name,
+            school_id=school,
+            teacher_id=teacher,
+            classification=classification,
+            created_by=request.user,
         )
         messages.success(request, '添加成功')
         return redirect('/course/')
@@ -60,7 +64,9 @@ class CourseView(LoginRequiredMixin, View):
     def get(self, request, course_id):
         context = {
             'reviews': Review.objects.filter(course_id=course_id).select_related('created_by'),
-            'rating': Review.objects.filter(course_id=course_id).aggregate(Avg('rating'))['rating__avg'],
+            'rating': Review.objects.filter(course_id=course_id).aggregate(Avg('rating'))[
+                'rating__avg'
+            ],
         }
         return render(request, 'course_detail.html', context=context)
 
@@ -72,7 +78,11 @@ class CourseView(LoginRequiredMixin, View):
             anonymous = True
         try:
             Review.objects.create(
-                course_id=course_id, content=content, rating=rating, created_by=request.user, anonymous=anonymous
+                course_id=course_id,
+                content=content,
+                rating=rating,
+                created_by=request.user,
+                anonymous=anonymous,
             )
             messages.success(request, '添加成功')
         except IntegrityError:

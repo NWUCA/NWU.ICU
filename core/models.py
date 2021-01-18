@@ -47,4 +47,6 @@ class Review(models.Model):
     anonymous = models.BooleanField()
 
     class Meta:
-        constraints = [models.UniqueConstraint(fields=['course', 'created_by'], name='unique_review')]
+        constraints = [
+            models.UniqueConstraint(fields=['course', 'created_by'], name='unique_review')
+        ]

@@ -86,7 +86,10 @@ class Login(View):
                 user = User.objects.get(username=username)
             except User.DoesNotExist:
                 user = User.objects.create(
-                    username=username, name=name, cookie=pickle.dumps(cookies), cookie_last_update=datetime.now()
+                    username=username,
+                    name=name,
+                    cookie=pickle.dumps(cookies),
+                    cookie_last_update=datetime.now(),
                 )
             login(request, user)
             messages.add_message(request, messages.SUCCESS, '登录成功')
@@ -120,5 +123,9 @@ class RefreshCookies(View):
         else:
             messages.error(request, msg)
             if '验证码' in msg:
-                messages.error(request, '请手动使用统一身份认证登录一次, 入口在<a href="authserver.nwu.edu.cn">这里</a>', extra_tags='safe')
+                messages.error(
+                    request,
+                    '请手动使用统一身份认证登录一次, 入口在<a href="authserver.nwu.edu.cn">这里</a>',
+                    extra_tags='safe',
+                )
         return redirect(redirect_url)
