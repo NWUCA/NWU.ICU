@@ -1,11 +1,11 @@
 import base64
 import re
+import pickle
 from datetime import datetime
 from collections import namedtuple
 
 from django.shortcuts import render, redirect
 from django.views import View
-from django.http import HttpResponse
 from django.contrib.auth import login, logout
 from django.contrib import messages
 from django.utils.crypto import get_random_string
@@ -56,7 +56,10 @@ def unified_login(username, raw_password):
         span = soup.select('span[id="msg"]')
         if len(span) == 0:
             name = soup.find(class_='auth_username').span.span.text.strip()
-            return LoginResult(True, '登陆成功', name, session.cookies.get_dict())
+
+            # 获取 app.nwu.edu.cn 域下的 cookies
+            session.get('https://app.nwu.edu.cn/uc/wap/login')
+            return LoginResult(True, '登陆成功', name, session.cookies)
         else:
             msg = span[0].text
             return LoginResult(False, msg, None, None)  # TODO: 需要验证码时的处理
@@ -79,7 +82,7 @@ class Login(View):
                 user = User.objects.create(
                     username=username,
                     name=name,
-                    cookie=cookies,
+                    cookie=pickle.dumps(cookies),
                     cookie_last_update=datetime.now()
                 )
             login(request, user)
@@ -106,7 +109,7 @@ class RefreshCookies(View):
         redirect_url = request.POST.get('redirect')  # FIXME: 是否为最优的方案?
         success, msg, name, cookies = unified_login(user.username, password)
         if success:
-            user.cookie = cookies
+            user.cookie = pickle.dumps(cookies)
             user.cookie_last_update = datetime.now()
             user.save()
             messages.success(request, '刷新 Cookies 成功, 请重新开启填报')

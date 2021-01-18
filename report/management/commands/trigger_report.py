@@ -1,5 +1,6 @@
 from concurrent import futures
 from time import strftime
+import pickle
 
 from django.core.management.base import BaseCommand
 import requests
@@ -13,7 +14,7 @@ class Command(BaseCommand):
     help = '执行自动填报'
 
     def handle(self, *args, **options):
-        report_list = Report.objects.filter(status=True)
+        report_list = Report.objects.filter(status=True).select_related('user')
         workers = min(MAX_WORKERS, len(report_list))
         with futures.ThreadPoolExecutor(workers) as executor:
             results = executor.map(self.do_report, report_list)
@@ -52,5 +53,6 @@ class Command(BaseCommand):
             "ymtys": ""
         }
 
-        r = requests.post(url, headers=headers, data=data, cookies=report.user.cookie)
+        cookie_jar = pickle.loads(report.user.cookie)
+        r = requests.post(url, headers=headers, data=data, cookies=cookie_jar)
         return r

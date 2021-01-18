@@ -9,6 +9,9 @@ pipenv install
 - 根据 `production.py.sample` 建立 `production.py` 配置文件
 - 执行 `start.sh`
 
+## 自动填报
+把 `report/trigger_report.sh` 加入 crontab 中.
+
 ## TODO
 - [x] 生产环境的配置, static files, DEBUG, 以及启动脚本
 - [ ] 每个评价的编号是错的
