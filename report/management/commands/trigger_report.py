@@ -26,7 +26,9 @@ class Command(BaseCommand):
         for result in results:
             if result:
                 success += 1
-        logger.info(f'成功人数: {success}/{len(report_list)}, 用时: {time.time()-start_time:.2f}s')
+        logger.critical(
+            f'成功人数: {success}/{len(report_list)}, 用时: {time.time()-start_time:.2f}s'
+        )
 
     def do_report(self, report: Report):
         url = 'https://app.nwu.edu.cn/ncov/wap/open-report/save'
@@ -61,12 +63,7 @@ class Command(BaseCommand):
             "ymtys": "",
         }
 
-        # FIXME: 修复有些人无 cookie, 之后可以移除
-        try:
-            cookie_jar = pickle.loads(report.user.cookie)
-        except EOFError:
-            logger.error(f'{report.user.username}-{report.user.name} 无 cookie')
-            cookie_jar = {}
+        cookie_jar = pickle.loads(report.user.cookie)
         try:
             r = requests.post(url, headers=headers, data=data, cookies=cookie_jar)
             r = json.loads(r.text)

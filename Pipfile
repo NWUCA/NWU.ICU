@@ -8,6 +8,7 @@ django = "*"
 pycryptodome = "*"
 requests = "*"
 beautifulsoup4 = "*"
+pytelegrambotapi = "*"
 
 [dev-packages]
 pre-commit = "*"

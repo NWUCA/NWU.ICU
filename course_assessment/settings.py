@@ -128,10 +128,6 @@ LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
     'formatters': {
-        'verbose': {
-            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
-            'style': '{',
-        },
         'simple': {
             'format': '[{asctime}] {levelname} {module}: {message}',
             'style': '{',
@@ -142,9 +138,23 @@ LOGGING = {
             'class': 'logging.StreamHandler',
             'formatter': 'simple',
         },
+        'telegram': {
+            'class': 'course_assessment.log.TelegramBotHandler',
+            'formatter': 'simple',
+        },
     },
     'root': {
         'handlers': ['console'],
         'level': 'INFO',
+    },
+    'loggers': {
+        'report.management.commands.trigger_report': {
+            'handlers': ['telegram'],
+            'level': 'CRITICAL',
+        },
+        'django.request': {
+            'handlers': ['telegram'],
+            'level': 'ERROR',
+        },
     },
 }

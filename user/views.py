@@ -1,4 +1,5 @@
 import base64
+import logging
 import pickle
 import re
 from collections import namedtuple
@@ -16,6 +17,7 @@ from django.views import View
 
 from user.models import User
 
+logger = logging.getLogger(__name__)
 LoginResult = namedtuple('LoginResult', 'success msg name cookies')
 
 
@@ -90,7 +92,7 @@ class Login(View):
         username = request.POST['username']
         password = request.POST['password']
         success, msg, name, cookies = unified_login(username, password)
-        print(success, msg, name)  # TODO: log format
+        logger.info(f'{name} 认证状态:{success}-{msg}')
         if success:
             try:
                 user = User.objects.get(username=username)

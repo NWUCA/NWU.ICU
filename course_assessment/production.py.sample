@@ -9,3 +9,6 @@ DEBUG = False
 STATIC_ROOT = '/www/wwwroot/course.nwu.icu/static/'
 
 ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
+
+TELEGRAM_BOT_API_TOKEN = '123:abc'
+TELEGRAM_CHAT_ID = -123

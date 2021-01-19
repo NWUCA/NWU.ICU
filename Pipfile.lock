@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "d438f0bfbc23b584893b01126a654a160e88f7d867e00be2e5a8ec12553a4417"
+            "sha256": "3293de63c6c3f6b5da9f2563fe506f5bef4096f16a748598ddace9f126e971fa"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -104,6 +104,13 @@
             ],
             "index": "tuna",
             "version": "==3.9.9"
+        },
+        "pytelegrambotapi": {
+            "hashes": [
+                "sha256:859136cbd50e99922e1ea495d4ebe8235b2cb10fe419a5421f28855249db4278"
+            ],
+            "index": "tuna",
+            "version": "==3.7.6"
         },
         "pytz": {
             "hashes": [
@@ -234,11 +241,11 @@
         },
         "virtualenv": {
             "hashes": [
-                "sha256:0c111a2236b191422b37fe8c28b8c828ced39aab4bf5627fa5c331aeffb570d9",
-                "sha256:14b34341e742bdca219e10708198e704e8a7064dd32f474fc16aca68ac53a306"
+                "sha256:219ee956e38b08e32d5639289aaa5bd190cfbe7dafcb8fa65407fca08e808f9c",
+                "sha256:227a8fed626f2f20a6cdb0870054989f82dd27b2560a911935ba905a2a5e0034"
             ],
             "markers": "python_version >= '2.7' and python_version not in '3.0, 3.1, 3.2, 3.3'",
-            "version": "==20.3.1"
+            "version": "==20.4.0"
         }
     }
 }
