@@ -1,12 +1,15 @@
+import json
+import logging
 import pickle
+import time
 from concurrent import futures
-from time import strftime
 
 import requests
 from django.core.management.base import BaseCommand
 
 from report.models import Report
 
+logger = logging.getLogger(__name__)
 MAX_WORKERS = 100
 
 
@@ -14,14 +17,16 @@ class Command(BaseCommand):
     help = '执行自动填报'
 
     def handle(self, *args, **options):
+        start_time = time.time()
         report_list = Report.objects.filter(status=True).select_related('user')
         workers = min(MAX_WORKERS, len(report_list))
         with futures.ThreadPoolExecutor(workers) as executor:
             results = executor.map(self.do_report, report_list)
-        for i, result in enumerate(results):
-            print(
-                f"{strftime('[%H:%M:%S]')} {i+1}/{len(report_list)} 已结束"
-            )  # TODO: replace with log
+        success = 0
+        for result in results:
+            if result:
+                success += 1
+        logger.info(f'成功人数: {success}/{len(report_list)}, 用时: {time.time()-start_time:.2f}s')
 
     def do_report(self, report: Report):
         url = 'https://app.nwu.edu.cn/ncov/wap/open-report/save'
@@ -60,17 +65,17 @@ class Command(BaseCommand):
         try:
             cookie_jar = pickle.loads(report.user.cookie)
         except EOFError:
-            print(
-                f"{strftime('[%H:%M:%S]')} {report.user.username}-{report.user.name} 无 cookie"
-            )
+            logger.error(f'{report.user.username}-{report.user.name} 无 cookie')
             cookie_jar = {}
         try:
             r = requests.post(url, headers=headers, data=data, cookies=cookie_jar)
-            print(
-                f"{strftime('[%H:%M:%S]')} {report.user.username}-{report.user.name} {r.text}"
-            )
-            return r
+            r = json.loads(r.text)
+            if r['e'] == 1 or r['e'] == 0:
+                logger.info(f'{report.user.username}-{report.user.name} {r["m"]}')
+                return True
+            else:
+                logger.warning(f'{report.user.username}-{report.user.name} {r}')
+                return False
         except ConnectionError as e:
-            print(f"{strftime('[%H:%M:%S]')} {report.user.username}-{report.user.name} 连接失败")
-            print(f"错误信息: {e}")
-        return None
+            logger.error(f'{report.user.username}-{report.user.name} 连接失败\n' f'错误信息: {e}')
+        return False
