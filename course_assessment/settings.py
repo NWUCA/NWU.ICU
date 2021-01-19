@@ -141,6 +141,7 @@ LOGGING = {
         'telegram': {
             'class': 'course_assessment.log.TelegramBotHandler',
             'formatter': 'simple',
+            'level': 'ERROR',
         },
     },
     'root': {
@@ -150,11 +151,9 @@ LOGGING = {
     'loggers': {
         'report.management.commands.trigger_report': {
             'handlers': ['telegram'],
-            'level': 'CRITICAL',
         },
         'django.request': {
             'handlers': ['telegram'],
-            'level': 'ERROR',
         },
     },
 }
