@@ -5,7 +5,7 @@
 {% block content %}
 <h2>登录</h2>
 <label class="mb-3">请使用西北大学统一身份认证登录</label>
-<form method="POST">
+<form method="POST" name="login_form">
     {% csrf_token %}
     <div class="mb-3">
             <label for="username" class="form-label">用户名</label>
@@ -45,6 +45,16 @@
             </div>
         </div>
     </div>
-    <button type="submit" class="btn btn-primary">登录</button>
+    <button type="submit" class="btn btn-primary" id="login_btn">登录</button>
 </form>
+
+<script>
+    let login_btn = document.getElementById('login_btn');
+    login_btn.onclick = () =>{
+        login_btn.disabled = true;
+        login_btn.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                加载中...`
+        document.login_form.submit();
+    };
+</script>
 {% endblock %}

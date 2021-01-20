@@ -86,7 +86,11 @@ def handle_login_error(request, msg):
 
 class Login(View):
     def get(self, request):
-        return render(request, 'login.html')
+        if not request.user.is_authenticated:
+            return render(request, 'login.html')
+        else:
+            next_url = request.GET.get('next')
+            return redirect(next_url if next_url else '/')
 
     def post(self, request):
         username = request.POST['username']
