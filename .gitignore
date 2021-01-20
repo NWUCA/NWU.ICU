@@ -3,3 +3,4 @@
 *.pyc
 static/
 production.py
+development.py

@@ -5,8 +5,9 @@
 
 ## 起步
 ```
-pipenv install
+pipenv sync
 ```
+根据 `development.py.sample` 建立 `development.py` 配置文件.
 
 ## 部署
 - 根据 `production.py.sample` 建立 `production.py` 配置文件
