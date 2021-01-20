@@ -14,7 +14,7 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path
+from django.urls import path, re_path
 
 from core.views import CourseAddView, CourseList, CourseView, Index, TeacherView
 from report.views import ReportIndex
@@ -30,5 +30,6 @@ urlpatterns = [
     path('course/', CourseAddView.as_view()),
     path('course/<int:course_id>/', CourseView.as_view()),
     path('report/', ReportIndex.as_view()),
+    re_path(r'^report/*$', ReportIndex.as_view()),  # 会有人访问 /// 这样的坑爹路径
     path('refresh_cookies/', RefreshCookies.as_view()),
 ]

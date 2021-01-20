@@ -20,8 +20,8 @@ pipenv sync
 
 ## TODO
 - [x] 生产环境的配置, static files, DEBUG, 以及启动脚本
-- [ ] logging
-- [ ] 静态文件的图片 404 了
+- [x] logging
+- [x] 静态文件的图片 404 了
 
 ### 自动填报
 - [ ] 失败后的提醒
