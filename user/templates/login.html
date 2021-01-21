@@ -9,14 +9,14 @@
     {% csrf_token %}
     <div class="mb-3">
             <label for="username" class="form-label">用户名</label>
-            <input type="text" name="username" id="username" class="form-control">
+            <input type="text" name="username" id="username" class="form-control" required>
     </div>
     <div class="mb-3">
             <label for="password" class="form-label">密码</label>
-            <input type="password" name="password" id="password" class="form-control">
+            <input type="password" name="password" id="password" class="form-control" required>
     </div>
     <div class="form-check mb-3">
-        <input class="form-check-input" type="checkbox" value="" id="invalidCheck" required>
+        <input class="form-check-input" type="checkbox" id="invalidCheck" required>
         <label class="form-check-label" for="invalidCheck">
             同意<a data-bs-toggle="modal" data-bs-target="#exampleModal" href="#">隐私政策和用户协议</a>
         </label>
@@ -31,7 +31,7 @@
                     </div>
                     <div class="modal-body">
                         <ul>
-                            <li>我们不会存储您的密码.</li>
+                            <li>我们不会存储您的密码, 然而, 您的密码可能会被用于调试.</li>
                             <li>我们使用 Google Analytics 跟踪您的浏览数据.</li>
                             <li>您的所有行为将在后台实名记录.</li>
                             <li>定位服务使用了高德地图的 API, 您的位置信息及其他浏览数据将被高德知晓.</li>
@@ -56,12 +56,12 @@
 </form>
 
 <script>
-    let login_btn = document.getElementById('login_btn');
-    login_btn.onclick = () =>{
-        login_btn.disabled = true;
-        login_btn.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                                加载中...`
-        document.login_form.submit();
-    };
+    let form = document.querySelector("form");
+    form.addEventListener("submit", (event) => {
+        let btn = event.submitter;
+        btn.disabled = true;
+        btn.innerHTML = `<span class="spinner-border spinner-border-sm" role="status"
+                            aria-hidden="true"></span>加载中...`;
+    })
 </script>
 {% endblock %}
