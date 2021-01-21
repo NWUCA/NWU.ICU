@@ -3,6 +3,7 @@ import logging
 import pickle
 import time
 from concurrent import futures
+from datetime import datetime
 
 import requests
 from django.core.management.base import BaseCommand
@@ -69,9 +70,14 @@ class Command(BaseCommand):
             r = json.loads(r.text)
             if r['e'] == 1 or r['e'] == 0:
                 logger.info(f'{report.user.username}-{report.user.name} {r["m"]}')
+                if report.last_report_message:
+                    report.last_report_message = ''
+                    report.save()
                 return True
             else:
                 logger.warning(f'{report.user.username}-{report.user.name} {r}')
+                report.last_report_message = f'[{datetime.now()} {r}]'
+                report.save()
                 return False
         except ConnectionError as e:
             logger.error(f'{report.user.username}-{report.user.name} 连接失败\n' f'错误信息: {e}')

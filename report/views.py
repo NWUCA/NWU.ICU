@@ -22,6 +22,7 @@ class ReportIndex(LoginRequiredMixin, View):
             else False,
             'is_at_school': '在校' if report.sfzx else '不在校',
             'address': report.address,
+            'last_report_message': report.last_report_message,
         }
         return render(request, 'report.html', context=context)
 
