@@ -26,8 +26,8 @@ def unified_login(username, raw_password):
     login_page_url = "http://authserver.nwu.edu.cn/authserver/login"
     session = requests.session()
     try:
-        response = session.get(login_page_url)
-    except ConnectionError:
+        response = session.get(login_page_url, timeout=5)
+    except requests.exceptions.ConnectionError:
         return LoginResult(False, '连接统一身份认证服务失败, 请稍后重试..', None, None)
 
     ds = BeautifulSoup(response.text, "html.parser")
