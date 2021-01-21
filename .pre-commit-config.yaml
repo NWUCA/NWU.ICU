@@ -13,7 +13,7 @@ repos:
   rev: 3.8.4
   hooks:
   - id: flake8
-    args: ['--max-line-length', '95']
+    args: ['--max-line-length', '95', '--extend-ignore=E203']
     exclude: migrations
 
 - repo: https://github.com/psf/black

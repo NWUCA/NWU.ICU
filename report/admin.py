@@ -4,7 +4,7 @@ from report.models import Report
 
 
 @admin.register(Report)
-class UserAdmin(admin.ModelAdmin):
-    list_display = ('user', 'status')
+class ReportAdmin(admin.ModelAdmin):
+    list_display = ('user', 'status', 'last_report_message')
     list_filter = ('status',)
     search_fields = ('user__username',)

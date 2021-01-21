@@ -45,6 +45,9 @@
                             <li>我们保留无条件封停您的帐号的权利.</li>
                         </ul>
                     </div>
+                    <div class="modal-body">
+                        最后更新日期: 2021-01-21
+                    </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
                     </div>
@@ -54,14 +57,4 @@
     </div>
     <button type="submit" class="btn btn-primary" id="login_btn">登录</button>
 </form>
-
-<script>
-    let form = document.querySelector("form");
-    form.addEventListener("submit", (event) => {
-        let btn = event.submitter;
-        btn.disabled = true;
-        btn.innerHTML = `<span class="spinner-border spinner-border-sm" role="status"
-                            aria-hidden="true"></span>加载中...`;
-    })
-</script>
 {% endblock %}
