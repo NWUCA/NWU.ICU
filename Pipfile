@@ -9,6 +9,7 @@ pycryptodome = "*"
 requests = "*"
 beautifulsoup4 = "*"
 pytelegrambotapi = "*"
+django-inline-svg = "*"
 
 [dev-packages]
 pre-commit = "*"

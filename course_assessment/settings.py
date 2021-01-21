@@ -21,6 +21,7 @@ INSTALLED_APPS = [
     'core',
     'user',
     'report',
+    'svg',  # FIXME: this lib is a temporary solution
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -153,3 +154,7 @@ LOGGING = {
         },
     },
 }
+
+SVG_DIRS = [
+    BASE_DIR / 'static/img',
+]

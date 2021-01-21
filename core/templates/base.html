@@ -1,4 +1,5 @@
 {% load static %}
+{% load svg %}
 
 <!DOCTYPE html>
 <html lang="zh-hans">
@@ -75,6 +76,12 @@
                     <li class="nav-item">
                         <a class="nav-link" href="/report/">自动填报</a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="https://resour.nwu.icu/" target="_blank">
+                            资源分享
+                            {% svg 'box-arrow-up-right' %}
+                        </a>
+                    </li>
                 </ul>
                 {% if user.is_authenticated %}
                     <label style="color: rgba(255,255,255,.55)">{{ user.name }}, </label>
@@ -112,7 +119,10 @@
     <div class="container">
         <div>
             <span>2020 nwu.icu Source Code On</span>
-            <a href="https://github.com/NWUCA/course_assessment">Github</a>
+            <a target="_blank" href="https://github.com/NWUCA/course_assessment">
+                Github
+                {% svg 'box-arrow-up-right' %}
+            </a>
         </div>
         <div>
             意见反馈: <a href="mailto:admin@nwu.icu">admin@nwu.icu</a>
