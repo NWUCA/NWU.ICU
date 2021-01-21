@@ -1,6 +1,5 @@
 .idea
 *.sqlite3
 *.pyc
-static/
 production.py
 development.py
