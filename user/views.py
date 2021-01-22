@@ -71,7 +71,7 @@ def unified_login(username, raw_password):
             return LoginResult(True, '登陆成功', name, session.cookies)
         else:
             msg = span[0].text
-            return LoginResult(False, msg, None, None)  # TODO: 需要验证码时的处理
+            return LoginResult(False, msg, None, None)
     return LoginResult(False, '网络错误', None, None)
 
 

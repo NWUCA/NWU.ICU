@@ -32,6 +32,21 @@ class Command(BaseCommand):
             f'成功人数: {success}/{len(report_list)}, 用时: {time.time()-start_time:.2f}s'
         )
 
+    def model_save_with_retry(self, report: Report):
+        """
+        sqlite 似乎不支持这么高的并发, 一直会报错 database is locked
+        https://docs.djangoproject.com/en/3.1/ref/databases/#database-is-locked-errors
+        FIXME: 暂时用无限重试解决
+        """
+        retry = 1
+        while retry > 0:
+            try:
+                logger.info(f'writing {report.user.username:10} to database, retry={retry}')
+                report.save()
+                retry = -1
+            except OperationalError:
+                retry += 1
+
     def do_report(self, report: Report):
         url = 'https://app.nwu.edu.cn/ncov/wap/open-report/save'
 
@@ -73,26 +88,15 @@ class Command(BaseCommand):
                 logger.info(f'{report.user.username}-{report.user.name} {r["m"]}')
                 if report.last_report_message:
                     report.last_report_message = ''
-                    report.save()
+                    self.model_save_with_retry(report)
                 return True
             else:
                 logger.warning(f'{report.user.username}-{report.user.name} {r}')
                 report.last_report_message = f'[{datetime.now()} {r}]'
-                report.save()
+                self.model_save_with_retry(report)
                 return False
         except requests.exceptions.ConnectionError as e:
             logger.warning(f'{report.user.username}-{report.user.name} 连接失败\n' f'错误信息: {e}')
             report.last_report_message = f'[{datetime.now()} 连接失败\n' f'错误信息: {e}]'
-
-            # sqlite 似乎不支持这么高的并发了, 一直会报错 database is locked
-            # https://docs.djangoproject.com/en/3.1/ref/databases/#database-is-locked-errors
-            # FIXME: 暂时用无限重试解决
-            retry = 1
-            while retry > 0:
-                try:
-                    logger.info(f'writing {report.user.username:10} retry={retry}')
-                    report.save()
-                    retry = -1
-                except OperationalError:
-                    retry += 1
+            self.model_save_with_retry(report)
         return False
