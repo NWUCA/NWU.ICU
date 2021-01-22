@@ -64,7 +64,16 @@ def unified_login(username, raw_password):
         soup = BeautifulSoup(response_login.text, 'html.parser')
         span = soup.select('span[id="msg"]')
         if len(span) == 0:
-            name = soup.find(class_='auth_username').span.span.text.strip()
+            # FIXME: 有时候 name 会获取失败, DOM 里没有 auth_username 这个 class
+            # FIXME: 尝试存个当时的 html 看看
+            try:
+                name = soup.find(class_='auth_username').span.span.text.strip()
+            except AttributeError:
+                log_dir = settings.BASE_DIR / 'logs'
+                log_dir.mkdir(exist_ok=True)
+                with open(log_dir / f'{username}-{datetime.now()}.html', 'b') as f:
+                    f.write(response_login.content)
+                return LoginResult(False, '获取个人信息失败, 请稍后重试..', None, None)
 
             # 获取 app.nwu.edu.cn 域下的 cookies
             session.get('https://app.nwu.edu.cn/uc/wap/login')

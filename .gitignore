@@ -3,3 +3,4 @@
 *.pyc
 production.py
 development.py
+logs/
