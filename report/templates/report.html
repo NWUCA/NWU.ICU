@@ -6,8 +6,12 @@
     {% if last_report_message %}
         <div class="alert alert-warning" role="alert">
             <p>您的上一次填报可能失败了, 返回信息为: {{ last_report_message }}</p>
-            <p>已知可能的原因为您开启了统一身份认证的二次验证. 请关闭后重新开关填报.
-                若问题无法解决, 请与我们联系.</p>
+            <p>已知可能的原因有:</p>
+            <ul>
+                <li>您开启了统一身份认证的二次验证. 请关闭后重新开关填报.</li>
+                <li>学校服务器崩溃了, 请等待学校修复.</li>
+            </ul>
+            <p>若问题无法解决, 请与我们联系.</p>
         </div>
     {% endif %}
     {% if status %}
