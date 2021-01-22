@@ -79,6 +79,8 @@ class Command(BaseCommand):
                 report.last_report_message = f'[{datetime.now()} {r}]'
                 report.save()
                 return False
-        except ConnectionError as e:
-            logger.error(f'{report.user.username}-{report.user.name} 连接失败\n' f'错误信息: {e}')
+        except requests.exceptions.ConnectionError as e:
+            logger.warning(f'{report.user.username}-{report.user.name} 连接失败\n' f'错误信息: {e}')
+            report.last_report_message = f'[{datetime.now()} 连接失败\n' f'错误信息: {e}]'
+            report.save()
         return False
