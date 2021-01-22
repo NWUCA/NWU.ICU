@@ -7,6 +7,7 @@ from datetime import datetime
 
 import requests
 from django.core.management.base import BaseCommand
+from django.db import OperationalError
 
 from report.models import Report
 
@@ -82,5 +83,16 @@ class Command(BaseCommand):
         except requests.exceptions.ConnectionError as e:
             logger.warning(f'{report.user.username}-{report.user.name} 连接失败\n' f'错误信息: {e}')
             report.last_report_message = f'[{datetime.now()} 连接失败\n' f'错误信息: {e}]'
-            report.save()
+
+            # sqlite 似乎不支持这么高的并发了, 一直会报错 database is locked
+            # https://docs.djangoproject.com/en/3.1/ref/databases/#database-is-locked-errors
+            # FIXME: 暂时用无限重试解决
+            retry = 1
+            while retry > 0:
+                try:
+                    logger.info(f'writing {report.user.username:10} retry={retry}')
+                    report.save()
+                    retry = -1
+                except OperationalError:
+                    retry += 1
         return False

@@ -70,7 +70,7 @@ DATABASES = {
         'NAME': BASE_DIR / 'db.sqlite3',
         'ATOMIC_REQUESTS': True,
         'OPTIONS': {
-            'timeout': 2,
+            'timeout': 10,
         },
     }
 }

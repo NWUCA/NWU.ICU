@@ -18,6 +18,7 @@ class TelegramBotHandler(logging.Handler):
     def __init__(self):
         super().__init__()
         self.bot = telebot.TeleBot(settings.TELEGRAM_BOT_API_TOKEN)
+        telebot.apihelper.RETRY_ON_ERROR = True
 
     def emit(self, record):
         # 基本照着 django.utils.log.AdminEmailHandler 写的
