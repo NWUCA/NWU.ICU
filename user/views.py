@@ -62,6 +62,10 @@ def unified_login(username, raw_password):
     response_login = session.post(login_page_url, data=data)
     if response_login is not None:
         soup = BeautifulSoup(response_login.text, 'html.parser')
+
+        if soup.find(id='improveInfoForm'):
+            return LoginResult(False, '您的密码仍为初始密码, 请更新您的密码后重试..', None, None)
+
         span = soup.select('span[id="msg"]')
         if len(span) == 0:
             # FIXME: 有时候 name 会获取失败, DOM 里没有 auth_username 这个 class
@@ -71,7 +75,8 @@ def unified_login(username, raw_password):
             except AttributeError:
                 log_dir = settings.BASE_DIR / 'logs'
                 log_dir.mkdir(exist_ok=True)
-                with open(log_dir / f'{username}-{datetime.now()}.html', 'b') as f:
+                logger.error('获取个人信息失败')
+                with open(log_dir / f'{username}-{datetime.now()}.html', 'wb') as f:
                     f.write(response_login.content)
                 return LoginResult(False, '获取个人信息失败, 请稍后重试..', None, None)
 
@@ -86,7 +91,7 @@ def unified_login(username, raw_password):
 
 def handle_login_error(request, msg):
     messages.error(request, msg)
-    if '验证码' in msg:
+    if '验证码' in msg or '初始密码' in msg:
         messages.error(
             request,
             '请手动使用统一身份认证登录一次, 入口在<a target="_blank" '
