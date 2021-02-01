@@ -5,7 +5,7 @@
 
 ## 起步
 ```
-pipenv sync
+pipenv sync --dev
 ```
 根据 `development.py.sample` 建立 `development.py` 配置文件.
 
@@ -23,6 +23,8 @@ pipenv sync
 - [x] 生产环境的配置, static files, DEBUG, 以及启动脚本
 - [x] logging
 - [x] 静态文件的图片 404 了
+- [ ] 使用 django form
+- [ ] 登录的 throttle
 
 ### 自动填报
 - [x] 失败后的提醒
