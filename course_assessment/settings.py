@@ -143,6 +143,12 @@ LOGGING = {
             'filters': ['require_debug_false'],
             'level': 'ERROR',
         },
+        'telegram_with_context': {
+            'class': 'course_assessment.log.TelegramBotHandlerWithContext',
+            'formatter': 'simple',
+            'filters': ['require_debug_false'],
+            'level': 'ERROR',
+        },
     },
     'root': {
         'handlers': ['console'],
@@ -153,7 +159,7 @@ LOGGING = {
             'handlers': ['telegram'],
         },
         'django.request': {
-            'handlers': ['telegram'],
+            'handlers': ['telegram_with_context'],
         },
     },
 }

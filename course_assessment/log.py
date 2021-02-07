@@ -20,7 +20,24 @@ class TelegramBotHandler(logging.Handler):
         self.bot = telebot.TeleBot(settings.TELEGRAM_BOT_API_TOKEN)
         telebot.apihelper.RETRY_ON_ERROR = True
 
+    def _get_msg(self, record):
+        return self.format(record)
+
     def emit(self, record):
+        msg = self._get_msg(record)
+
+        # Telegram 限制单条消息的长度, 有必要进行切片发送
+        MAX_LENGTH = 4000
+        for s in [msg[i : i + MAX_LENGTH] for i in range(0, len(msg), MAX_LENGTH)]:
+            self.bot.send_message(settings.TELEGRAM_CHAT_ID, s)
+
+
+class TelegramBotHandlerWithContext(TelegramBotHandler):
+    """
+    把 request 的上下文包含到 log 中
+    """
+
+    def _get_msg(self, record):
         # 基本照着 django.utils.log.AdminEmailHandler 写的
         try:
             request = record.request
@@ -45,7 +62,4 @@ class TelegramBotHandler(logging.Handler):
             f'{self.format(no_exc_record)}\n\n{reporter.get_traceback_text()}'
         )
 
-        # Telegram 限制单条消息的长度, 有必要进行切片发送
-        MAX_LENGTH = 4000
-        for s in [msg[i : i + MAX_LENGTH] for i in range(0, len(msg), MAX_LENGTH)]:
-            self.bot.send_message(settings.TELEGRAM_CHAT_ID, s)
+        return msg
