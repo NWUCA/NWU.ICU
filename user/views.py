@@ -118,6 +118,9 @@ class Login(View):
         if success:
             try:
                 user = User.objects.get(username=username)
+                user.cookie = pickle.dumps(cookies)
+                user.cookie_last_update = datetime.now()
+                user.save()
             except User.DoesNotExist:
                 user = User.objects.create(
                     username=username,
