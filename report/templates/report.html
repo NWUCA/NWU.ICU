@@ -3,6 +3,14 @@
 {% block subtitle %}自动填报{% endblock %}
 
 {% block content %}
+    {% for announcement in announcements %}
+        {% if announcement.type == 'report' %}
+            <div class="alert alert-primary" role="alert">
+                公告: {{ announcement.content }} <br> 最后更新时间: {{ announcement.update_time }}
+            </div>
+        {% endif %}
+    {% endfor %}
+
     {% if last_report_message %}
         <div class="alert alert-warning" role="alert">
             <p>您的上一次填报可能失败了, 返回信息为: {{ last_report_message }}</p>

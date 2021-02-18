@@ -74,7 +74,7 @@
                         </ul>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="/report/">自动填报</a>
+                        <a class="nav-link" href="/report">自动填报</a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="https://resour.nwu.icu/" target="_blank">
@@ -94,18 +94,24 @@
         </div>
     </nav>
     <div class="container">
-        {% block messages %}
-            {% if messages %}
-                {% for message in messages %}
-                    <div
-                            {% if message.tags == 'error' %} class="alert alert-danger"
-                            {% else %} class="alert alert-success"
-                            {% endif %}
-                                                             role="alert">
-                        {% if 'safe' in message.tags %}{{ message | safe }}{% else %}{{ message }}{% endif %}
-                    </div>
-                {% endfor %}
+        {% for announcement in announcements %}
+            {% if announcement.type == 'all' %}
+                <div class="alert alert-primary" role="alert">
+                    公告: {{ announcement.content }} <br> 最后更新时间: {{ announcement.update_time }}
+                </div>
             {% endif %}
+        {% endfor %}
+
+        {% block messages %}
+            {% for message in messages %}
+                <div
+                        {% if message.tags == 'error' %} class="alert alert-danger"
+                        {% else %} class="alert alert-success"
+                        {% endif %}
+                                                         role="alert">
+                    {% if 'safe' in message.tags %}{{ message | safe }}{% else %}{{ message }}{% endif %}
+                </div>
+            {% endfor %}
         {% endblock %}
     </div>
 </div>
