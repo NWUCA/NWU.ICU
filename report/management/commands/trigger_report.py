@@ -29,7 +29,7 @@ class Command(BaseCommand):
             if result:
                 success += 1
         logger.critical(
-            f'成功人数: {success}/{len(report_list)}, 用时: {time.time()-start_time:.2f}s'
+            f'成功人数: {success}/{len(report_list)}, 用时: {time.time() - start_time:.2f}s'
         )
 
     def model_save_with_retry(self, report: Report):
@@ -82,11 +82,11 @@ class Command(BaseCommand):
 
         cookie_jar = pickle.loads(report.user.cookie)
         try:
-            cookie_dict=cookie_jar.get_dict()
+            cookie_dict = cookie_jar.get_dict()
             cookie_str = ''
-            for i in (cookie_dict):
+            for i in cookie_dict:
                 cookie_str += i + '=' + cookie_dict[i] + '; '
-            headers['Cookie']=cookie_str
+            headers['Cookie'] = cookie_str
             r = requests.post(url, headers=headers, data=data)
             r = json.loads(r.text)
             if r['e'] == 1 or r['e'] == 0:
