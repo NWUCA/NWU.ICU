@@ -13,6 +13,8 @@ django-inline-svg = "*"
 
 [dev-packages]
 pre-commit = "*"
+pytest = "*"
+pytest-django = "*"
 
 [requires]
 python_version = "3"
