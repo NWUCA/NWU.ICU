@@ -102,7 +102,7 @@
                         <h5 class="modal-title">开启填报</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
-                    <form method="POST">
+                    <form method="POST" style="padding-right: 0;">
                         <div class="modal-body">
                             <p>注意: 广告拦截插件可能会拦截高德的位置服务, 建议关闭.</p>
                             <p>若位置不准确, 可尝试更换设备或网络环境后重试.</p>
@@ -123,145 +123,157 @@
                             </div>
                             <div>
                                 <label class="form-label">填报地址</label><br>
-                                <input class="form-check-input" type="radio" name="addrType" id="northCampus" value="1"
-                                       required onclick="changeArea(1)">
+                                <input class="form-check-input" type="radio" name="addrType" id="northCampus"
+                                       value="north"
+                                       required @click="changeArea(1)">
                                 <label class="form-check-label" for="northCampus">
                                     北校区（太白校区）
                                 </label><br>
-                                <input class="form-check-input" type="radio" name="addrType" id="southCampus" value="2"
-                                       required onclick="changeArea(2)">
+                                <input class="form-check-input" type="radio" name="addrType" id="southCampus"
+                                       value="south"
+                                       required @click="changeArea(2)">
                                 <label class="form-check-label" for="southCampus">
                                     南校区（长安校区）
                                 </label><br>
-                                <input class="form-check-input" type="radio" name="addrType" id="custom" value="3"
-                                       required onclick="changeArea(3)">
+                                <input class="form-check-input" type="radio" name="addrType" id="custom" value="current"
+                                       required @click="changeArea(3)">
                                 <label class="form-check-label" for="custom">
                                     使用当前位置
                                 </label>
-                                <div class="spinner-border spinner-border-sm" role="status" id="loading"
-                                     style="display: none;">
+                                <div class="spinner-border spinner-border-sm"
+                                     :class="{ invisible: !is_location_loading }"
+                                     role="status">
                                     <span class="visually-hidden">Loading...</span>
                                 </div>
                             </div>
                             <div class="row">
                                 <label for="address" class="form-label">地址</label>
-                                <textarea class="form-control" id="address" name="address" readonly></textarea>
+                                <textarea v-model="address" class="form-control" id="address" name="address"
+                                          readonly></textarea>
                             </div>
                             <div class="row mb-3">
                                 <label for="area" class="form-label">地区</label>
-                                <input class="form-control" id="area" name="area" readonly>
+                                <input v-model="area" class="form-control" id="area" name="area" readonly>
                             </div>
-                            <div class="row mb-3">
-                                <label for="province" class="form-label">省份</label>
-                                <input class="form-control" id="province" name="province" readonly>
-                            </div>
-                            <div class="row mb-3">
-                                <label for="city" class="form-label">城市</label>
-                                <input class="form-control" id="city" name="city" readonly>
-                            </div>
-                            <div class="row mb-3">
-                                <label for="geo_api_info" class="form-label">geo_api_info</label>
-                                <textarea class="form-control" id="geo_api_info" name="geo_api_info" rows="2"
-                                          readonly></textarea>
-                            </div>
+                            <input type="hidden" v-model="province" id="province" name="province">
+                            <input type="hidden" v-model="city" id="city" name="city">
+                            <input type="hidden" v-model="geo_api_info" id="geo_api_info" name="geo_api_info">
                         </div>
                         <div id="map"></div>
                         <div class="info">
-                            <h4 id='status'></h4>
-                            <hr>
-                            <p id='result'></p>
-                            <hr>
+                            <p v-html="amap_status"></p>
+                            <p v-html="amap_result"></p>
                         </div>
                         <div class="modal-footer">
-                            <button type="submit" class="btn btn-primary" id="submit" disabled>提交</button>
+                            <button type="submit" class="btn btn-primary" id="submit" :disabled="is_submit_disabled">
+                                提交
+                            </button>
                         </div>
                     </form>
                 </div>
             </div>
-            <script>
-                function getLocation() {
-                    document.getElementById('loading').style = '';
-                    var map = new AMap.Map('map', {
-                        resizeEnable: true
-                    });
-                    AMap.plugin('AMap.Geolocation', function () {
-                        var geolocation = new AMap.Geolocation({
-                            enableHighAccuracy: true,//是否使用高精度定位，默认:true
-                            timeout: 10000,          //超过10秒后停止定位，默认：5s
-                            {#noIpLocate: 3,#}
+        </div>
+
+        <script>
+            Vue.createApp({
+                data() {
+                    return {
+                        address: null,
+                        area: null,
+                        province: null,
+                        city: null,
+                        geo_api_info: null,
+                        is_location_loading: false,
+                        is_submit_disabled: true,
+                        amap_status: null,
+                        amap_result: null,
+                    }
+                },
+                methods: {
+                    getLocation() {
+                        this.is_location_loading = true;
+                        let map = new AMap.Map('map', {
+                            resizeEnable: true
                         });
-                        map.addControl(geolocation);
-                        geolocation.getCurrentPosition(function (status, result) {
-                            if (status === 'complete') {
-                                onComplete(result)
-                            } else {
-                                onError(result)
-                            }
+                        AMap.plugin('AMap.Geolocation', () => {
+                            let geolocation = new AMap.Geolocation({
+                                enableHighAccuracy: true,//是否使用高精度定位，默认:true
+                                timeout: 10000,          //超过10秒后停止定位，默认：5s
+                                {#noIpLocate: 3,#}
+                            });
+                            map.addControl(geolocation);
+                            geolocation.getCurrentPosition((status, result) => {
+                                this.is_location_loading = false;
+                                if (status === 'complete') {
+                                    this.onComplete(result)
+                                } else {
+                                    //解析定位错误信息
+                                    this.amap_status = `定位失败, 请确认已授予设备位置权限并刷新重试, 多次失败请更换浏览器或设备重试。`;
+                                    this.amap_result = '失败原因排查信息:' + result.message;
+                                }
+                            });
                         });
-                    });
+                    },
 
                     //解析定位结果
-                    function onComplete(data) {
-                        document.getElementById('loading').style = 'display: none;';
-                        console.log(data)
-                        document.getElementById('status').innerHTML = '定位成功'
+                    onComplete(data) {
+                        console.log(data);
+                        this.amap_status = '定位成功';
                         let str = [];
                         str.push('定位结果：' + data.position);
                         str.push('定位类别：' + data.location_type);
                         if (data.accuracy) {
                             str.push('精度：' + data.accuracy + ' 米');
-                        }//如为IP精确定位结果则没有精度信息
+                        } //如为IP精确定位结果则没有精度信息
 
-                        document.getElementById('result').innerHTML = str.join('<br>');
+                        this.amap_result = str.join('<br>');
 
-                        document.getElementById('address').value = data.formattedAddress
-                        let address_component = data.addressComponent
-                        console.log(address_component)
-                        document.getElementById('area').value =
-                            `${address_component.province} ${address_component.city} ${address_component.district}`;
-                        document.getElementById('province').value = address_component.province;
-                        document.getElementById('city').value = address_component.city;
-                        document.getElementById('geo_api_info').value = JSON.stringify(data);
+                        this.address = data.formattedAddress;
+                        let address_component = data.addressComponent;
+                        console.log(address_component);
+                        this.area = `${address_component.province} ${address_component.city} ${address_component.district}`;
+                        this.province = address_component.province;
+                        this.city = address_component.city;
+                        this.geo_api_info = JSON.stringify(data);
 
-                        document.getElementById('submit').disabled = false;
-                    }
+                        this.is_submit_disabled = false;
+                    },
 
-                    //解析定位错误信息
-                    function onError(data) {
-                        document.getElementById('status').innerHTML =
-                            `定位失败, 请确认已授予设备位置权限并刷新重试, 多次失败请更换浏览器或设备重试。`;
-                        document.getElementById('result').innerHTML = '失败原因排查信息:' + data.message;
-                    }
-                }
+                    clear_result() {
+                        this.amap_status = null;
+                        this.amap_result = null;
+                        this.address = null;
+                        this.area = null;
+                        this.province = null;
+                        this.city = null
+                        this.geo_api_info = null;
+                    },
 
-                function changeArea(addrType) {
-                    if (addrType == 1) {
-                        // document.getElementById('result').innerHTML = str.join('<br>');
-                        document.getElementById('status').innerHTML = '';
-                        document.getElementById('result').innerHTML = '';
-                        document.getElementById('address').value = "陕西省西安市碑林区张家村街道含光路144号西北大学太白校区";
-                        document.getElementById('area').value = "陕西省 西安市 碑林区";
-                        document.getElementById('province').value = "陕西省";
-                        document.getElementById('city').value = "西安市";
-                        document.getElementById('geo_api_info').value = '{"type":"complete","info":"SUCCESS","status":1,"$Da":"jsonp_368616_","position":{"Q":34.24801,"R":108.92881,"lng":108.92881,"lat":34.24801},"message":"Get ipLocation success.Get address success.","location_type":"ip","accuracy":null,"isConverted":true,"addressComponent":{"citycode":"029","adcode":"610103","businessAreas":[{"name":"环城南路","id":"610103","location":{"Q":34.250901,"R":108.94798100000003,"lng":108.947981,"lat":34.250901}},{"name":"长安路","id":"610113","location":{"Q":34.225014,"R":108.94260099999997,"lng":108.942601,"lat":34.225014}},{"name":"甜水井","id":"610104","location":{"Q":34.255614,"R":108.92899899999998,"lng":108.928999,"lat":34.255614}}],"neighborhoodType":"","neighborhood":"","building":"","buildingType":"","street":"含光路","streetNumber":"144号","country":"中国","province":"陕西省","city":"西安市","district":"碑林区","township":"张家村街道"},"formattedAddress":"陕西省西安市碑林区张家村街道含光路144号西北大学太白校区","roads":[],"crosses":[],"pois":[]}';
-                        document.getElementById('submit').disabled = false;
-                    } else if (addrType == 2) {
-                        // document.getElementById('result').innerHTML = str.join('<br>');
-                        document.getElementById('status').innerHTML = '';
-                        document.getElementById('result').innerHTML = '';
-                        document.getElementById('address').value = "陕西省西安市长安区郭杜街道凤林大道西北大学长安校区";
-                        document.getElementById('area').value = "陕西省 西安市 长安区";
-                        document.getElementById('province').value = "陕西省";
-                        document.getElementById('city').value = "西安市";
-                        document.getElementById('geo_api_info').value = '{"type":"complete","info":"SUCCESS","status":1,"VDa":"jsonp_546141_","position":{"Q":34.14215,"R":108.87224000000003,"lng":108.87224,"lat":34.14215},"message":"Get ipLocation success.Get address success.","location_type":"ip","accuracy":null,"isConverted":true,"addressComponent":{"citycode":"029","adcode":"610116","businessAreas":[],"neighborhoodType":"","neighborhood":"","building":"","buildingType":"","street":"凤林大道","streetNumber":"1号","country":"中国","province":"陕西省","city":"西安市","district":"长安区","township":"郭杜街道"},"formattedAddress":"陕西省西安市长安区郭杜街道凤林大道西北大学长安校区","roads":[],"crosses":[],"pois":[]}';
-                        document.getElementById('submit').disabled = false;
-                    } else if (addrType == 3) {
-                        document.getElementById('submit').disabled = true;
-                        getLocation();
+                    changeArea(addrType) {
+                        this.clear_result();
+                        this.is_submit_disabled = true;
+                        if (addrType === 1) {
+                            this.address = "陕西省西安市碑林区张家村街道含光路144号西北大学太白校区";
+                            this.area = "陕西省 西安市 碑林区";
+                            this.province = "陕西省";
+                            this.city = "西安市";
+                            this.geo_api_info = '{"type":"complete","info":"SUCCESS","status":1,"$Da":"jsonp_368616_","position":{"Q":34.24801,"R":108.92881,"lng":108.92881,"lat":34.24801},"message":"Get ipLocation success.Get address success.","location_type":"ip","accuracy":null,"isConverted":true,"addressComponent":{"citycode":"029","adcode":"610103","businessAreas":[{"name":"环城南路","id":"610103","location":{"Q":34.250901,"R":108.94798100000003,"lng":108.947981,"lat":34.250901}},{"name":"长安路","id":"610113","location":{"Q":34.225014,"R":108.94260099999997,"lng":108.942601,"lat":34.225014}},{"name":"甜水井","id":"610104","location":{"Q":34.255614,"R":108.92899899999998,"lng":108.928999,"lat":34.255614}}],"neighborhoodType":"","neighborhood":"","building":"","buildingType":"","street":"含光路","streetNumber":"144号","country":"中国","province":"陕西省","city":"西安市","district":"碑林区","township":"张家村街道"},"formattedAddress":"陕西省西安市碑林区张家村街道含光路144号西北大学太白校区","roads":[],"crosses":[],"pois":[]}';
+                            this.is_submit_disabled = false;
+                        } else if (addrType === 2) {
+                            this.address = "陕西省西安市长安区郭杜街道凤林大道西北大学长安校区";
+                            this.area = "陕西省 西安市 长安区";
+                            this.province = "陕西省";
+                            this.city = "西安市";
+                            this.geo_api_info = '{"type":"complete","info":"SUCCESS","status":1,"VDa":"jsonp_546141_","position":{"Q":34.14215,"R":108.87224000000003,"lng":108.87224,"lat":34.14215},"message":"Get ipLocation success.Get address success.","location_type":"ip","accuracy":null,"isConverted":true,"addressComponent":{"citycode":"029","adcode":"610116","businessAreas":[],"neighborhoodType":"","neighborhood":"","building":"","buildingType":"","street":"凤林大道","streetNumber":"1号","country":"中国","province":"陕西省","city":"西安市","district":"长安区","township":"郭杜街道"},"formattedAddress":"陕西省西安市长安区郭杜街道凤林大道西北大学长安校区","roads":[],"crosses":[],"pois":[]}';
+                            this.is_submit_disabled = false;
+                        } else if (addrType === 3) {
+                            this.getLocation();
+                        }
+
                     }
                 }
-            </script>
-        </div>
+            }).mount('#turnOnAutoReport')
+        </script>
     {% endif %}
 
 
