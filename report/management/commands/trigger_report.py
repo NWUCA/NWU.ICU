@@ -82,12 +82,12 @@ class Command(BaseCommand):
 
         cookie_jar = pickle.loads(report.user.cookie)
         try:
-            cookie_dict = cookie_jar.get_dict()
-            cookie_str = ''
-            for i in cookie_dict:
-                cookie_str += i + '=' + cookie_dict[i] + '; '
-            headers['Cookie'] = cookie_str
-            r = requests.post(url, headers=headers, data=data)
+            r = requests.post(
+                url,
+                headers=headers,
+                cookies=cookie_jar.get_dict(domain='app.nwu.edu.cn'),
+                data=data,
+            )
             r = json.loads(r.text)
             if r['e'] == 1 or r['e'] == 0:
                 logger.info(f'{report.user.username}-{report.user.name} {r["m"]}')

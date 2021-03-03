@@ -82,6 +82,8 @@ def unified_login(username, raw_password):
 
             # 获取 app.nwu.edu.cn 域下的 cookies
             session.get('https://app.nwu.edu.cn/uc/wap/login')
+            for cookie in session.cookies:
+                cookie.expires = None
             return LoginResult(True, '登陆成功', name, session.cookies)
         else:
             msg = span[0].text
