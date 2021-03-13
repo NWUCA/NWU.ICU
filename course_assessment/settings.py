@@ -169,3 +169,5 @@ LOGGING = {
 SVG_DIRS = [
     BASE_DIR / 'static/img',
 ]
+
+SESSION_COOKIE_AGE = 365 * 24 * 60 * 60  # 365 days, in seconds
