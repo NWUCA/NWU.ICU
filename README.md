@@ -10,6 +10,7 @@ pipenv sync --dev
 根据 `development.py.sample` 建立 `development.py` 配置文件.
 
 ## 部署
+- 确保 clone 了整个仓库.. (版本号模块使用了 git describe)
 - 根据 `production.py.sample` 建立 `production.py` 配置文件
 - 配置静态文件
 - 初始化数据库
