@@ -1,17 +1,10 @@
 import logging
 from copy import copy
 
+import requests
 import telebot
 from django.conf import settings
 from django.views.debug import ExceptionReporter
-
-
-class TrimmedExceptionReporter(ExceptionReporter):
-    def get_traceback_data(self):
-        data = super().get_traceback_data()
-        data.pop('settings', None)
-        data.pop('request_meta', None)
-        return data
 
 
 class TelegramBotHandler(logging.Handler):
@@ -55,7 +48,7 @@ class TelegramBotHandlerWithContext(TelegramBotHandler):
         else:
             exc_info = (None, record.getMessage(), None)
 
-        reporter = TrimmedExceptionReporter(request, is_email=True, *exc_info)
+        reporter = ExceptionReporter(request, is_email=True, *exc_info)
 
         msg = (
             f'{record.levelname}, {record.getMessage()}\n'
@@ -63,3 +56,10 @@ class TelegramBotHandlerWithContext(TelegramBotHandler):
         )
 
         return msg
+
+    def emit(self, record):
+        msg = self._get_msg(record)
+
+        r = requests.post('https://paste.coherence.space/api/', data={'content': msg})
+
+        self.bot.send_message(settings.TELEGRAM_CHAT_ID, r.text.strip())
