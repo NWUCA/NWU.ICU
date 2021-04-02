@@ -5,7 +5,7 @@ from django.db.models import Avg
 from django.shortcuts import redirect, render
 from django.views import View
 
-from core.models import Course, Review, School, Teacher
+from course_assessment.models import Course, Review, School, Teacher
 
 
 class Index(View):

@@ -1,4 +1,4 @@
-"""course_assessment URL Configuration
+"""NWU.ICU URL Configuration
 
 The `urlpatterns` list routes URLs to views. For more information please see:
     https://docs.djangoproject.com/en/3.1/topics/http/urls/
@@ -16,7 +16,13 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, re_path
 
-from core.views import CourseAddView, CourseList, CourseView, Index, TeacherView
+from course_assessment.views import (
+    CourseAddView,
+    CourseList,
+    CourseView,
+    Index,
+    TeacherView,
+)
 from report.views import ReportIndex
 from user.views import Login, Logout, RefreshCookies
 
