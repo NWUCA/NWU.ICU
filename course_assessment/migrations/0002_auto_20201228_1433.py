@@ -7,13 +7,15 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '0001_initial'),
+        ('course_assessment', '0001_initial'),
     ]
 
     operations = [
         migrations.AlterField(
             model_name='course',
             name='school',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='core.school'),
+            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='course_assessment.school'),
         ),
     ]
+
+    replaces = [('core', '0002_auto_20201228_1433')]

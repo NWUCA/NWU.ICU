@@ -4,3 +4,4 @@
 production.py
 development.py
 logs/
+*.backup

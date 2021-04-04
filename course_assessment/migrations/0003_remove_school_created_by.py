@@ -6,7 +6,7 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '0002_auto_20201228_1433'),
+        ('course_assessment', '0002_auto_20201228_1433'),
     ]
 
     operations = [
@@ -15,3 +15,5 @@ class Migration(migrations.Migration):
             name='created_by',
         ),
     ]
+
+    replaces = [('core', '0003_remove_school_created_by')]

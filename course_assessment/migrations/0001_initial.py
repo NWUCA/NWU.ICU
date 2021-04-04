@@ -23,6 +23,7 @@ class Migration(migrations.Migration):
                 ('school', models.TextField(help_text='院系')),
                 ('created_by', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to=settings.AUTH_USER_MODEL)),
             ],
+            options={'db_table': 'core_course'},
         ),
         migrations.CreateModel(
             name='School',
@@ -31,6 +32,7 @@ class Migration(migrations.Migration):
                 ('name', models.TextField(unique=True)),
                 ('created_by', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to=settings.AUTH_USER_MODEL)),
             ],
+            options={'db_table': 'core_school'},
         ),
         migrations.CreateModel(
             name='Teacher',
@@ -38,8 +40,9 @@ class Migration(migrations.Migration):
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('name', models.TextField()),
                 ('created_by', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to=settings.AUTH_USER_MODEL)),
-                ('school', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='core.school')),
+                ('school', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='course_assessment.school')),
             ],
+            options={'db_table': 'core_teacher'},
         ),
         migrations.CreateModel(
             name='Review',
@@ -48,13 +51,16 @@ class Migration(migrations.Migration):
                 ('content', models.TextField()),
                 ('rating', models.SmallIntegerField()),
                 ('anonymous', models.BooleanField()),
-                ('course', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='core.course')),
+                ('course', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='course_assessment.course')),
                 ('created_by', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to=settings.AUTH_USER_MODEL)),
             ],
+            options={'db_table': 'core_review'},
         ),
         migrations.AddField(
             model_name='course',
             name='teacher',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='core.teacher'),
+            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='course_assessment.teacher'),
         ),
     ]
+
+    replaces = [('core', '0001_initial')]
