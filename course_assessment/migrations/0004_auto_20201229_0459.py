@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '0003_remove_school_created_by'),
+        ('course_assessment', '0003_remove_school_created_by'),
     ]
 
     operations = [
@@ -15,3 +15,5 @@ class Migration(migrations.Migration):
             constraint=models.UniqueConstraint(fields=('course', 'created_by'), name='unique_review'),
         ),
     ]
+
+    replaces = [('core', '0004_auto_20201229_0459')]

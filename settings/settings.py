@@ -41,7 +41,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-ROOT_URLCONF = 'course_assessment.urls'
+ROOT_URLCONF = 'settings.urls'
 
 TEMPLATES = [
     {
@@ -141,13 +141,13 @@ LOGGING = {
             'formatter': 'simple',
         },
         'telegram': {
-            'class': 'course_assessment.log.TelegramBotHandler',
+            'class': 'settings.log.TelegramBotHandler',
             'formatter': 'simple',
             'filters': ['require_debug_false'],
             'level': 'ERROR',
         },
         'telegram_with_context': {
-            'class': 'course_assessment.log.TelegramBotHandlerWithContext',
+            'class': 'settings.log.TelegramBotHandlerWithContext',
             'formatter': 'simple',
             'filters': ['require_debug_false'],
             'level': 'ERROR',
