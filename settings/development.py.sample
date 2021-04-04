@@ -1,12 +1,10 @@
 from .settings import *
 
-# SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'whosyourdaddy'
-
-# SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
 ALLOWED_HOSTS = ['*']
 
+# this is only used for production logging, you can ignore them in development.
 TELEGRAM_BOT_API_TOKEN = 'your api token'
 TELEGRAM_CHAT_ID = -1
