@@ -1,13 +1,24 @@
-据说某人五月份说要写这个来着... (咕咕咕
-
-这本来是一个课程评价网站.. 为了复用 user 部分的代码把自动填报加进去了..
-目前文件结构有些乱..
+目前拥有课程评价和自动填报两个模块, 更多功能正在计划中..
 
 ## 起步
-```
-pipenv sync --dev
-```
-根据 `development.py.sample` 建立 `development.py` 配置文件.
+本项目使用 Django 开发, 并使用 pipenv 来管理依赖.
+- 安装依赖:
+    ```
+    pipenv sync --dev
+    ```
+- 进入虚拟环境:
+    ```
+    pipenv shell
+    ```
+- 根据 `development.py.sample` 建立 `development.py` 配置文件.
+- 建立数据库:
+    ```
+    python manage.py migrate
+    ```
+- 运行开发服务器:
+    ```
+    python manage.py runserver
+    ```
 
 ## 部署
 - 确保 clone 了整个仓库.. (版本号模块使用了 git describe)
@@ -19,6 +30,11 @@ pipenv sync --dev
 
 ## 自动填报
 把 `report/trigger_report.sh` 加入 crontab 中.
+
+## Roadmap
+- [ ] 首页添加类似 ustc.life 的导航
+- [ ] PWA
+- [ ] 课程评价的 UX 改进
 
 ## TODO
 - [x] 生产环境的配置, static files, DEBUG, 以及启动脚本
