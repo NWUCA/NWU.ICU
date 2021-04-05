@@ -6,7 +6,7 @@
     {% for announcement in announcements %}
         {% if announcement.type == 'report' %}
             <div class="alert alert-primary" role="alert">
-                公告: {{ announcement.content }} <br> 最后更新时间: {{ announcement.update_time }}
+                公告: {{ announcement.content | linebreaks }} 最后更新时间: {{ announcement.update_time }}
             </div>
         {% endif %}
     {% endfor %}
