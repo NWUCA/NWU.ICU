@@ -63,71 +63,67 @@
 
 
 <body>
-<nav class="navbar navbar-expand-md navbar-dark bg-dark fixed-top">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="/">NWU.ICU</a>
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
-                data-bs-target="#navbarsExampleDefault" aria-controls="navbarsExampleDefault"
-                aria-expanded="false" aria-label="Toggle navigation">
-            <span class="navbar-toggler-icon"></span>
-        </button>
+<nav class="navbar navbar-expand-md navbar-dark bg-dark fixed-top container-fluid">
+    <a class="navbar-brand" href="/">NWU.ICU</a>
 
-        <div class="collapse navbar-collapse" id="navbarsExampleDefault">
-            <ul class="navbar-nav me-auto mb-2 mb-md-0">
-                <li class="nav-item dropdown">
-                    <a
-                            class="nav-link dropdown-toggle"
-                            href="#"
-                            role="button"
-                            data-bs-toggle="dropdown"
-                            aria-expanded="false"
-                            id="courseDropdown"
-                    >
-                        课程评价
-                    </a>
-                    <ul class="dropdown-menu" aria-labelledby="courseDropdown">
-                        <li><a class="dropdown-item" href="/course_list/">课程列表</a></li>
-                        <li><a class="dropdown-item" href="/course/">添加课程</a></li>
-                        <li><a class="dropdown-item" href="/teacher/">添加教师</a></li>
-                    </ul>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="/report/">自动填报</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="https://resour.nwu.icu/" target="_blank">
-                        资源分享
+    <div class="collapse navbar-collapse" id="navbarsExampleDefault">
+        <ul class="navbar-nav me-auto mb-2 mb-md-0">
+            <li class="nav-item dropdown">
+                <a
+                    class="nav-link dropdown-toggle"
+                    href="#"
+                    role="button"
+                    data-bs-toggle="dropdown"
+                    aria-expanded="false"
+                    id="courseDropdown"
+                >
+                    课程评价
+                </a>
+                <ul class="dropdown-menu" aria-labelledby="courseDropdown">
+                    <li><a class="dropdown-item" href="/course_list/">课程列表</a></li>
+                    <li><a class="dropdown-item" href="/course/">添加课程</a></li>
+                    <li><a class="dropdown-item" href="/teacher/">添加教师</a></li>
+                </ul>
+            </li>
+
+            <li class="nav-item">
+                <a class="nav-link" href="/report/">自动填报</a>
+            </li>
+
+            <li class="nav-item">
+                <a class="nav-link" href="https://resour.nwu.icu/" target="_blank">
+                    资源分享
+                    {% svg 'box-arrow-up-right' %}
+                </a>
+            </li>
+
+            <li class="nav-item dropdown">
+                <a
+                    class="nav-link dropdown-toggle"
+                    href="#"
+                    role="button"
+                    data-bs-toggle="dropdown"
+                    aria-expanded="false"
+                    id="friendsDropdown"
+                >
+                    友链
+                </a>
+                <ul class="dropdown-menu" aria-labelledby="friendsDropdown">
+                    <li><a class="dropdown-item" href="https://nwuzmed.ga/" target="_blank">
+                        DAC导航
                         {% svg 'box-arrow-up-right' %}
-                    </a>
-                </li>
-                <li class="nav-item dropdown">
-                    <a
-                            class="nav-link dropdown-toggle"
-                            href="#"
-                            role="button"
-                            data-bs-toggle="dropdown"
-                            aria-expanded="false"
-                            id="friendsDropdown"
-                    >
-                        友链
-                    </a>
-                    <ul class="dropdown-menu" aria-labelledby="friendsDropdown">
-                        <li><a class="dropdown-item" href="https://nwuzmed.ga/" target="_blank">
-                            DAC导航
-                            {% svg 'box-arrow-up-right' %}
-                        </a></li>
-                    </ul>
-                </li>
+                    </a></li>
+                </ul>
+            </li>
 
-            </ul>
-            {% if user.is_authenticated %}
-                <label style="color: rgba(255,255,255,.55)">{{ user.name }}, </label>
-                <a class="nav-link" href="/logout/" style="color: rgba(255,255,255,.55)">注销</a>
-            {% else %}
-                <a class="nav-link" href="/login/" style="color: rgba(255,255,255,.55)">登录</a>
-                {#FIXME: 为什么颜色没有继承其他 nav-link?#}
-            {% endif %}
-        </div>
+        </ul>
+        {% if user.is_authenticated %}
+            <label style="color: rgba(255,255,255,.55)">{{ user.name }}, </label>
+            <a class="nav-link" href="/logout/" style="color: rgba(255,255,255,.55)">注销</a>
+        {% else %}
+            <a class="nav-link" href="/login/" style="color: rgba(255,255,255,.55)">登录</a>
+            {#FIXME: 为什么颜色没有继承其他 nav-link?#}
+        {% endif %}
     </div>
 </nav>
 
