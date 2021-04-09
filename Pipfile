@@ -10,6 +10,8 @@ requests = "*"
 beautifulsoup4 = "*"
 pytelegrambotapi = "*"
 django-inline-svg = "*"
+django-crispy-forms = "*"
+crispy-bootstrap5 = "*"
 
 [dev-packages]
 pre-commit = "*"
