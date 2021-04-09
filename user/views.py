@@ -18,6 +18,8 @@ from django.views import View
 
 from user.models import User
 
+from .form import LoginForm
+
 logger = logging.getLogger(__name__)
 LoginResult = namedtuple('LoginResult', 'success msg name cookies')
 
@@ -108,38 +110,45 @@ def handle_login_error(request, msg):
 
 
 class Login(View):
+    def render_login_page(self, request):
+        return render(request, 'login.html', {'login_form': LoginForm()})
+
     def get(self, request):
         if not request.user.is_authenticated:
-            return render(request, 'login.html')
+            return self.render_login_page(request)
         else:
             next_url = request.GET.get('next')
             return redirect(next_url if next_url else '/')
 
     def post(self, request):
+        form = LoginForm(request.POST)
         username = request.POST['username']
         password = request.POST['password']
-        success, msg, name, cookies = unified_login(username, password)
-        logger.info(f'{name} 认证状态:{success}-{msg}')
-        if success:
-            try:
-                user = User.objects.get(username=username)
-                user.cookie = pickle.dumps(cookies)
-                user.cookie_last_update = datetime.now()
-                user.save()
-            except User.DoesNotExist:
-                user = User.objects.create(
-                    username=username,
-                    name=name,
-                    cookie=pickle.dumps(cookies),
-                    cookie_last_update=datetime.now(),
-                )
-            login(request, user)
-            messages.add_message(request, messages.SUCCESS, '登录成功')
-            next_url = request.GET.get('next')
-            return redirect(next_url if next_url else '/')
+        if form.is_valid():
+            success, msg, name, cookies = unified_login(username, password)
+            logger.info(f'{name} 认证状态:{success}-{msg}')
+            if success:
+                try:
+                    user = User.objects.get(username=username)
+                    user.cookie = pickle.dumps(cookies)
+                    user.cookie_last_update = datetime.now()
+                    user.save()
+                except User.DoesNotExist:
+                    user = User.objects.create(
+                        username=username,
+                        name=name,
+                        cookie=pickle.dumps(cookies),
+                        cookie_last_update=datetime.now(),
+                    )
+                login(request, user)
+                messages.add_message(request, messages.SUCCESS, '登录成功')
+                next_url = request.GET.get('next')
+                return redirect(next_url if next_url else '/')
+            else:
+                handle_login_error(request, msg)
+                return self.render_login_page(request)
         else:
-            handle_login_error(request, msg)
-            return render(request, 'login.html')
+            return self.render_login_page(request)
 
 
 class Logout(View):

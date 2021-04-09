@@ -22,7 +22,11 @@ INSTALLED_APPS = [
     'common',
     'user',
     'report',
+    # below are 3rd apps
     'svg',  # FIXME: this lib is a temporary solution
+    'crispy_forms',
+    "crispy_bootstrap5",
+    # below are django apps
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -76,6 +80,8 @@ DATABASES = {
         },
     }
 }
+
+DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
 
 
 # Password validation
@@ -172,3 +178,6 @@ SVG_DIRS = [
 ]
 
 SESSION_COOKIE_AGE = 365 * 24 * 60 * 60  # 365 days, in seconds
+
+CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
+CRISPY_TEMPLATE_PACK = "bootstrap5"
