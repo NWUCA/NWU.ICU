@@ -5,7 +5,9 @@ from django.db.models import Avg
 from django.shortcuts import redirect, render
 from django.views import View
 
-from course_assessment.models import Course, Review, School, Teacher
+from course_assessment.models import Course, Review
+
+from .models import CourseForm, TeacherForm
 
 
 class Index(View):
@@ -25,37 +27,24 @@ class CourseList(LoginRequiredMixin, View):
 
 class TeacherView(LoginRequiredMixin, View):
     def get(self, request):
-        return render(request, 'teacher.html', context={'schools': School.objects.all()})
+        return render(request, 'teacher.html', context={'form': TeacherForm()})
 
     def post(self, request):
-        name = request.POST['name']
-        school = request.POST['school']
-        Teacher.objects.create(name=name, school_id=school, created_by=request.user)
+        f = TeacherForm(request.POST)
+        f.instance.created_by = request.user
+        f.save()
         messages.success(request, '添加成功')
         return redirect('/teacher')
 
 
 class CourseAddView(LoginRequiredMixin, View):
     def get(self, request):
-        context = {
-            'classification_choices': Course.classification_choices,
-            'teachers': Teacher.objects.all(),
-            'schools': School.objects.all(),
-        }
-        return render(request, 'course_add.html', context=context)
+        return render(request, 'course_add.html', context={'form': CourseForm()})
 
     def post(self, request):
-        name = request.POST['name']
-        teacher = request.POST['teacher']
-        school = request.POST['school']
-        classification = request.POST['classification']
-        Course.objects.create(
-            name=name,
-            school_id=school,
-            teacher_id=teacher,
-            classification=classification,
-            created_by=request.user,
-        )
+        f = CourseForm(request.POST)
+        f.instance.created_by = request.user
+        f.save()
         messages.success(request, '添加成功')
         return redirect('/course/')
 

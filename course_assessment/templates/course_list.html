@@ -1,9 +1,9 @@
 {% extends "base_course.html" %}
 
 {% block course_content %}
-<h2>课程列表</h2>
-<table class="table table-hover">
-    <thead>
+    <h2>课程列表</h2>
+    <table class="table table-hover">
+        <thead>
         <tr>
             <th scope="col">#</th>
             <th scope="col">名称</th>
@@ -11,28 +11,17 @@
             <th scope="col">教师</th>
             <th scope="col">院系</th>
         </tr>
-    </thead>
-    <tbody>
+        </thead>
+        <tbody>
         {% for course in courses %}
-        <tr onmousedown="window.location='/course/{{ course.id }}';" style="cursor: pointer">
-            <th scope="row">{{ course.id }}</th>
-            <td>{{ course.name }}</td>
-            <td>{{ course.get_classification_display }}</td>
-            <td>{{ course.teacher }}</td>
-            <td>{{ course.school }}</td>
-        </tr>
+            <tr onmousedown="window.location='/course/{{ course.id }}';" style="cursor: pointer">
+                <th scope="row">{{ course.id }}</th>
+                <td>{{ course.name }}</td>
+                <td>{{ course.get_classification_display }}</td>
+                <td>{{ course.teacher }}</td>
+                <td>{{ course.school }}</td>
+            </tr>
         {% endfor %}
-    </tbody>
-</table>
-
-<script>
-    function test() {
-        let form = new FormData();
-        form.append('csrfmiddlewaretoken', document.getElementsByName('csrfmiddlewaretoken')[0].value)
-        fetch('', {
-            method: 'POST',
-            body: form,
-        })
-    }
-</script>
+        </tbody>
+    </table>
 {% endblock %}

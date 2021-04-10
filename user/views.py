@@ -18,7 +18,7 @@ from django.views import View
 
 from user.models import User
 
-from .form import LoginForm
+from .forms import LoginForm
 
 logger = logging.getLogger(__name__)
 LoginResult = namedtuple('LoginResult', 'success msg name cookies')
