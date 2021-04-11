@@ -58,6 +58,7 @@ class CourseForm(forms.ModelForm):
     class Meta:
         model = Course
         fields = ['name', 'teacher', 'classification', 'school']
+        help_texts = {'teacher': '没有找到想要的老师? <a href="/teacher/">点击添加</a>'}
 
 
 class Review(models.Model):

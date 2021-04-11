@@ -15,7 +15,7 @@ class Index(View):
         return render(request, 'index.html')
 
 
-class CourseList(LoginRequiredMixin, View):
+class CourseList(View):
     def get(self, request):
         context = {'courses': Course.objects.all()}
         return render(request, 'course_list.html', context=context)
@@ -34,7 +34,7 @@ class TeacherView(LoginRequiredMixin, View):
         f.instance.created_by = request.user
         f.save()
         messages.success(request, '添加成功')
-        return redirect('/teacher')
+        return redirect('/course/')
 
 
 class CourseAddView(LoginRequiredMixin, View):
@@ -52,6 +52,7 @@ class CourseAddView(LoginRequiredMixin, View):
 class CourseView(LoginRequiredMixin, View):
     def get(self, request, course_id):
         context = {
+            'course': Course.objects.get(id=course_id),
             'reviews': Review.objects.filter(course_id=course_id).select_related('created_by'),
             'rating': Review.objects.filter(course_id=course_id).aggregate(Avg('rating'))[
                 'rating__avg'
