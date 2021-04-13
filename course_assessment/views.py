@@ -2,7 +2,7 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import IntegrityError
 from django.db.models import Avg
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
 
 from course_assessment.models import Course, Review
@@ -17,7 +17,7 @@ class Index(View):
 
 class CourseList(View):
     def get(self, request):
-        context = {'courses': Course.objects.all()}
+        context = {'courses': Course.objects.annotate(rating=Avg('review__rating'))}
         return render(request, 'course_list.html', context=context)
 
     def post(self, request):
@@ -51,8 +51,9 @@ class CourseAddView(LoginRequiredMixin, View):
 
 class CourseView(LoginRequiredMixin, View):
     def get(self, request, course_id):
+        course = get_object_or_404(Course, id=course_id)
         context = {
-            'course': Course.objects.get(id=course_id),
+            'course': course,
             'reviews': Review.objects.filter(course_id=course_id).select_related('created_by'),
             'rating': Review.objects.filter(course_id=course_id).aggregate(Avg('rating'))[
                 'rating__avg'

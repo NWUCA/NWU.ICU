@@ -10,6 +10,7 @@
         <tr>
             <th scope="col">#</th>
             <th scope="col">名称</th>
+            <th scope="col">评分</th>
             <th scope="col">类型</th>
             <th scope="col">教师</th>
             <th scope="col">院系</th>
@@ -20,6 +21,13 @@
             <tr onmousedown="window.location='/course/{{ course.id }}';" style="cursor: pointer">
                 <th scope="row">{{ course.id }}</th>
                 <td>{{ course.name }}</td>
+                <td>
+                    {% if course.rating %}
+                        {{ course.rating | floatformat }} / 5
+                    {% else %}
+                        暂无评分
+                    {% endif %}
+                </td>
                 <td>{{ course.get_classification_display }}</td>
                 <td>{{ course.teacher }}</td>
                 <td>{{ course.school }}</td>

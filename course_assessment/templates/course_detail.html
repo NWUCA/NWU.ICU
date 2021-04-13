@@ -8,7 +8,14 @@
     </p>
 
     <h3>
-        <span>总体评价: {{ rating }}</span>
+        <span>
+            总体评价:
+            {% if rating %}
+                {{ rating | floatformat }} / 5
+            {% else %}
+                暂无评分
+            {% endif %}
+        </span>
         <span style="font-size: medium">({{ reviews.count }} 人评价)</span>
     </h3>
 
