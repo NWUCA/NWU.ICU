@@ -1,4 +1,5 @@
-目前拥有课程评价和自动填报两个模块, 更多功能正在计划中..
+# NWU.ICU
+目前拥有导航, 课程评价和自动填报三个模块, 更多功能正在计划中..
 
 ## 起步
 本项目使用 Django 开发, 并使用 pipenv 来管理依赖.
@@ -28,11 +29,13 @@
 - 执行 `start.sh`
 - 配置反向代理
 
+目前生产环境的部署流程见[这里](https://github.com/cjc7373/ansible/blob/master/playbooks/nwu.icu.yml).
+
 ## 自动填报
 把 `report/trigger_report.sh` 加入 crontab 中.
 
 ## Roadmap
-- [ ] 首页添加类似 ustc.life 的导航
+- [x] 首页添加类似 ustc.life 的导航
 - [ ] PWA
 - [ ] 课程评价的 UX 改进
 
@@ -40,7 +43,7 @@
 - [x] 生产环境的配置, static files, DEBUG, 以及启动脚本
 - [x] logging
 - [x] 静态文件的图片 404 了
-- [ ] 使用 django form
+- [x] 使用 django form
 - [ ] 登录的 throttle
 
 ### 自动填报
