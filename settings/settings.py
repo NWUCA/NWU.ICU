@@ -26,6 +26,7 @@ INSTALLED_APPS = [
     'svg',  # FIXME: this lib is a temporary solution
     'crispy_forms',
     "crispy_bootstrap5",
+    'silk',
     # below are django apps
     'django.contrib.admin',
     'django.contrib.auth',
@@ -37,6 +38,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'silk.middleware.SilkyMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -181,3 +183,10 @@ SESSION_COOKIE_AGE = 365 * 24 * 60 * 60  # 365 days, in seconds
 
 CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
 CRISPY_TEMPLATE_PACK = "bootstrap5"
+
+SILKY_AUTHENTICATION = True  # User must login
+SILKY_AUTHORISATION = True  # User must have permissions
+SILKY_PYTHON_PROFILER = True
+SILKY_META = True
+SILKY_MAX_RECORDED_REQUESTS = 10 ** 4
+SILKY_MAX_RESPONSE_BODY_SIZE = 1024  # If response body>1024 bytes, ignore

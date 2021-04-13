@@ -14,7 +14,7 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path, re_path
+from django.urls import include, path, re_path
 
 from course_assessment.views import (
     CourseAddView,
@@ -28,6 +28,7 @@ from user.views import Login, Logout, RefreshCookies
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('silk/', include('silk.urls', namespace='silk')),
     path('', Index.as_view()),
     path('course_list/', CourseList.as_view()),
     path('login/', Login.as_view()),
