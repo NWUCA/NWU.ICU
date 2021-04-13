@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block subtitle %}404-NOT FOUND{% endblock %}
+
+{% block content %}
+    <h1>404 NOT FOUND</h1>
+    <p>你访问的页面找不到了.. 5 秒后自动返回首页..</p>
+
+    <script>
+        setTimeout(() => {
+            window.location.href = '/';
+        }, 5000)
+    </script>
+{% endblock %}
