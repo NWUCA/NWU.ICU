@@ -8,7 +8,6 @@
     <table class="table table-hover">
         <thead>
         <tr>
-            <th scope="col">#</th>
             <th scope="col">名称</th>
             <th scope="col">评分</th>
             <th scope="col">类型</th>
@@ -19,7 +18,6 @@
         <tbody>
         {% for course in courses %}
             <tr onmousedown="window.location='/course/{{ course.id }}';" style="cursor: pointer">
-                <th scope="row">{{ course.id }}</th>
                 <td>{{ course.name }}</td>
                 <td>
                     {% if course.rating %}
@@ -29,10 +27,11 @@
                     {% endif %}
                 </td>
                 <td>{{ course.get_classification_display }}</td>
-                <td>{{ course.teacher }}</td>
+                <td>{{ course.teacher.name }}</td>
                 <td>{{ course.school }}</td>
             </tr>
         {% endfor %}
         </tbody>
     </table>
+    <p style="font-size: small; text-align: center;">没有找到想要评价的课程? <a href="/course/">点击添加</a></p>
 {% endblock %}
