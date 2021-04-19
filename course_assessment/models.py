@@ -63,10 +63,10 @@ class CourseForm(forms.ModelForm):
 
 class Review(models.Model):
     course = models.ForeignKey(Course, on_delete=models.CASCADE)
-    content = models.TextField()
-    rating = models.SmallIntegerField()
+    content = models.TextField(verbose_name='内容')
+    rating = models.SmallIntegerField(verbose_name='打分 (满分 5 分)')
     created_by = models.ForeignKey(User, on_delete=models.CASCADE)
-    anonymous = models.BooleanField()
+    anonymous = models.BooleanField(verbose_name='匿名评价')
 
     class Meta:
         constraints = [
@@ -75,6 +75,10 @@ class Review(models.Model):
 
 
 class ReviewForm(forms.ModelForm):
+    helper = FormHelper()
+    helper.add_input(Submit('submit', '提交'))
+
     class Meta:
         model = Review
         fields = ['content', 'rating', 'anonymous']
+        widgets = {'rating': forms.Select(choices=[(i, f'{i}分') for i in range(1, 6)])}

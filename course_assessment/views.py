@@ -7,7 +7,7 @@ from django.views import View
 
 from course_assessment.models import Course, Review
 
-from .models import CourseForm, TeacherForm
+from .models import CourseForm, ReviewForm, TeacherForm
 
 
 class Index(View):
@@ -60,23 +60,16 @@ class CourseView(LoginRequiredMixin, View):
             'rating': Review.objects.filter(course_id=course_id).aggregate(Avg('rating'))[
                 'rating__avg'
             ],
+            'review_form': ReviewForm(),
         }
         return render(request, 'course_detail.html', context=context)
 
     def post(self, request, course_id):
-        content = request.POST['content']
-        rating = request.POST['rating']
-        anonymous = request.POST.get('anonymous', False)
-        if anonymous == 'on':
-            anonymous = True
+        f = ReviewForm(request.POST)
+        f.instance.created_by = request.user
+        f.instance.course_id = course_id
         try:
-            Review.objects.create(
-                course_id=course_id,
-                content=content,
-                rating=rating,
-                created_by=request.user,
-                anonymous=anonymous,
-            )
+            f.save()
             messages.success(request, '添加成功')
         except IntegrityError:
             messages.error(request, '你已经评价过本课程了')
