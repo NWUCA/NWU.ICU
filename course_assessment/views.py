@@ -17,9 +17,7 @@ class Index(View):
 
 class CourseList(View):
     def get(self, request):
-        context = {
-            'courses': Course.objects.order_by('school').annotate(rating=Avg('review__rating'))
-        }
+        context = {'courses': Course.objects.annotate(rating=Avg('review__rating'))}
         return render(request, 'course_list.html', context=context)
 
     def post(self, request):
