@@ -23,6 +23,9 @@ class Teacher(models.Model):
     def __str__(self):
         return f'{self.name}-{self.school}'
 
+    class Meta:
+        ordering = ['school']
+
 
 class TeacherForm(forms.ModelForm):
     helper = FormHelper()
@@ -50,6 +53,9 @@ class Course(models.Model):
     def __str__(self):
         return self.name
 
+    class Meta:
+        ordering = ['school']
+
 
 class CourseForm(forms.ModelForm):
     helper = FormHelper()
@@ -69,6 +75,7 @@ class Review(models.Model):
     anonymous = models.BooleanField(verbose_name='匿名评价')
 
     class Meta:
+        ordering = ['created_by']
         constraints = [
             models.UniqueConstraint(fields=['course', 'created_by'], name='unique_review')
         ]
