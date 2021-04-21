@@ -75,7 +75,6 @@ class Review(models.Model):
     anonymous = models.BooleanField(verbose_name='匿名评价')
 
     class Meta:
-        ordering = ['created_by']
         constraints = [
             models.UniqueConstraint(fields=['course', 'created_by'], name='unique_review')
         ]
