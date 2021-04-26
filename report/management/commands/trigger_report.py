@@ -38,8 +38,8 @@ class Command(BaseCommand):
         https://docs.djangoproject.com/en/3.1/ref/databases/#database-is-locked-errors
         FIXME: 暂时用无限重试解决
         """
-        retry = 1
-        while retry > 0:
+        retry = 0
+        while retry >= 0:
             try:
                 logger.info(f'writing {report.user.username:10} to database, retry={retry}')
                 report.save()
