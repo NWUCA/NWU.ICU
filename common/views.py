@@ -7,5 +7,5 @@ def manifest(request):
 
 
 def service_worker(request):
-    """Serve manifest.json"""
+    """Serve serviceworker.js"""
     return render(request, 'serviceworker.js', content_type='application/javascript')
