@@ -26,7 +26,7 @@ INSTALLED_APPS = [
     'svg',  # FIXME: this lib is a temporary solution
     'crispy_forms',
     "crispy_bootstrap5",
-    'silk',
+    # 'silk',
     # below are django apps
     'django.contrib.admin',
     'django.contrib.auth',
@@ -38,7 +38,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'silk.middleware.SilkyMiddleware',
+    # 'silk.middleware.SilkyMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
