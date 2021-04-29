@@ -21,8 +21,9 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', (e) => {
-    if (e.request.url.startsWith('chrome-extension') || e.request.method !== 'GET') {
-        console.log(`[Service Worker] Skipping dealing resource: ${e.request.url}`);
+    console.log(e.request)
+    if (e.request.url.startsWith('chrome-extension') || e.request.method !== 'GET' || e.request.destination === 'document') {
+        console.log(`[Service Worker] Skipping dealing with resource: ${e.request.url}`);
         return
     }
     e.respondWith((async () => {
@@ -33,7 +34,6 @@ self.addEventListener('fetch', (e) => {
             return r;
         }
         const response = await fetch(e.request);
-        console.log(e.request)
         const cache = await caches.open(cacheName);
         console.log(`[Service Worker] Caching new resource: ${e.request.url}`);
         await cache.put(e.request, response.clone());
