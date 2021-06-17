@@ -40,7 +40,7 @@
             position: absolute;
             bottom: 0;
             width: 100%;
-            height: 60px; /* Set the fixed height of the footer here */
+            height: 30px; /* Set the fixed height of the footer here */
             line-height: 30px; /* Vertically center the text there */
             background-color: #f5f5f5;
         }
@@ -101,23 +101,8 @@
                 </a>
             </li>
 
-            <li class="nav-item dropdown">
-                <a
-                    class="nav-link dropdown-toggle"
-                    href="#"
-                    role="button"
-                    data-bs-toggle="dropdown"
-                    aria-expanded="false"
-                    id="friendsDropdown"
-                >
-                    友链
-                </a>
-                <ul class="dropdown-menu" aria-labelledby="friendsDropdown">
-                    <li><a class="dropdown-item" href="https://nwuzmed.ga/" target="_blank">
-                        DAC导航
-                        <i class="bi bi-box-arrow-up-right"></i>
-                    </a></li>
-                </ul>
+            <li class="nav-item">
+                <a class="nav-link" href="/about/">关于</a>
             </li>
 
         </ul>
@@ -160,22 +145,9 @@
 <footer class="footer">
     <div class="container">
         <div>
-            <span>2020 nwu.icu Source Code On</span>
-            <a target="_blank" href="https://github.com/NWUCA/NWU.ICU">
-                Github
-                <i class="bi bi-box-arrow-up-right"></i>
-            </a>
-            <span style="margin-left: 15px">version: {{ version }}</span>
-        </div>
-        <div>
-            <span>意见反馈: <a href="mailto:admin@nwu.icu">admin@nwu.icu</a></span>
-            <span>
-                或提交一个
-                    <a target="_blank" href="https://github.com/NWUCA/NWU.ICU/issues">
-                        Issue
-                        <i class="bi bi-box-arrow-up-right"></i>
-                    </a>
-            </span>
+            <span>2020 nwu.icu</span>
+            <a href="/about/">关于我们</a>
+            <span style="margin-left: 5px">version: {{ version }}</span>
         </div>
     </div>
 </footer>
