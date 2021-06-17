@@ -1,10 +1,22 @@
 {% extends "base_course.html" %}
 
 {% block course_content %}
-    <h1>课程列表</h1>
-    <a type="button" class="btn btn-primary" href="/course/">
-            新增课程
-        </a>
+    <div class="row">
+        <h1 class="col">课程列表</h1>
+        <span class="col-auto">
+            <a type="button" class="btn btn-primary" href="/course/">
+                新增课程
+            </a>
+        </span>
+    </div>
+
+    <form>
+        <div class="row container">
+            <input type="search" class="form-control col gx-4" placeholder="搜索课程、老师" aria-label="search" name="s" id="searchInput">
+            <button type="submit" class="btn btn-primary bi bi-search col-auto"></button>
+        </div>
+    </form>
+
     <table class="table table-hover">
         <thead>
         <tr>
@@ -34,4 +46,8 @@
         </tbody>
     </table>
     <p style="font-size: small; text-align: center;">没有找到想要评价的课程? <a href="/course/">点击添加</a></p>
+
+    <script>
+        document.getElementById('searchInput').value = '{{ search_string }}'
+    </script>
 {% endblock %}
