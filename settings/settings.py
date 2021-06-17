@@ -23,7 +23,6 @@ INSTALLED_APPS = [
     'user',
     'report',
     # below are 3rd apps
-    'svg',  # FIXME: this lib is a temporary solution
     'crispy_forms',
     "crispy_bootstrap5",
     # 'silk',
@@ -174,10 +173,6 @@ LOGGING = {
         },
     },
 }
-
-SVG_DIRS = [
-    BASE_DIR / 'static/img',
-]
 
 SESSION_COOKIE_AGE = 365 * 24 * 60 * 60  # 365 days, in seconds
 
