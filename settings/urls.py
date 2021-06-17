@@ -16,14 +16,8 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, re_path
 
-from common.views import manifest, service_worker
-from course_assessment.views import (
-    CourseAddView,
-    CourseList,
-    CourseView,
-    Index,
-    TeacherView,
-)
+from common.views import about, index, manifest, service_worker
+from course_assessment.views import CourseAddView, CourseList, CourseView, TeacherView
 from report.views import ReportIndex
 from user.views import Login, Logout, RefreshCookies
 
@@ -32,7 +26,8 @@ urlpatterns = [
     # path('silk/', include('silk.urls', namespace='silk')),
     path('manifest.json', manifest),
     path('serviceworker.js', service_worker),
-    path('', Index.as_view()),
+    path('', index),
+    path('about/', about),
     path('course_list/', CourseList.as_view()),
     path('login/', Login.as_view()),
     path('logout/', Logout.as_view()),

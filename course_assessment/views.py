@@ -10,11 +10,6 @@ from course_assessment.models import Course, Review
 from .models import CourseForm, ReviewForm, TeacherForm
 
 
-class Index(View):
-    def get(self, request):
-        return render(request, 'index.html')
-
-
 class CourseList(View):
     def get(self, request):
         context = {
