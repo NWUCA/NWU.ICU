@@ -103,8 +103,7 @@ def handle_login_error(request, msg):
             request,
             '请手动使用统一身份认证登录一次, 入口在<a target="_blank" '
             'href="http://authserver.nwu.edu.cn">这里'
-            f'<img src="{settings.STATIC_URL}img/box-arrow-up-right.svg" '
-            f'alt="authserver"></a>',
+            '<i class="bi bi-box-arrow-up-right"></i></a>',
             extra_tags='safe',
         )
 

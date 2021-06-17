@@ -72,7 +72,7 @@ class Review(models.Model):
     content = models.TextField(verbose_name='内容')
     rating = models.SmallIntegerField(verbose_name='打分 (满分 5 分)')
     created_by = models.ForeignKey(User, on_delete=models.CASCADE)
-    anonymous = models.BooleanField(verbose_name='匿名评价')
+    anonymous = models.BooleanField(verbose_name='匿名评价', default=True)
 
     class Meta:
         constraints = [
