@@ -41,28 +41,26 @@
         </div>
     </div>
 
-    <table class="table table-hover">
-        <thead>
-        <tr>
-            <th scope="col">#</th>
-            <th scope="col">内容</th>
-            <th scope="col">打分</th>
-            <th scope="col">姓名</th>
-        </tr>
-        </thead>
-        <tbody>
-        {% for review in reviews %}
-            <tr>
-                <th scope="row">{{ review.id }}</th>
-                <td>{{ review.content }}</td>
-                <td>{{ review.rating }}</td>
-                {% if review.anonymous %}
-                    <td>匿名</td>
-                {% else %}
-                    <td>{{ review.created_by.name }}</td>
-                {% endif %}
-            </tr>
-        {% endfor %}
-        </tbody>
-    </table>
+    {% for review in reviews %}
+        <div class="card m-2">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-muted">
+                    <span>
+                        {% if review.anonymous %}
+                            <td>匿名</td>
+                        {% else %}
+                            <td>{{ review.created_by.name }}</td>
+                        {% endif %}
+                    </span>
+                    <span class="ps-5">
+                        {{ review.rating }} 分
+                    </span>
+                </h6>
+                <p class="card-text">
+                    {{ review.content }}
+                </p>
+            </div>
+        </div>
+    {% endfor %}
+
 {% endblock %}

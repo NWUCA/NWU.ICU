@@ -17,34 +17,27 @@
         </div>
     </form>
 
-    <table class="table table-hover">
-        <thead>
-        <tr>
-            <th scope="col">名称</th>
-            <th scope="col">评分</th>
-            <th scope="col">类型</th>
-            <th scope="col">教师</th>
-            <th scope="col">院系</th>
-        </tr>
-        </thead>
-        <tbody>
-        {% for course in courses %}
-            <tr onmousedown="window.location='/course/{{ course.id }}';" style="cursor: pointer">
-                <td>{{ course.name }}</td>
-                <td>
+    {% for course in courses %}
+        <div class="card m-2">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <a href="/course/{{ course.id }}">{{ course.name }}</a>
+                </h5>
+                <h6 class="card-subtitle mb-2 text-muted">
+                    {{ course.teacher.name }} {{ course.get_classification_display }}
+                    {{ course.school }}
+                </h6>
+                <p class="card-text">
                     {% if course.rating %}
-                        {{ course.rating | floatformat }} / 5
+                        {{ course.rating | floatformat }} / 5 分
+                        ({{ course.review_set.count }} 人评价)
                     {% else %}
                         暂无评分
                     {% endif %}
-                </td>
-                <td>{{ course.get_classification_display }}</td>
-                <td>{{ course.teacher.name }}</td>
-                <td>{{ course.school }}</td>
-            </tr>
-        {% endfor %}
-        </tbody>
-    </table>
+                </p>
+            </div>
+        </div>
+    {% endfor %}
     <p style="font-size: small; text-align: center;">没有找到想要评价的课程? <a href="/course/">点击添加</a></p>
 
     <script>
