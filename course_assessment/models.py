@@ -19,6 +19,7 @@ class Teacher(models.Model):
     name = models.CharField(max_length=20, verbose_name='姓名')
     school = models.ForeignKey(School, on_delete=models.CASCADE, verbose_name='院系')
     created_by = models.ForeignKey(User, on_delete=models.CASCADE)
+    created_time = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return f'{self.name}-{self.school}'
@@ -49,6 +50,7 @@ class Course(models.Model):
     classification = models.TextField(choices=classification_choices, verbose_name='分类')
     school = models.ForeignKey(School, on_delete=models.CASCADE, verbose_name='院系')
     created_by = models.ForeignKey(User, on_delete=models.CASCADE)
+    created_time = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return self.name
@@ -73,6 +75,7 @@ class Review(models.Model):
     rating = models.SmallIntegerField(verbose_name='打分 (满分 5 分)')
     created_by = models.ForeignKey(User, on_delete=models.CASCADE)
     anonymous = models.BooleanField(verbose_name='匿名评价', default=True)
+    created_time = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         constraints = [

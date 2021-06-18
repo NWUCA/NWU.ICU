@@ -4,8 +4,9 @@
 {% block course_content %}
     <h2>{{ course.name }}</h2>
     <p>
-        <span style="margin-right: 50px">课程类别: {{ course.get_classification_display }}</span>
-        <span>教师: {{ course.teacher }}</span>
+        <span>课程类别: {{ course.get_classification_display }}</span>
+        <span class="ms-4">教师: {{ course.teacher.name }}</span>
+        <span class="ms-4">开课院系: {{ course.school }}</span>
     </p>
 
     <h3>
@@ -17,7 +18,7 @@
                 暂无评分
             {% endif %}
         </span>
-        <span style="font-size: medium">({{ reviews.count }} 人评价)</span>
+        <span class="fs-6">({{ reviews.count }} 人评价)</span>
     </h3>
 
     <div class="row">
@@ -58,6 +59,9 @@
                 </h6>
                 <p class="card-text">
                     {{ review.content }}
+                </p>
+                <p class="card-text fw-light">
+                    {{ review.created_time }}
                 </p>
             </div>
         </div>
