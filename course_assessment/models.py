@@ -91,3 +91,4 @@ class ReviewForm(forms.ModelForm):
         model = Review
         fields = ['content', 'rating', 'anonymous']
         widgets = {'rating': forms.Select(choices=[(i, f'{i}分') for i in range(1, 6)])}
+        help_texts = {'content': '可以从课程难度、作业多少、给分好坏、收获大小等方面阐述'}
