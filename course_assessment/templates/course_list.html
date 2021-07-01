@@ -10,6 +10,10 @@
         </span>
     </div>
 
+    <p>
+    目前共有 {{ course_list.count }} 门课程, {{ review_count }} 条评价.
+    </p>
+
     <form>
         <div class="row container">
             <input type="search" class="form-control col gx-4" placeholder="搜索课程、老师" aria-label="search" name="s" id="searchInput">
@@ -17,7 +21,7 @@
         </div>
     </form>
 
-    {% for course in courses %}
+    {% for course in course_list %}
         <div class="card m-2">
             <div class="card-body">
                 <h5 class="card-title">

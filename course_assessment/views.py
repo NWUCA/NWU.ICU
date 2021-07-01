@@ -17,19 +17,19 @@ class CourseList(ListView):
 
     def get_queryset(self):
         search_string = self.request.GET.get('s', "")
-        course_set = self.model.objects.all()
+        course_set = (
+            self.model.objects.all().order_by('school').annotate(rating=Avg('review__rating'))
+        )
         if search_string:
-            course_set = self.model.objects.filter(
+            course_set = course_set.filter(
                 Q(name__contains=search_string) | Q(teacher__name__contains=search_string)
             )
         return course_set
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['courses'] = (
-            self.get_queryset().order_by('school').annotate(rating=Avg('review__rating'))
-        )
         context['search_string'] = self.request.GET.get('s', "")
+        context['review_count'] = Review.objects.count()
         return context
 
 
