@@ -4,53 +4,53 @@
 {% block subtitle %}登录{% endblock %}
 
 {% block content %}
-    <h2>登录</h2>
-    <label class="mb-3">请使用<a href="http://authserver.nwu.edu.cn/">西北大学统一身份认证</a>登录</label>
-    <form method="POST" name="login_form">
-        {% crispy login_form %}
-        <div class="form-check mb-3">
-            <input class="form-check-input" type="checkbox" id="invalidCheck" required>
-            <label class="form-check-label" for="invalidCheck">
-                同意<a data-bs-toggle="modal" data-bs-target="#exampleModal" href="#">隐私政策和用户协议</a>
-            </label>
+<h2>登录</h2>
+<label class="mb-3">请使用<a href="http://authserver.nwu.edu.cn/">西北大学统一身份认证</a>登录</label>
+<form method="POST" name="login_form">
+    {% crispy login_form %}
+    <div class="form-check mb-3">
+        <input class="form-check-input" type="checkbox" id="invalidCheck" required>
+        <label class="form-check-label" for="invalidCheck">
+            同意<a data-bs-toggle="modal" data-bs-target="#exampleModal" href="#">隐私政策和用户协议</a>
+        </label>
 
-            <!-- Modal -->
-            <div class="modal fade" id="exampleModal" tabindex="-1" aria-hidden="true">
-                <div class="modal-dialog">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title">隐私政策</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                        </div>
-                        <div class="modal-body">
-                            <ul>
-                                <li>我们不会存储您的密码, 然而, 您的密码可能会被用于调试.</li>
-                                <li>您的所有行为将在后台实名记录.</li>
-                                <li>我们使用了 Google Analytics 分析服务, Google 将知晓您的浏览数据.</li>
-                                <li>我们使用了高德地图的定位服务, 高德将知晓您的位置信息及其他浏览数据.</li>
-                                <li>学校和其他有关部门有权获取您的数据.</li>
-                                <li>除此之外, 您的数据将不会被共享给其他第三方.</li>
-                            </ul>
-                        </div>
-                        <div class="modal-header">
-                            <h5 class="modal-title">用户协议</h5>
-                        </div>
-                        <div class="modal-body">
-                            <ul>
-                                <li>禁止一切形式的人身攻击、侮辱、挑衅及违反国家法律法规的内容.</li>
-                                <li>我们将视情况删除我们认为不合适的内容, 并保留封停您的帐号的权利.</li>
-                            </ul>
-                        </div>
-                        <div class="modal-body">
-                            最后更新日期: 2021-06-22
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
-                        </div>
+        <!-- Modal -->
+        <div class="modal fade" id="exampleModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">隐私政策</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <ul>
+                            <li>我们不会存储您的密码, 然而, 您的密码可能会被用于调试.</li>
+                            <li>您的所有行为将在后台实名记录.</li>
+                            <li>我们使用了 Google Analytics 分析服务, Google 将知晓您的浏览数据.</li>
+                            <li>我们使用了高德地图的定位服务, 高德将知晓您的位置信息及其他浏览数据.</li>
+                            <li>学校和其他有关部门有权获取您的数据.</li>
+                            <li>除此之外, 您的数据将不会被共享给其他第三方.</li>
+                        </ul>
+                    </div>
+                    <div class="modal-header">
+                        <h5 class="modal-title">用户协议</h5>
+                    </div>
+                    <div class="modal-body">
+                        <ul>
+                            <li>禁止一切形式的人身攻击、侮辱、挑衅及违反国家法律法规的内容.</li>
+                            <li>我们将视情况删除我们认为不合适的内容, 并保留封停您的帐号的权利.</li>
+                        </ul>
+                    </div>
+                    <div class="modal-body">
+                        最后更新日期: 2021-06-22
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
                     </div>
                 </div>
             </div>
         </div>
-        <button type="submit" class="btn btn-primary" id="login_btn">登录</button>
-    </form>
+    </div>
+    <button type="submit" class="btn btn-primary" id="login_btn">登录</button>
+</form>
 {% endblock %}

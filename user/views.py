@@ -26,6 +26,7 @@ LoginResult = namedtuple('LoginResult', 'success msg name cookies')
 
 
 def unified_login(username, raw_password):
+    # login_page_url = "http://authserver.nwu.edu.cn/authserver/login"
     login_page_url = (
         "http://authserver.nwu.edu.cn/authserver/login?service=https://a"
         "pp.nwu.edu.cn/a_nwu/api/sso"
@@ -78,10 +79,12 @@ def unified_login(username, raw_password):
             except IndexError:
                 return LoginResult(False, '未知错误, 请尝试重新登录', None, None)
             # 分析一下是否是密码错误or验证码
-            span = span[0].text
-            if ('验证码' in span or '有误' in span):
-                return LoginResult(False, span, None, None)
-            continue
+            try:
+                span = span[0].text
+                if '验证码' in span or '有误' in span:
+                    return LoginResult(False, span, None, None)
+            except IndexError:
+                continue
     if response_login is not None:
         userinfo_get = session.get('https://app.nwu.edu.cn/ncov/wap/open-report/index')
         # 这里存放的是上一次填报的json信息, 即使之前没有填报也会有realname的信息
