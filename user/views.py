@@ -1,9 +1,11 @@
 import base64
+import json
 import logging
 import pickle
 import re
 from collections import namedtuple
 from datetime import datetime
+from time import sleep
 
 import requests
 from bs4 import BeautifulSoup
@@ -25,76 +27,91 @@ LoginResult = namedtuple('LoginResult', 'success msg name cookies')
 
 
 def unified_login(username, raw_password):
-    login_page_url = "http://authserver.nwu.edu.cn/authserver/login"
-    session = requests.session()
-    try:
-        response = session.get(login_page_url, timeout=5)
-        if response.status_code != 200:
-            raise requests.exceptions.ConnectionError
-    except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
-        return LoginResult(False, '连接统一身份认证服务失败, 请稍后重试..', None, None)
+    # login_page_url = "http://authserver.nwu.edu.cn/authserver/login"
+    login_page_url = (
+        "http://authserver.nwu.edu.cn/authserver/login?service=https://a"
+        "pp.nwu.edu.cn/a_nwu/api/sso"
+        "/cas?redirect=https://app.nwu.edu.cn/site/ncov/dailyup&from=wap"
+    )
+    while True:
+        session = requests.session()
+        try:
+            response = session.get(login_page_url, timeout=5)
+            if response.status_code != 200:
+                raise requests.exceptions.ConnectionError
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
+            return LoginResult(False, '连接统一身份认证服务失败, 请稍后重试..', None, None)
 
-    ds = BeautifulSoup(response.text, "html.parser")
-    if 'IP被冻结' in ds.text:
-        return LoginResult(False, '我们的服务器 IP 被统一身份认证冻结, 请稍后重试..', None, None)
+        ds = BeautifulSoup(response.text, "html.parser")
+        if 'IP被冻结' in ds.text:
+            return LoginResult(False, '我们的服务器 IP 被统一身份认证冻结, 请稍后重试..', None, None)
 
-    lt = ds.select('input[name="lt"]')[0].get('value')
-    dllt = ds.select('input[name="dllt"]')[0].get('value')
-    execution = ds.select('input[name="execution"]')[0].get('value')
-    _eventId = ds.select('input[name="_eventId"]')[0].get('value')
-    rm_shown = ds.select('input[name="rmShown"]')[0].get('value')
-
-    # key 被单独写在一个 <script> 标签里
-    aes_key = re.search('var pwdDefaultEncryptSalt = "(.*)";', response.text)[1]
-
-    raw_password_byte = (get_random_string(64) + raw_password).encode()  # 随机字符串为统一身份认证的行为
-    raw_password_byte = pad(raw_password_byte, AES.block_size)
-    # PyCryptodome 提供的 iv 似乎会包含统一身份认证不会识别的字符, 导致返回用户名或密码错误
-    cipher = AES.new(aes_key.encode(), AES.MODE_CBC, get_random_string(16).encode())
-    password = base64.b64encode(cipher.encrypt(raw_password_byte))
-
-    data = {
-        "_eventId": _eventId,
-        "dllt": dllt,
-        "execution": execution,
-        "lt": lt,
-        "password": password,
-        "rmShown": rm_shown,
-        "username": username,
-    }
-
-    response_login = session.post(login_page_url, data=data)
-    if response_login is not None:
-        soup = BeautifulSoup(response_login.text, 'html.parser')
-
-        if soup.find(id='improveInfoForm'):
-            return LoginResult(False, '您的密码仍为初始密码, 请更新您的密码后重试..', None, None)
-
-        span = soup.select('span[id="msg"]')
-        if len(span) == 0:
-            # FIXME: 有时候 name 会获取失败, DOM 里没有 auth_username 这个 class
-            # FIXME: 尝试存个当时的 html 看看
-            try:
-                name = soup.find(class_='auth_username').span.span.text.strip()
-            except AttributeError:
-                log_dir = settings.BASE_DIR / 'logs'
-                log_dir.mkdir(exist_ok=True)
-                logger.error('获取个人信息失败')
-                with open(log_dir / f'{username}-{datetime.now()}.html', 'wb') as f:
-                    f.write(response_login.content)
-                return LoginResult(False, '获取个人信息失败, 请稍后重试..', None, None)
-
-            # 获取 app.nwu.edu.cn 域下的 cookies
-            try:
-                session.get('https://app.nwu.edu.cn/uc/wap/login')
-            except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
-                return LoginResult(False, '连接 app.nwu.edu.cn, 请稍后重试..', None, None)
-            for cookie in session.cookies:
-                cookie.expires = None
-            return LoginResult(True, '登陆成功', name, session.cookies)
+        lt = ds.select('input[name="lt"]')[0].get('value')
+        dllt = ds.select('input[name="dllt"]')[0].get('value')
+        execution = ds.select('input[name="execution"]')[0].get('value')
+        _eventId = ds.select('input[name="_eventId"]')[0].get('value')
+        rm_shown = ds.select('input[name="rmShown"]')[0].get('value')
+        # key 被单独写在一个 <script> 标签里
+        aes_key = re.search('var pwdDefaultEncryptSalt = "(.*)";', response.text)[1]
+        raw_password_byte = (get_random_string(64) + raw_password).encode()  # 随机字符串为统一身份认证的行为
+        raw_password_byte = pad(raw_password_byte, AES.block_size)
+        # PyCryptodome 提供的 iv 似乎会包含统一身份认证不会识别的字符, 导致返回用户名或密码错误
+        cipher = AES.new(aes_key.encode(), AES.MODE_CBC, get_random_string(16).encode())
+        password = base64.b64encode(cipher.encrypt(raw_password_byte))
+        data = {
+            "_eventId": _eventId,
+            "dllt": dllt,
+            "execution": execution,
+            "lt": lt,
+            "password": password,
+            "rmShown": rm_shown,
+            "username": username,
+        }
+        sleep(2)
+        # 因为是多线程, 为了防止由用户密码输入错误, 导致瞬间发多个包导致ip被ban, 故slepp一下
+        response_login = session.post(login_page_url, data=data)
+        # 如果正确的获取到了cookie(也就是没有进入404界面),
+        # 那么最终登录302到的网址就是https://app.nwu.edu.cn/site/ncov/dailyup,
+        # 如果不是, 则说明密码错误/有验证码/学校的垃圾系统又给你转到了404然而status却等于200的界面
+        if response_login.url == 'https://app.nwu.edu.cn/site/ncov/dailyup':
+            break  # 这就证明获取到了正确的cookie, redirect到了晨午检填报地址
         else:
-            msg = span[0].text
-            return LoginResult(False, msg, None, None)
+            soup = BeautifulSoup(response_login.text, 'html.parser')
+            try:
+                span = soup.select('span[id="msg"]')
+            except IndexError:
+                return LoginResult(False, '未知错误, 请尝试重新登录', None, None)
+            # 分析一下是否是密码错误or验证码
+            span = span[0].text
+            if '验证码' in span:
+                return LoginResult(
+                    False,
+                    '需要输入验证码, 请在统一身份认证网站(http://authserver.nwu.edu.cn/authserver/index.do)成'
+                    '功登录后, 再重新登录本站',
+                    None,
+                    None,
+                )
+            elif '有误' in span:
+                return LoginResult(False, '您输入的密码有误, 请勘正后重新尝试登录', None, None)
+            else:
+                return LoginResult(False, span, None, None)
+            continue
+    if response_login is not None:
+        userinfo_get = session.get('https://app.nwu.edu.cn/ncov/wap/open-report/index')
+        # 这里存放的是上一次填报的json信息, 即使之前没有填报也会有realname的信息
+        try:
+            userinfo = json.loads(userinfo_get.text)
+            name = userinfo['d']['userinfo']['realname']
+        except IndexError:
+            log_dir = settings.BASE_DIR / 'logs'
+            log_dir.mkdir(exist_ok=True)
+            logger.error('获取个人信息失败')
+            with open(log_dir / f'{username}-{datetime.now()}.html', 'wb') as f:
+                f.write(response_login.content)
+            return LoginResult(False, '获取个人信息失败, 请稍后重试..', None, None)
+        for cookie in session.cookies:
+            cookie.expires = None
+        return LoginResult(True, '登陆成功', name, session.cookies)
     return LoginResult(False, '网络错误', None, None)
 
 
