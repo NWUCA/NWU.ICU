@@ -5,7 +5,6 @@ import pickle
 import re
 from collections import namedtuple
 from datetime import datetime
-from time import sleep
 
 import requests
 from bs4 import BeautifulSoup
@@ -27,7 +26,6 @@ LoginResult = namedtuple('LoginResult', 'success msg name cookies')
 
 
 def unified_login(username, raw_password):
-    # login_page_url = "http://authserver.nwu.edu.cn/authserver/login"
     login_page_url = (
         "http://authserver.nwu.edu.cn/authserver/login?service=https://a"
         "pp.nwu.edu.cn/a_nwu/api/sso"
@@ -67,8 +65,6 @@ def unified_login(username, raw_password):
             "rmShown": rm_shown,
             "username": username,
         }
-        sleep(2)
-        # 因为是多线程, 为了防止由用户密码输入错误, 导致瞬间发多个包导致ip被ban, 故slepp一下
         response_login = session.post(login_page_url, data=data)
         # 如果正确的获取到了cookie(也就是没有进入404界面),
         # 那么最终登录302到的网址就是https://app.nwu.edu.cn/site/ncov/dailyup,
@@ -83,17 +79,7 @@ def unified_login(username, raw_password):
                 return LoginResult(False, '未知错误, 请尝试重新登录', None, None)
             # 分析一下是否是密码错误or验证码
             span = span[0].text
-            if '验证码' in span:
-                return LoginResult(
-                    False,
-                    '需要输入验证码, 请在统一身份认证网站(http://authserver.nwu.edu.cn/authserver/index.do)成'
-                    '功登录后, 再重新登录本站',
-                    None,
-                    None,
-                )
-            elif '有误' in span:
-                return LoginResult(False, '您输入的密码有误, 请勘正后重新尝试登录', None, None)
-            else:
+            if ('验证码' in span or '有误' in span):
                 return LoginResult(False, span, None, None)
             continue
     if response_login is not None:
@@ -120,7 +106,7 @@ def handle_login_error(request, msg):
     if '验证码' in msg or '初始密码' in msg:
         messages.error(
             request,
-            '请手动使用统一身份认证登录一次, 入口在<a target="_blank" '
+            '需要输入验证码, 解决方案: 请手动使用统一身份认证登录一次, 入口在<a target="_blank" '
             'href="http://authserver.nwu.edu.cn">这里'
             '<i class="bi bi-box-arrow-up-right"></i></a>',
             extra_tags='safe',
