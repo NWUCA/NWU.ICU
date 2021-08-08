@@ -32,7 +32,11 @@ def unified_login(username, raw_password):
         "pp.nwu.edu.cn/a_nwu/api/sso"
         "/cas?redirect=https://app.nwu.edu.cn/site/ncov/dailyup&from=wap"
     )
+    i = 0  # 防止上游崩溃 导致无限重试
     while True:
+        i = i + 1
+        if i == 10:
+            return LoginResult(False, '连接统一身份认证服务失败, 请稍后重试..', None, None)
         session = requests.session()
         try:
             response = session.get(login_page_url, timeout=5)
