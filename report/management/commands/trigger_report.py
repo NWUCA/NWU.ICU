@@ -36,9 +36,9 @@ class Command(BaseCommand):
                 return False
             try:
                 a = requests.get(url, proxies=proxies)  # 用于验证获取到的代理是否可以访问学校网站
-            except requests.exceptions.ReadTimeout:  # 不能访问就重新获取, 反正获取ip不要钱
+            except (requests.exceptions.ReadTimeout):  # 不能访问就重新获取, 反正获取ip不要钱
                 continue
-            return proxies  # 成功就返回代理, 代理有效时长为5-25分钟
+            return proxies  # 成功就返回代理, 代理有效时长为5-25分钟, 足够一次填报使用, 日后如果人数超过2w人才需要更改
 
     proxies = get_proxy_ip()
 

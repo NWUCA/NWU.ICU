@@ -41,8 +41,8 @@ def get_proxy_ip():
         if i > 10:
             return False
         try:
-            a = requests.get(url, proxies=proxies)  # 用于验证获取到的代理是否可以访问学校网站
-        except requests.exceptions.ReadTimeout:  # 不能访问就重新获取, 反正获取ip不要钱
+            a = requests.get(url, proxies=proxies,timeout=3)  # 用于验证获取到的代理是否可以访问学校网站, 并设置一个超时防止莫名其妙的问题
+        except (requests.exceptions.ReadTimeout,requests.exceptions.ProxyError):  # 不能访问就重新获取, 反正获取ip不要钱
             continue
         return proxies  # 成功就返回代理, 代理有效时长为1-5分钟, 做登陆用
     # TODO 这里一个ip只能被使用一次, 有点浪费, 应该设置个全局时钟, 检测ip失效后再换
