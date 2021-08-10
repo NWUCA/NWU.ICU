@@ -25,6 +25,25 @@ logger = logging.getLogger(__name__)
 LoginResult = namedtuple('LoginResult', 'success msg name cookies')
 
 
+def get_proxy_ip():
+    i = 0
+    while True:
+        url = 'http://api.kuainiaoip.com/test'
+        api_url = str(settings.IP_PROXY_POOL_URL)
+        proxy = json.loads(requests.get(api_url).text)
+        proxy_ip = proxy['data'][0]['ip']
+        proxy_port = proxy['data'][0]['port']
+        proxies = {"http": f"http://{proxy_ip}:{proxy_port}"}
+        a = requests.get(url, proxies=proxies)
+        i = i + 1
+        if i > 10:
+            return False
+        if a.text == proxy_ip:
+            return proxies
+        else:
+            continue
+
+
 def unified_login(username, raw_password):
     # login_page_url = "http://authserver.nwu.edu.cn/authserver/login"
     login_page_url = (
@@ -33,13 +52,17 @@ def unified_login(username, raw_password):
         "/cas?redirect=https://app.nwu.edu.cn/site/ncov/dailyup&from=wap"
     )
     i = 0  # 防止上游崩溃 导致无限重试
+    proxies = get_proxy_ip()
+    print(proxies)
+    if proxies == False:
+        return LoginResult(False, '获取代理池ip失败, 请稍后重试..', None, None)
     while True:
         i = i + 1
         if i == 10:
             return LoginResult(False, '连接统一身份认证服务失败, 请稍后重试..', None, None)
         session = requests.session()
         try:
-            response = session.get(login_page_url, timeout=5)
+            response = session.get(login_page_url, timeout=5, proxies=proxies)
             if response.status_code != 200:
                 raise requests.exceptions.ConnectionError
         except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
@@ -70,7 +93,7 @@ def unified_login(username, raw_password):
             "rmShown": rm_shown,
             "username": username,
         }
-        response_login = session.post(login_page_url, data=data)
+        response_login = session.post(login_page_url, data=data, proxies=proxies)
         # 如果正确的获取到了cookie(也就是没有进入404界面),
         # 那么最终登录302到的网址就是https://app.nwu.edu.cn/site/ncov/dailyup,
         # 如果不是, 则说明密码错误/有验证码/学校的垃圾系统又给你转到了404然而status却等于200的界面
@@ -90,7 +113,9 @@ def unified_login(username, raw_password):
             except IndexError:
                 continue
     if response_login is not None:
-        userinfo_get = session.get('https://app.nwu.edu.cn/ncov/wap/open-report/index')
+        userinfo_get = session.get(
+            'https://app.nwu.edu.cn/ncov/wap/open-report/index', proxies=proxies
+        )
         # 这里存放的是上一次填报的json信息, 即使之前没有填报也会有realname的信息
         try:
             userinfo = json.loads(userinfo_get.text)
