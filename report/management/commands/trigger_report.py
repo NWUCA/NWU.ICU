@@ -6,6 +6,7 @@ from concurrent import futures
 from datetime import datetime
 
 import requests
+from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.db import OperationalError
 
@@ -17,6 +18,29 @@ MAX_WORKERS = 100
 
 class Command(BaseCommand):
     help = '执行自动填报'
+
+    def get_proxy_ip():
+        i = 0
+        while True:
+            url = 'http://authserver.nwu.edu.cn/authserver/login'
+            api_url = str(settings.IP_PROXY_POOL_URL_FOR_REPORT)
+            proxy = json.loads(requests.get(api_url).text)
+            proxy_ip = proxy['data'][0]['ip']
+            proxy_port = proxy['data'][0]['port']
+            proxies = {
+                "http": f"http://{proxy_ip}:{proxy_port}",
+                "https": f"http://{proxy_ip}:{proxy_port}",
+            }
+            i = i + 1
+            if i > 10:
+                return False
+            try:
+                a = requests.get(url, proxies=proxies)  # 用于验证获取到的代理是否可以访问学校网站
+            except requests.exceptions.ReadTimeout:  # 不能访问就重新获取, 反正获取ip不要钱
+                continue
+            return proxies  # 成功就返回代理, 代理有效时长为5-25分钟
+
+    proxies = get_proxy_ip()
 
     def handle(self, *args, **options):
         start_time = time.time()
@@ -47,7 +71,7 @@ class Command(BaseCommand):
             except OperationalError:
                 retry += 1
 
-    def do_report(self, report: Report):
+    def do_report(self, report: Report, proxies=proxies):
         url = 'https://app.nwu.edu.cn/ncov/wap/open-report/save'
 
         headers = {
@@ -61,8 +85,8 @@ class Command(BaseCommand):
             "Connection": "keep-alive",
             "Content-Length": "1780",
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_6) "
-            "AppleWebKit/605.1.15 (KHTML, like Gecko) "
-            "Version/13.1 Safari/605.1.15",
+                          "AppleWebKit/605.1.15 (KHTML, like Gecko) "
+                          "Version/13.1 Safari/605.1.15",
             "X-Requested-With": "XMLHttpRequest",
         }
 
@@ -79,15 +103,17 @@ class Command(BaseCommand):
             "qtqk": "",
             "ymtys": "",
         }
-
         cookie_jar = pickle.loads(report.user.cookie)
         try:
+            print(proxies)
             r = requests.post(
                 url,
                 headers=headers,
                 cookies=cookie_jar.get_dict(domain='app.nwu.edu.cn'),
                 data=data,
+                proxies=proxies,
             )
+            # 使用代理进行填报, 因为ip已经被学校完全ban了
             r = json.loads(r.text)
             if r['e'] == 1 or r['e'] == 0:
                 logger.info(f'{report.user.username}-{report.user.name} {r["m"]}')
