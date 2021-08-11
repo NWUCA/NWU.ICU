@@ -25,29 +25,6 @@ logger = logging.getLogger(__name__)
 LoginResult = namedtuple('LoginResult', 'success msg name cookies')
 
 
-def get_proxy_ip():
-    i = 0
-    while True:
-        url = 'http://authserver.nwu.edu.cn/authserver/login'
-        api_url = str(settings.IP_PROXY_POOL_URL)
-        proxy = json.loads(requests.get(api_url).text)
-        proxy_ip = proxy['data'][0]['ip']
-        proxy_port = proxy['data'][0]['port']
-        proxies = {
-            "http": f"http://{proxy_ip}:{proxy_port}",
-            "https": f"http://{proxy_ip}:{proxy_port}",
-        }
-        i = i + 1
-        if i > 10:
-            return False
-        try:
-            a = requests.get(url, proxies=proxies,timeout=3)  # 用于验证获取到的代理是否可以访问学校网站, 并设置一个超时防止莫名其妙的问题
-        except (requests.exceptions.ReadTimeout,requests.exceptions.ProxyError):  # 不能访问就重新获取, 反正获取ip不要钱
-            continue
-        return proxies  # 成功就返回代理, 代理有效时长为1-5分钟, 做登陆用
-    # TODO 这里一个ip只能被使用一次, 有点浪费, 应该设置个全局时钟, 检测ip失效后再换
-
-
 def unified_login(username, raw_password):
     # login_page_url = "http://authserver.nwu.edu.cn/authserver/login"
     login_page_url = (
@@ -56,17 +33,13 @@ def unified_login(username, raw_password):
         "/cas?redirect=https://app.nwu.edu.cn/site/ncov/dailyup&from=wap"
     )
     i = 0  # 防止上游崩溃 导致无限重试
-    proxies = get_proxy_ip()
-    print(proxies)
-    if proxies == False:
-        return LoginResult(False, '获取代理池ip失败, 请稍后重试..', None, None)
     while True:
         i = i + 1
         if i == 10:
             return LoginResult(False, '连接统一身份认证服务失败, 请稍后重试..', None, None)
         session = requests.session()
         try:
-            response = session.get(login_page_url, timeout=5, proxies=proxies)
+            response = session.get(login_page_url, timeout=5)
             if response.status_code != 200:
                 raise requests.exceptions.ConnectionError
         except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
@@ -97,10 +70,7 @@ def unified_login(username, raw_password):
             "rmShown": rm_shown,
             "username": username,
         }
-        try:
-            response_login = session.post(login_page_url, data=data, proxies=proxies)
-        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
-            return LoginResult(False, '连接统一身份认证服务失败, 请稍后重试..', None, None)
+        response_login = session.post(login_page_url, data=data)
         # 如果正确的获取到了cookie(也就是没有进入404界面),
         # 那么最终登录302到的网址就是https://app.nwu.edu.cn/site/ncov/dailyup,
         # 如果不是, 则说明密码错误/有验证码/学校的垃圾系统又给你转到了404然而status却等于200的界面
@@ -120,12 +90,7 @@ def unified_login(username, raw_password):
             except IndexError:
                 continue
     if response_login is not None:
-        try:
-            userinfo_get = session.get(
-                'https://app.nwu.edu.cn/ncov/wap/open-report/index', proxies=proxies
-            )
-        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
-            return LoginResult(False, '连接统一身份认证服务失败, 请稍后重试..', None, None)
+        userinfo_get = session.get('https://app.nwu.edu.cn/ncov/wap/open-report/index')
         # 这里存放的是上一次填报的json信息, 即使之前没有填报也会有realname的信息
         try:
             userinfo = json.loads(userinfo_get.text)
