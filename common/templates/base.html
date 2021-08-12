@@ -57,21 +57,14 @@
     {# Bootstarp #}
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.1/dist/css/bootstrap.min.css" rel="stylesheet"
           crossorigin="anonymous">
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.1/dist/js/bootstrap.bundle.min.js"
-            crossorigin="anonymous"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
     {# Bootstarp Icons #}
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.5.0/font/bootstrap-icons.css">
 
-    {# vue #}
-    <script src="https://unpkg.com/vue@3.0.9/dist/vue.global.js"></script>
-
     <script>
         navigator.serviceWorker.register('/serviceworker.js')
     </script>
-
-    <script src="{% static 'misc.js' %}"></script>
 </head>
 
 
@@ -152,5 +145,11 @@
     </div>
 </footer>
 
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.1/dist/js/bootstrap.bundle.min.js"
+            crossorigin="anonymous"></script>
+    {# vue #}
+    <script src="https://unpkg.com/vue@3.0.9/dist/vue.global.js"></script>
+
+    <script src="{% static 'misc.js' %}"></script>
 </body>
 </html>
