@@ -65,3 +65,11 @@ self.addEventListener('fetch', (e) => {
         return await cacheRequest(e.request);
     })());
 });
+
+self.addEventListener('push', function(event) {
+    console.log(event)
+    console.log(event.data.text())
+    const promiseChain = self.registration.showNotification(event.data.text());
+
+    event.waitUntil(promiseChain);
+});

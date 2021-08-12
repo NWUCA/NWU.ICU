@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block subtitle %}设置{% endblock %}
+
+{% block content %}
+    <h1 id="title">设置</h1>
+    {% csrf_token %}
+    <button class="btn btn-primary" onclick="turnOnNotification()">
+        开启通知 (每个设备的通知状态相互独立)
+    </button>
+
+    <script>
+        function urlBase64ToUint8Array(base64String) {
+            const padding = '='.repeat((4 - base64String.length % 4) % 4);
+            const base64 = (base64String + padding)
+                .replace(/\-/g, '+')
+                .replace(/_/g, '/');
+
+            const rawData = window.atob(base64);
+            const outputArray = new Uint8Array(rawData.length);
+
+            for (let i = 0; i < rawData.length; ++i) {
+                outputArray[i] = rawData.charCodeAt(i);
+            }
+            return outputArray;
+        }
+
+        class messages {
+            static success(msg) {
+                let title = document.getElementById('title')
+                let alert = document.createElement('div');
+                alert.className = "alert alert-success";
+                alert.innerText = msg;
+                title.before(alert);
+            }
+        }
+
+        function turnOnNotification() {
+            navigator.serviceWorker.register('/serviceworker.js').then(registration => {
+                const subscribeOptions = {
+                    userVisibleOnly: true,
+                    applicationServerKey: urlBase64ToUint8Array('BD50iv3l5UfFMKQnZsBK9cYJ_gwYH7xv3AMkdzeyhPAYIoJEEmx32eT4BGwjM8i_RlYcQs9J-8nS-0mUXiF0VvE')
+                };
+
+                // registration.pushManager.getSubscription().then({
+                //
+                // })
+                return registration.pushManager.subscribe(subscribeOptions);
+            }).then(function (pushSubscription) {
+                console.log('Received PushSubscription: ', JSON.stringify(pushSubscription));
+                // TODO: send it to backend
+                return pushSubscription;
+            }).then(subscription => {
+                return fetch('/api/save-subscription/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': document.querySelector("input[name='csrfmiddlewaretoken']").value
+                    },
+                    body: JSON.stringify(subscription)
+                })
+            }).then(resp => {
+                messages.success('开启成功')
+            }).catch(err => {
+                messages.success(err)
+            })
+        }
+
+
+    </script>
+
+{% endblock %}

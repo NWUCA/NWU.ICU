@@ -1,3 +1,7 @@
+import json
+
+from django.contrib.auth.decorators import login_required
+from django.http import HttpResponse
 from django.shortcuts import render
 
 
@@ -7,6 +11,16 @@ def index(request):
 
 def about(request):
     return render(request, 'about.html')
+
+
+@login_required
+def settings(request):
+    return render(request, 'settings.html')
+
+
+def save_push_subscription(request):
+    print(json.loads(request.body))
+    return HttpResponse()
 
 
 def manifest(request):
