@@ -12,6 +12,7 @@ pytelegrambotapi = "*"
 django-crispy-forms = "*"
 crispy-bootstrap5 = "*"
 django-silk = "*"
+pywebpush = "*"
 
 [dev-packages]
 pre-commit = "*"

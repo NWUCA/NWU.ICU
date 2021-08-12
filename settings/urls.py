@@ -16,7 +16,14 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, re_path
 
-from common.views import about, index, manifest, service_worker
+from common.views import (
+    about,
+    index,
+    manifest,
+    save_push_subscription,
+    service_worker,
+    settings,
+)
 from course_assessment.views import CourseAddView, CourseList, CourseView, TeacherView
 from report.views import ReportIndex
 from user.views import Login, Logout, RefreshCookies
@@ -28,6 +35,8 @@ urlpatterns = [
     path('serviceworker.js', service_worker),
     path('', index),
     path('about/', about),
+    path('settings/', settings),
+    path('api/save-subscription/', save_push_subscription),
     path('course_list/', CourseList.as_view()),
     path('login/', Login.as_view()),
     path('logout/', Logout.as_view()),
