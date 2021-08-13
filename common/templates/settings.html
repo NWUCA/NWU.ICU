@@ -6,7 +6,7 @@
     <h1 id="title">设置</h1>
     {% csrf_token %}
     <button class="btn btn-primary" onclick="turnOnNotification()">
-        开启通知 (每个设备的通知状态相互独立)
+        开启通知 (每个设备的通知状态相互独立, 目前只能在一个设备启用) (BETA)
     </button>
 
     <script>
@@ -39,7 +39,7 @@
             navigator.serviceWorker.register('/serviceworker.js').then(registration => {
                 const subscribeOptions = {
                     userVisibleOnly: true,
-                    applicationServerKey: urlBase64ToUint8Array('BD50iv3l5UfFMKQnZsBK9cYJ_gwYH7xv3AMkdzeyhPAYIoJEEmx32eT4BGwjM8i_RlYcQs9J-8nS-0mUXiF0VvE')
+                    applicationServerKey: urlBase64ToUint8Array('{{ VAPID_PUBLIC_KEY }}')
                 };
 
                 // registration.pushManager.getSubscription().then({
@@ -48,7 +48,6 @@
                 return registration.pushManager.subscribe(subscribeOptions);
             }).then(function (pushSubscription) {
                 console.log('Received PushSubscription: ', JSON.stringify(pushSubscription));
-                // TODO: send it to backend
                 return pushSubscription;
             }).then(subscription => {
                 return fetch('/api/save-subscription/', {
