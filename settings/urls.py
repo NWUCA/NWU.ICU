@@ -21,6 +21,7 @@ from common.views import (
     index,
     manifest,
     save_push_subscription,
+    send_test_notification,
     service_worker,
     settings,
 )
@@ -37,6 +38,7 @@ urlpatterns = [
     path('about/', about),
     path('settings/', settings),
     path('api/save-subscription/', save_push_subscription),
+    path('api/send-test-notification', send_test_notification),
     path('course_list/', CourseList.as_view()),
     path('login/', Login.as_view()),
     path('logout/', Logout.as_view()),

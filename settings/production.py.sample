@@ -14,3 +14,9 @@ ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
 
 TELEGRAM_BOT_API_TOKEN = '123:abc'
 TELEGRAM_CHAT_ID = -123
+
+WEBPUSH_SETTINGS = {
+    "VAPID_PUBLIC_KEY": "Vapid Public Key",
+    "VAPID_PRIVATE_KEY":"Vapid Private Key",
+    "VAPID_ADMIN_EMAIL": "admin@example.com"
+}

@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 
 
@@ -13,3 +14,9 @@ class Announcement(models.Model):
     create_time = models.DateTimeField(auto_now_add=True)
     update_time = models.DateTimeField(auto_now=True)
     enabled = models.BooleanField(default=True)
+
+
+class WebPushSubscription(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    update_time = models.DateTimeField(auto_now=True)
+    subscription = models.JSONField()
