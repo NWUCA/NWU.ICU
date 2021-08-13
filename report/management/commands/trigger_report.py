@@ -4,6 +4,7 @@ import pickle
 import time
 from concurrent import futures
 from datetime import datetime
+from time import sleep
 
 import requests
 from django.core.management.base import BaseCommand
@@ -81,27 +82,36 @@ class Command(BaseCommand):
         }
 
         cookie_jar = pickle.loads(report.user.cookie)
-        try:
-            r = requests.post(
-                url,
-                headers=headers,
-                cookies=cookie_jar.get_dict(domain='app.nwu.edu.cn'),
-                data=data,
-            )
-            r = json.loads(r.text)
-            if r['e'] == 1 or r['e'] == 0:
-                logger.info(f'{report.user.username}-{report.user.name} {r["m"]}')
-                if report.last_report_message:
-                    report.last_report_message = ''
+        i = 0
+        while True:
+            try:
+                r = requests.post(
+                    url,
+                    headers=headers,
+                    cookies=cookie_jar.get_dict(domain='app.nwu.edu.cn'),
+                    data=data,
+                )
+                r = json.loads(r.text)
+                if r['e'] == 1 or r['e'] == 0:
+                    logger.info(f'{report.user.username}-{report.user.name} {r["m"]}')
+                    if report.last_report_message:
+                        report.last_report_message = ''
+                        self.model_save_with_retry(report)
+                    return True
+                else:
+                    logger.warning(f'{report.user.username}-{report.user.name} {r}')
+                    report.last_report_message = f'[{datetime.now()} {r}]'
                     self.model_save_with_retry(report)
-                return True
-            else:
-                logger.warning(f'{report.user.username}-{report.user.name} {r}')
-                report.last_report_message = f'[{datetime.now()} {r}]'
-                self.model_save_with_retry(report)
-                return False
-        except requests.exceptions.ConnectionError as e:
-            logger.warning(f'{report.user.username}-{report.user.name} 连接失败\n' f'错误信息: {e}')
-            report.last_report_message = f'[{datetime.now()} 连接失败\n' f'错误信息: {e}]'
-            self.model_save_with_retry(report)
-        return False
+                    return False
+            except (requests.exceptions.ConnectionError, requests.exceptions.SSLError) as e:
+                i = i + 1
+                sleep(1)
+                if i < 10:
+                    continue
+                else:
+                    logger.warning(
+                        f'{report.user.username}-{report.user.name} 连接失败,已重试10次\n' f'错误信息: {e}'
+                    )
+                    report.last_report_message = f'[{datetime.now()} 连接失败\n' f'错误信息: {e}]'
+                    self.model_save_with_retry(report)
+                    return False
