@@ -162,6 +162,16 @@
                             <input type="hidden" v-model="province" id="province" name="province">
                             <input type="hidden" v-model="city" id="city" name="city">
                             <input type="hidden" v-model="geo_api_info" id="geo_api_info" name="geo_api_info">
+
+                            <input class="form-check-input" type="checkbox" id="confirmLegalRisk" required>
+                            <label class="form-check-label" for="confirmLegalRisk" style="display: inline">
+                                我确认 14 天内自身健康状况无异常, 并无疫情中高风险地区旅居史, 我知晓上报虚假信息将承担相应后果.
+                            </label>
+                            <br>
+                            <input class="form-check-input" type="checkbox" id="confirmDeactivation" required>
+                            <label class="form-check-label" for="confirmDeactivation" style="display: inline">
+                                若我的健康状况或流行病学史有变化, 我将在第一时间停用自动填报.
+                            </label>
                         </div>
                         <div id="map"></div>
                         <div class="info">
