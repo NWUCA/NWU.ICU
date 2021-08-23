@@ -68,12 +68,12 @@
                 type="button"
                 class="btn btn-primary"
                 data-bs-toggle="modal"
-                data-bs-target="{% if cookie_status %}#turnOnAutoReport{% else %}#refreshCookie{% endif %}"
+                data-bs-target="#turnOnAutoReport"
         >
             开启填报
         </button>
 
-        <div class="modal fade" id="refreshCookie" tabindex="-1" aria-hidden="true">
+        <div class="modal fade" id="refreshCookie" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
             <div class="modal-dialog">
                 <div class="modal-content">
                     <div class="modal-header">
@@ -87,12 +87,33 @@
                             <label for="password" class="form-label">
                                 我们需要刷新您在统一身份认证的登录状态, 请输入您的密码以继续
                             </label>
+                            <p>注意, 若您多次看到该提示, 则可能为您开启了统一身份认证的二次验证. 请手动关闭. 操作步骤详见
+                                <a href="https://www.yuque.com/docs/share/89bf6c74-8b51-4493-a388-cb597a9a64fa" target="_blank">这里
+                                    <i class="bi bi-box-arrow-up-right"></i>
+                                </a>
+                            </p>
                             <input type="password" name="password" class="form-control" id="password">
                         </div>
                         <div class="modal-footer">
                             <button type="submit" class="btn btn-primary">提交</button>
                         </div>
                     </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal fade" id="loadingModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            <span class="spinner-border spinner-border-sm" role="status"></span>
+                            加载中..
+                        </h5>
+                    </div>
+                    <p>
+                        正在检查统一身份认证状态的有效性..
+                    </p>
                 </div>
             </div>
         </div>
@@ -203,6 +224,20 @@
                         amap_result: null,
                     }
                 },
+                mounted() {
+                    let loadingModal = new bootstrap.Modal(document.getElementById('loadingModal'));
+                    loadingModal.show();
+                    fetch('/api/report/check-cookie-status/')
+                        .then(response => {
+                            if (response.status === 200) {
+                                loadingModal.hide();
+                            } else {
+                                loadingModal.hide();
+                                let refreshModal = new bootstrap.Modal(document.getElementById('refreshCookie'));
+                                refreshModal.show();
+                            }
+                        })
+                },
                 methods: {
                     getLocation() {
                         this.is_location_loading = true;
@@ -286,7 +321,7 @@
 
                     }
                 }
-            }).mount('#turnOnAutoReport')
+            }).mount('#content')
         </script>
     {% endif %}
 

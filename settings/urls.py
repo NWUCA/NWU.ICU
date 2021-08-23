@@ -26,7 +26,7 @@ from common.views import (
     settings,
 )
 from course_assessment.views import CourseAddView, CourseList, CourseView, TeacherView
-from report.views import ReportIndex
+from report.views import ReportIndex, check_cookie_status
 from user.views import Login, Logout, RefreshCookies
 
 urlpatterns = [
@@ -46,6 +46,7 @@ urlpatterns = [
     path('course/', CourseAddView.as_view()),
     path('course/<int:course_id>/', CourseView.as_view()),
     path('report/', ReportIndex.as_view()),
+    path('api/report/check-cookie-status/', check_cookie_status),
     re_path(r'^report/*$', ReportIndex.as_view()),  # 会有人访问 /// 这样的坑爹路径
     path('refresh_cookies/', RefreshCookies.as_view()),
 ]
