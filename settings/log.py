@@ -25,6 +25,12 @@ class TelegramBotHandler(logging.Handler):
             self.bot.send_message(settings.TELEGRAM_CHAT_ID, s)
 
 
+def upload_pastebin_and_send_to_tg(msg):
+    r = requests.post('https://paste.coherence.space/api/', data={'content': msg})
+    bot = telebot.TeleBot(settings.TELEGRAM_BOT_API_TOKEN)
+    bot.send_message(settings.TELEGRAM_CHAT_ID, r.text.strip())
+
+
 class TelegramBotHandlerWithContext(TelegramBotHandler):
     """
     把 request 的上下文包含到 log 中
@@ -60,6 +66,4 @@ class TelegramBotHandlerWithContext(TelegramBotHandler):
     def emit(self, record):
         msg = self._get_msg(record)
 
-        r = requests.post('https://paste.coherence.space/api/', data={'content': msg})
-
-        self.bot.send_message(settings.TELEGRAM_CHAT_ID, r.text.strip())
+        upload_pastebin_and_send_to_tg(msg)

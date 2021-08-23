@@ -9,13 +9,13 @@ import requests
 from bs4 import BeautifulSoup
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad
-from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login, logout
 from django.shortcuts import redirect, render
 from django.utils.crypto import get_random_string
 from django.views import View
 
+from settings.log import upload_pastebin_and_send_to_tg
 from user.models import User
 
 from .forms import LoginForm
@@ -26,7 +26,14 @@ LoginResult = namedtuple('LoginResult', 'success msg name cookies')
 
 def unified_login(username, raw_password):
     login_page_url = "http://authserver.nwu.edu.cn/authserver/login"
-    session = requests.session()
+    session = requests.sessions.Session()
+    # 欺骗学校的防火墙
+    session.headers.update(
+        {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+            '(KHTML, like Gecko) Chrome/70.0.3538.77 Safari/537.36'
+        }
+    )
     try:
         response = session.get(login_page_url, timeout=5)
         if response.status_code != 200:
@@ -72,21 +79,18 @@ def unified_login(username, raw_password):
 
         span = soup.select('span[id="msg"]')
         if len(span) == 0:
-            # FIXME: 有时候 name 会获取失败, DOM 里没有 auth_username 这个 class
-            # FIXME: 尝试存个当时的 html 看看
             try:
                 name = soup.find(class_='auth_username').span.span.text.strip()
             except AttributeError:
-                log_dir = settings.BASE_DIR / 'logs'
-                log_dir.mkdir(exist_ok=True)
                 logger.error('获取个人信息失败')
-                with open(log_dir / f'{username}-{datetime.now()}.html', 'wb') as f:
-                    f.write(response_login.content)
+                upload_pastebin_and_send_to_tg(response_login.text)
                 return LoginResult(False, '获取个人信息失败, 请稍后重试..', None, None)
 
             # 获取 app.nwu.edu.cn 域下的 cookies
             try:
-                session.get('https://app.nwu.edu.cn/uc/wap/login')
+                r = session.get('https://app.nwu.edu.cn/uc/wap/login')
+                if r.url != 'https://app.nwu.edu.cn/site/center/personal':
+                    logger.error(f'用户[{name}]获取 app.nwu.edu.cn 的 cookie 失败...')
             except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
                 return LoginResult(False, '连接 app.nwu.edu.cn, 请稍后重试..', None, None)
             for cookie in session.cookies:
