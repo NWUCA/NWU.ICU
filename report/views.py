@@ -1,9 +1,13 @@
-from datetime import datetime, timedelta
+import pickle
 
+import requests
 from django.contrib import messages
+from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.http import HttpResponse
 from django.shortcuts import redirect, render
 from django.views import View
+from django.views.decorators.http import require_GET
 
 from report.models import Report
 
@@ -17,9 +21,6 @@ class ReportIndex(LoginRequiredMixin, View):
             report = Report.objects.create(user=user)
         context = {
             'status': report.status,
-            'cookie_status': True
-            if datetime.now() - user.cookie_last_update < timedelta(hours=24)
-            else False,
             'is_at_school': '在校' if report.sfzx else '不在校',
             'address': report.address,
             'last_report_message': report.last_report_message,
@@ -42,3 +43,21 @@ class ReportIndex(LoginRequiredMixin, View):
             report.save()
             messages.success(request, '关闭成功')
         return redirect('/report/')
+
+
+@require_GET
+@login_required
+def check_cookie_status(request):
+    cookie_jar = pickle.loads(request.user.cookie)
+    r = requests.get(
+        'https://app.nwu.edu.cn/uc/wap/login',
+        cookies=cookie_jar.get_dict(domain='app.nwu.edu.cn'),
+        headers={
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+            '(KHTML, like Gecko) Chrome/70.0.3538.77 Safari/537.36'
+        },
+    )
+    if r.url != 'https://app.nwu.edu.cn/site/center/personal':
+        return HttpResponse(status=401)
+    else:
+        return HttpResponse()
