@@ -76,6 +76,22 @@
     <script>
         navigator.serviceWorker.register('/serviceworker.js')
     </script>
+
+    <script
+      src="https://browser.sentry-cdn.com/6.11.0/bundle.min.js"
+      crossorigin="anonymous"
+    ></script>
+
+    <script>
+        Sentry.init({
+          dsn: "https://70fa0bc07f114e538288ace62c87faa5@o971270.ingest.sentry.io/5923395",
+
+          // Set tracesSampleRate to 1.0 to capture 100%
+          // of transactions for performance monitoring.
+          // We recommend adjusting this value in production
+          tracesSampleRate: 1.0,
+        });
+    </script>
 </head>
 
 
