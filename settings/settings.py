@@ -138,7 +138,7 @@ LOGGING = {
     },
     'formatters': {
         'simple': {
-            'format': '[{asctime}] {levelname} {module}: {message}',
+            'format': '[{asctime}] {levelname} {name}: {message}',
             'style': '{',
         },
     },
@@ -161,15 +161,13 @@ LOGGING = {
         },
     },
     'root': {
-        'handlers': ['console'],
+        'handlers': ['console', 'telegram_with_context'],
         'level': 'INFO',
     },
     'loggers': {
         'report.management.commands.trigger_report': {
-            'handlers': ['telegram'],
-        },
-        'django.request': {
-            'handlers': ['telegram_with_context'],
+            'handlers': ['console', 'telegram'],
+            'propagate': False,
         },
     },
 }
@@ -179,9 +177,10 @@ SESSION_COOKIE_AGE = 365 * 24 * 60 * 60  # 365 days, in seconds
 CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
 CRISPY_TEMPLATE_PACK = "bootstrap5"
 
-SILKY_AUTHENTICATION = True  # User must login
-SILKY_AUTHORISATION = True  # User must have permissions
-SILKY_PYTHON_PROFILER = True
-SILKY_META = True
-SILKY_MAX_RECORDED_REQUESTS = 10 ** 4
-SILKY_MAX_RESPONSE_BODY_SIZE = 1024  # If response body>1024 bytes, ignore
+# django-silk is disabled due to lack of django 3.2 support
+# SILKY_AUTHENTICATION = True  # User must login
+# SILKY_AUTHORISATION = True  # User must have permissions
+# SILKY_PYTHON_PROFILER = True
+# SILKY_META = True
+# SILKY_MAX_RECORDED_REQUESTS = 10 ** 4
+# SILKY_MAX_RESPONSE_BODY_SIZE = 1024  # If response body>1024 bytes, ignore
