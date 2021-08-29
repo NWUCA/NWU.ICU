@@ -52,15 +52,18 @@ class ReportIndex(LoginRequiredMixin, View):
 @login_required
 def check_cookie_status(request):
     cookie_jar = pickle.loads(request.user.cookie)
-    r = requests.get(
-        'https://app.nwu.edu.cn/uc/wap/login',
-        cookies=cookie_jar.get_dict(domain='app.nwu.edu.cn'),
-        headers={
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-            '(KHTML, like Gecko) Chrome/70.0.3538.77 Safari/537.36'
-        },
-    )
+    try:
+        r = requests.get(
+            'https://app.nwu.edu.cn/uc/wap/login',
+            cookies=cookie_jar.get_dict(domain='app.nwu.edu.cn'),
+            headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+                '(KHTML, like Gecko) Chrome/70.0.3538.77 Safari/537.36'
+            },
+        )
+    except requests.exceptions.ConnectionError:
+        return HttpResponse("timeout")
     if r.url != 'https://app.nwu.edu.cn/site/center/personal':
-        return HttpResponse(status=401)
+        return HttpResponse("invalid")
     else:
-        return HttpResponse()
+        return HttpResponse("ok")

@@ -111,9 +111,24 @@
                             加载中..
                         </h5>
                     </div>
-                    <p>
+                    <div class="modal-body">
                         正在检查统一身份认证状态的有效性..
-                    </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal fade" id="pleaseRefreshModel" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            请刷新重试..
+                        </h5>
+                    </div>
+                    <div class="modal-body">
+                        获取统一身份认证状态失败, 请刷新重试..
+                    </div>
                 </div>
             </div>
         </div>
@@ -229,14 +244,17 @@
                     loadingModal.show();
                     fetch('/api/report/check-cookie-status/')
                         .then(response => {
-                            if (response.status === 200) {
-                                loadingModal.hide();
-                            } else {
-                                loadingModal.hide();
-                                let refreshModal = new bootstrap.Modal(document.getElementById('refreshCookie'));
-                                refreshModal.show();
+                            return response.text()
+                        }).then(text => {
+                            loadingModal.hide();
+                            if (text === "invalid") {
+                                let passwordModal = new bootstrap.Modal(document.getElementById('refreshCookie'));
+                                passwordModal.show();
+                            } else if (text === "timeout") {
+                                let pleaseRefreshModel = new bootstrap.Modal(document.getElementById('pleaseRefreshModel'));
+                                pleaseRefreshModel.show();
                             }
-                        })
+                    })
                 },
                 methods: {
                     getLocation() {
