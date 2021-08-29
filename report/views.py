@@ -1,3 +1,4 @@
+import logging
 import pickle
 
 import requests
@@ -10,6 +11,8 @@ from django.views import View
 from django.views.decorators.http import require_GET
 
 from report.models import Report
+
+logger = logging.getLogger(__name__)
 
 
 class ReportIndex(LoginRequiredMixin, View):
