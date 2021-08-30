@@ -20,12 +20,76 @@
                     <a href="https://www.yuque.com/docs/share/89bf6c74-8b51-4493-a388-cb597a9a64fa" target="_blank">这里
                         <i class="bi bi-box-arrow-up-right"></i>
                     </a>
-                    </li>
+                </li>
                 <li>学校服务器崩溃了, 请等待学校修复.</li>
             </ul>
             <p>若问题无法解决, 请与我们联系.</p>
         </div>
     {% endif %}
+
+    <div id="checkCookie">
+        <div class="modal fade" id="refreshCookie" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">请输入密码</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <form method="POST" action="/refresh_cookies/">
+                        <div class="modal-body">
+                            {% csrf_token %}
+                            <input type="hidden" name="redirect" value="/report/">
+                            <label for="password" class="form-label">
+                                我们需要刷新您在统一身份认证的登录状态, 请输入您的密码以继续
+                            </label>
+                            <p>注意, 若您多次看到该提示, 则可能为您开启了统一身份认证的二次验证. 请手动关闭. 操作步骤详见
+                                <a href="https://www.yuque.com/docs/share/89bf6c74-8b51-4493-a388-cb597a9a64fa"
+                                   target="_blank">这里
+                                    <i class="bi bi-box-arrow-up-right"></i>
+                                </a>
+                            </p>
+                            <input type="password" name="password" class="form-control" id="password">
+                        </div>
+                        <div class="modal-footer">
+                            <button type="submit" class="btn btn-primary">提交</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal fade" id="loadingModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            <span class="spinner-border spinner-border-sm" role="status"></span>
+                            加载中..
+                        </h5>
+                    </div>
+                    <div class="modal-body">
+                        正在检查统一身份认证状态的有效性..
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal fade" id="pleaseRefreshModel" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            请刷新重试..
+                        </h5>
+                    </div>
+                    <div class="modal-body">
+                        获取统一身份认证状态失败, 请刷新重试..
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     {% if status %}
         <h2>当前填报状态: 开启</h2>
         <p>
@@ -72,66 +136,6 @@
         >
             开启填报
         </button>
-
-        <div class="modal fade" id="refreshCookie" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">请输入密码</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                    </div>
-                    <form method="POST" action="/refresh_cookies/">
-                        <div class="modal-body">
-                            {% csrf_token %}
-                            <input type="hidden" name="redirect" value="/report/">
-                            <label for="password" class="form-label">
-                                我们需要刷新您在统一身份认证的登录状态, 请输入您的密码以继续
-                            </label>
-                            <p>注意, 若您多次看到该提示, 则可能为您开启了统一身份认证的二次验证. 请手动关闭. 操作步骤详见
-                                <a href="https://www.yuque.com/docs/share/89bf6c74-8b51-4493-a388-cb597a9a64fa" target="_blank">这里
-                                    <i class="bi bi-box-arrow-up-right"></i>
-                                </a>
-                            </p>
-                            <input type="password" name="password" class="form-control" id="password">
-                        </div>
-                        <div class="modal-footer">
-                            <button type="submit" class="btn btn-primary">提交</button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        </div>
-
-        <div class="modal fade" id="loadingModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">
-                            <span class="spinner-border spinner-border-sm" role="status"></span>
-                            加载中..
-                        </h5>
-                    </div>
-                    <div class="modal-body">
-                        正在检查统一身份认证状态的有效性..
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="modal fade" id="pleaseRefreshModel" tabindex="-1">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">
-                            请刷新重试..
-                        </h5>
-                    </div>
-                    <div class="modal-body">
-                        获取统一身份认证状态失败, 请刷新重试..
-                    </div>
-                </div>
-            </div>
-        </div>
 
 
         <div class="modal fade" id="turnOnAutoReport" tabindex="-1" aria-hidden="true">
@@ -239,23 +243,6 @@
                         amap_result: null,
                     }
                 },
-                mounted() {
-                    let loadingModal = new bootstrap.Modal(document.getElementById('loadingModal'));
-                    loadingModal.show();
-                    fetch('/api/report/check-cookie-status/')
-                        .then(response => {
-                            return response.text()
-                        }).then(text => {
-                            loadingModal.hide();
-                            if (text === "invalid") {
-                                let passwordModal = new bootstrap.Modal(document.getElementById('refreshCookie'));
-                                passwordModal.show();
-                            } else if (text === "timeout") {
-                                let pleaseRefreshModel = new bootstrap.Modal(document.getElementById('pleaseRefreshModel'));
-                                pleaseRefreshModel.show();
-                            }
-                    })
-                },
                 methods: {
                     getLocation() {
                         this.is_location_loading = true;
@@ -343,7 +330,28 @@
         </script>
     {% endif %}
 
-
-
+    {% if last_report_message or not status %}
+        <script>
+            Vue.createApp({
+                mounted() {
+                    let loadingModal = new bootstrap.Modal(document.getElementById('loadingModal'));
+                    loadingModal.show();
+                    fetch('/api/report/check-cookie-status/')
+                        .then(response => {
+                            return response.text()
+                        }).then(text => {
+                        loadingModal.hide();
+                        if (text === "invalid") {
+                            let passwordModal = new bootstrap.Modal(document.getElementById('refreshCookie'));
+                            passwordModal.show();
+                        } else if (text === "timeout") {
+                            let pleaseRefreshModel = new bootstrap.Modal(document.getElementById('pleaseRefreshModel'));
+                            pleaseRefreshModel.show();
+                        }
+                    })
+                },
+            }).mount('#checkCookie')
+        </script>
+    {% endif %}
 
 {% endblock %}
