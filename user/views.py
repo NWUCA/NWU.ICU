@@ -82,7 +82,6 @@ def unified_login(username, raw_password):
             try:
                 name = soup.find(class_='auth_username').span.span.text.strip()
             except AttributeError:
-                logger.error('获取个人信息失败')
                 upload_pastebin_and_send_to_tg(response_login.text)
                 return LoginResult(False, '获取个人信息失败, 请稍后重试..', None, None)
 
@@ -132,6 +131,8 @@ class Login(View):
         if form.is_valid():
             success, msg, name, cookies = unified_login(username, password)
             logger.info(f'{name} 认证状态:{success}-{msg}')
+            if '获取个人信息失败' in msg:
+                logger.error('获取个人信息失败', extra={'request': request})
             if success:
                 try:
                     user = User.objects.get(username=username)
