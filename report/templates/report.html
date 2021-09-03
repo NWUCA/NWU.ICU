@@ -332,25 +332,21 @@
 
     {% if last_report_message or not status %}
         <script>
-            Vue.createApp({
-                mounted() {
-                    let loadingModal = new bootstrap.Modal(document.getElementById('loadingModal'));
-                    loadingModal.show();
-                    fetch('/api/report/check-cookie-status/')
-                        .then(response => {
-                            return response.text()
-                        }).then(text => {
-                        loadingModal.hide();
-                        if (text === "invalid") {
-                            let passwordModal = new bootstrap.Modal(document.getElementById('refreshCookie'));
-                            passwordModal.show();
-                        } else if (text === "timeout") {
-                            let pleaseRefreshModel = new bootstrap.Modal(document.getElementById('pleaseRefreshModel'));
-                            pleaseRefreshModel.show();
-                        }
-                    })
-                },
-            }).mount('#checkCookie')
+            let loadingModal = new bootstrap.Modal(document.getElementById('loadingModal'));
+            loadingModal.show();
+            fetch('/api/report/check-cookie-status/')
+                .then(response => {
+                    return response.text()
+                }).then(text => {
+                loadingModal.hide();
+                if (text === "invalid") {
+                    let passwordModal = new bootstrap.Modal(document.getElementById('refreshCookie'));
+                    passwordModal.show();
+                } else if (text === "timeout") {
+                    let pleaseRefreshModel = new bootstrap.Modal(document.getElementById('pleaseRefreshModel'));
+                    pleaseRefreshModel.show();
+                }
+            })
         </script>
     {% endif %}
 

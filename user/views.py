@@ -71,6 +71,16 @@ def unified_login(username, raw_password):
     }
 
     response_login = session.post(login_page_url, data=data)
+
+    if '踢出会话' in response_login.text:
+        response_login = session.post(
+            login_page_url,
+            data={
+                'execution': 'e2s2',
+                '_eventId': 'continue',
+            },
+        )
+
     if response_login is not None:
         soup = BeautifulSoup(response_login.text, 'html.parser')
 
