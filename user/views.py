@@ -72,17 +72,19 @@ def unified_login(username, raw_password):
 
     response_login = session.post(login_page_url, data=data)
 
-    if '踢出会话' in response_login.text:
-        response_login = session.post(
-            login_page_url,
-            data={
-                'execution': 'e2s2',
-                '_eventId': 'continue',
-            },
-        )
-
     if response_login is not None:
         soup = BeautifulSoup(response_login.text, 'html.parser')
+
+        if '踢出会话' in response_login.text:
+            response_login = session.post(
+                login_page_url,
+                data={
+                    'execution': soup.find(id='continue').find(attrs={"name": "execution"})[
+                        'value'
+                    ],
+                    '_eventId': 'continue',
+                },
+            )
 
         if soup.find(id='improveInfoForm'):
             return LoginResult(False, '您的密码仍为初始密码, 请更新您的密码后重试..', None, None)
