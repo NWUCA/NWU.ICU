@@ -85,6 +85,7 @@ def unified_login(username, raw_password):
                     '_eventId': 'continue',
                 },
             )
+            soup = BeautifulSoup(response_login.text, 'html.parser')
 
         if soup.find(id='improveInfoForm'):
             return LoginResult(False, '您的密码仍为初始密码, 请更新您的密码后重试..', None, None)
