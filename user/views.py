@@ -104,7 +104,7 @@ def unified_login(username, raw_password):
                 if r.url != 'https://app.nwu.edu.cn/site/center/personal':
                     logger.warning(f'用户[{name}]获取 app.nwu.edu.cn 的 cookie 失败...')
             except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
-                return LoginResult(False, '连接 app.nwu.edu.cn, 请稍后重试..', None, None)
+                return LoginResult(False, '连接 app.nwu.edu.cn 失败, 请稍后重试..', None, None)
             for cookie in session.cookies:
                 cookie.expires = None
             return LoginResult(True, '登陆成功', name, session.cookies)
