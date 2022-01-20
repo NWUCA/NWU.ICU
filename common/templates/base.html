@@ -5,20 +5,6 @@
 <head>
     <title>NWU.ICU-{% block subtitle %}{% endblock %}</title>
 
-    <!-- Global site tag (gtag.js) - Google Analytics -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FDZ38PGVZ6"></script>
-    <script>
-        window.dataLayer = window.dataLayer || [];
-
-        function gtag() {
-            dataLayer.push(arguments);
-        }
-
-        gtag('js', new Date());
-
-        gtag('config', 'G-FDZ38PGVZ6');
-    </script>
-
     <style>
         body {
             padding-top: 5rem;
@@ -53,6 +39,8 @@
     </style>
 
     <link rel="manifest" href="/manifest.json">
+
+    <script async defer data-domain="nwu.icu" src="https://analytics.coherence.space/js/plausible.js"></script>
 
     {# favicons #}
     <link rel="apple-touch-icon" href="{% static 'img/icon-192.png' %}">
