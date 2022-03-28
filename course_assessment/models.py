@@ -6,6 +6,15 @@ from django.db import models
 from user.models import User
 
 
+class Semeseter(models.Model):
+    """开课学期"""
+
+    name = models.CharField(max_length=20)
+
+    def __str__(self):
+        return self.name
+
+
 class School(models.Model):
     """院系"""
 
@@ -16,13 +25,18 @@ class School(models.Model):
 
 
 class Teacher(models.Model):
+    """
+    教务系统中课表只能够获取到教师姓名, 故对于重名的老师, 我们只能认为他们是同一个人
+    """
+
     name = models.CharField(max_length=20, verbose_name='姓名')
-    school = models.ForeignKey(School, on_delete=models.CASCADE, verbose_name='院系')
-    created_by = models.ForeignKey(User, on_delete=models.CASCADE)
+    # 因为是根据课程确定的教师院系, 可能不准确
+    school = models.ForeignKey(School, on_delete=models.CASCADE, verbose_name='院系', null=True)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, null=True)
     created_time = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f'{self.name}-{self.school}'
+        return f'{self.name}'
 
     class Meta:
         ordering = ['school']
@@ -44,16 +58,20 @@ class Course(models.Model):
         ('english', '英语'),
         ('professional', '专业课'),
         ('politics', '政治'),
-    )
-    name = models.CharField(max_length=30, verbose_name='课程名称')
-    teacher = models.ForeignKey(Teacher, on_delete=models.CASCADE, verbose_name='教师')
+        ('required', '必修'),
+        ('optional', '选修'),
+    )  # 从教务系统导入的课表中只有通识, 必修, 选修三类
+    course_id = models.CharField(max_length=30, verbose_name='课程号')
+    name = models.CharField(max_length=30, verbose_name='课程名称', db_index=True)
+    teachers = models.ManyToManyField(Teacher, db_index=True, related_name='books')
     classification = models.TextField(choices=classification_choices, verbose_name='分类')
     school = models.ForeignKey(School, on_delete=models.CASCADE, verbose_name='院系')
-    created_by = models.ForeignKey(User, on_delete=models.CASCADE)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, null=True)
     created_time = models.DateTimeField(auto_now_add=True)
+    semester = models.ManyToManyField(Semeseter, verbose_name="开课学期")
 
     def __str__(self):
-        return self.name
+        return f"{self.name}-{self.teachers.all()}"
 
     class Meta:
         ordering = ['school']
@@ -65,17 +83,32 @@ class CourseForm(forms.ModelForm):
 
     class Meta:
         model = Course
-        fields = ['name', 'teacher', 'classification', 'school']
+        fields = ['name', 'teachers', 'classification', 'school']
         help_texts = {'teacher': '没有找到想要的老师? <a href="/teacher/">点击添加</a>'}
 
 
 class Review(models.Model):
+    step_choices = (
+        ('low', '低'),
+        ('medium', '中'),
+        ('high', '高'),
+    )
+
+    source_choice = (('user', '用户生成'),)
+
     course = models.ForeignKey(Course, on_delete=models.CASCADE)
     content = models.TextField(verbose_name='内容')
     rating = models.SmallIntegerField(verbose_name='打分 (满分 5 分)')
     created_by = models.ForeignKey(User, on_delete=models.CASCADE)
     anonymous = models.BooleanField(verbose_name='匿名评价', default=True)
     created_time = models.DateTimeField(auto_now_add=True)
+    like = models.IntegerField(default=0, verbose_name='点赞')
+    difficulty = models.PositiveSmallIntegerField(verbose_name='课程难度')
+    grade = models.PositiveSmallIntegerField(verbose_name='给分高低')
+    homework = models.PositiveSmallIntegerField(verbose_name='作业多少')
+    reward = models.PositiveSmallIntegerField(verbose_name='收获多少')
+    source = models.CharField(verbose_name='来源', default='user', max_length=20)
+    # TODO: 文件/图片上传
 
     class Meta:
         constraints = [
