@@ -1,14 +1,14 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import IntegrityError
-from django.db.models import Avg, Q
+from django.db.models import Avg, Count, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
 from django.views.generic import ListView
 
 from course_assessment.models import Course, Review
 
-from .models import CourseForm, ReviewForm, TeacherForm
+from .models import ReviewForm
 
 
 class CourseList(ListView):
@@ -18,7 +18,9 @@ class CourseList(ListView):
     def get_queryset(self):
         search_string = self.request.GET.get('s', "")
         course_set = (
-            self.model.objects.all().order_by('school').annotate(rating=Avg('review__rating'))
+            self.model.objects.all()
+            .annotate(rating=Avg('review__rating'), num=Count('review'))
+            .order_by('-num')
         )
         if search_string:
             course_set = course_set.filter(
@@ -33,30 +35,6 @@ class CourseList(ListView):
         return context
 
 
-class TeacherView(LoginRequiredMixin, View):
-    def get(self, request):
-        return render(request, 'teacher.html', context={'form': TeacherForm()})
-
-    def post(self, request):
-        f = TeacherForm(request.POST)
-        f.instance.created_by = request.user
-        f.save()
-        messages.success(request, '添加成功')
-        return redirect('/course/')
-
-
-class CourseAddView(LoginRequiredMixin, View):
-    def get(self, request):
-        return render(request, 'course_add.html', context={'form': CourseForm()})
-
-    def post(self, request):
-        f = CourseForm(request.POST)
-        f.instance.created_by = request.user
-        f.save()
-        messages.success(request, '添加成功')
-        return redirect('/course/')
-
-
 class CourseView(LoginRequiredMixin, View):
     def get(self, request, course_id):
         course = get_object_or_404(Course, id=course_id)
@@ -69,6 +47,11 @@ class CourseView(LoginRequiredMixin, View):
             'review_form': ReviewForm(),
         }
         return render(request, 'course_detail.html', context=context)
+
+
+class ReviewAddView(LoginRequiredMixin, View):
+    def get(self, request, course_id):
+        return render(request, 'review_add.html', context={'form': ReviewForm()})
 
     def post(self, request, course_id):
         f = ReviewForm(request.POST)

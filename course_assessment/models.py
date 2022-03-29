@@ -71,7 +71,10 @@ class Course(models.Model):
     semester = models.ManyToManyField(Semeseter, verbose_name="开课学期")
 
     def __str__(self):
-        return f"{self.name}-{self.teachers.all()}"
+        return f"{self.name}-{self.get_teachers()}"
+
+    def get_teachers(self):
+        return ",".join([t.name for t in self.teachers.all()])
 
     class Meta:
         ordering = ['school']

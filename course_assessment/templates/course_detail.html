@@ -1,69 +1,54 @@
 {% extends "base_course.html" %}
-{% load crispy_forms_tags %}
 
 {% block course_content %}
-    <h2>{{ course.name }}</h2>
-    <p>
-        <span>课程类别: {{ course.get_classification_display }}</span>
-        <span class="ms-4">教师: {{ course.teacher.name }}</span>
-        <span class="ms-4">开课院系: {{ course.school }}</span>
-    </p>
+    <section class="block">
+        <h2 class="title is-2">{{ course.name }}</h2>
+        <p class="subtitle"><strong>教师:</strong> {{ course.get_teachers }}</p>
+        <p class="columns">
+            <span class="column"><strong>课程类别:</strong> {{ course.get_classification_display }}</span>
+            <span class="column"><strong>开课院系:</strong> {{ course.school }}</span>
+        </p>
 
-    <h3>
-        <span>
-            总体评价:
-            {% if rating %}
-                {{ rating | floatformat }} / 5
-            {% else %}
-                暂无评分
-            {% endif %}
-        </span>
-        <span class="fs-6">({{ reviews.count }} 人评价)</span>
-    </h3>
+        <h3 class="subtitle">
+            <span>
+                <strong>总体评价:</strong>
+                {% if rating %}
+                    {{ rating | floatformat }} / 5
+                {% else %}
+                    暂无评分
+                {% endif %}
+            </span>
+            <span class="fs-6">({{ reviews.count }} 人评价)</span>
+        </h3>
+    </section>
 
-    <div class="row">
-        <h2 class="col">评价列表</h2>
-        <button type="button" class="btn btn-primary col-auto" data-bs-toggle="modal" data-bs-target="#add_review">
+    <div class="level">
+        <h2 class="level-left title is-3">评价列表</h2>
+        <a class="level-right button is-dark" href="/course/{{ course.id }}/review_add/">
             新增评价
-        </button>
-    </div>
-
-    <div class="modal fade" id="add_review" tabindex="-1" aria-labelledby="add_review_modal_label" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="add_review_modal_label">新增评价</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    {% crispy review_form %}
-                </div>
-            </div>
-        </div>
+        </a>
     </div>
 
     {% for review in reviews %}
-        <div class="card m-2">
-            <div class="card-body">
-                <h6 class="card-subtitle mb-2 text-muted">
-                    <span>
-                        {% if review.anonymous %}
-                            <td>匿名</td>
-                        {% else %}
-                            <td>{{ review.created_by.name }}</td>
-                        {% endif %}
-                    </span>
-                    <span class="ps-5">
-                        {{ review.rating }} 分
-                    </span>
-                </h6>
-                <p class="card-text">
-                    {{ review.content }}
-                </p>
-                <p class="card-text fw-light">
-                    {{ review.created_time }}
-                </p>
-            </div>
+        <div class="box">
+            <p class="subtitle">
+                <span>
+                    {% if review.anonymous %}
+                        <td>匿名</td>
+                    {% else %}
+                        <td>{{ review.created_by.name }}</td>
+                    {% endif %}
+                </span>
+                <span class="ml-5">
+                    {{ review.rating }} 分
+                </span>
+            </p>
+            <p>
+                {{ review.content }}
+            </p>
+            <p class="is-size-7">
+                {{ review.created_time }}
+            </p>
         </div>
     {% endfor %}
 

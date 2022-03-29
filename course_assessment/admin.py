@@ -14,12 +14,9 @@ class ReviewAdmin(admin.ModelAdmin):
 @admin.register(Course)
 class CourseAdmin(admin.ModelAdmin):
     list_display = ('name', 'classification', 'get_teachers', 'school', 'created_by')
-    search_fields = ('teacher__name', 'name')
+    search_fields = ('teachers__name', 'name')
 
     def get_queryset(self, request):
         """To save an extra query"""
         qs = super().get_queryset(request)
         return qs.prefetch_related('teachers')
-
-    def get_teachers(self, obj):
-        return ",".join([t.name for t in obj.teachers.all()])
