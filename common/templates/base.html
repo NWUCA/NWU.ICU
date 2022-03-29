@@ -139,8 +139,8 @@
         {% block messages %}
             {% for message in messages %}
                 <div
-                        {% if message.tags == 'error' %} class="notification is-success is-light m-2"
-                        {% else %} class="notification is-danger is-light m-2"
+                        {% if message.tags == 'error' %} class="notification is-danger is-light m-2"
+                        {% else %} class="notification is-success is-light m-2"
                         {% endif %}
                 >
                     {% if 'safe' in message.tags %}{{ message | safe }}{% else %}{{ message }}{% endif %}

@@ -25,7 +25,7 @@ from common.views import (
     service_worker,
     settings,
 )
-from course_assessment.views import CourseAddView, CourseList, CourseView, TeacherView
+from course_assessment.views import CourseList, CourseView, ReviewAddView
 from report.views import ReportIndex, check_cookie_status
 from user.views import Login, Logout, RefreshCookies
 
@@ -42,9 +42,8 @@ urlpatterns = [
     path('course_list/', CourseList.as_view()),
     path('login/', Login.as_view()),
     path('logout/', Logout.as_view()),
-    path('teacher/', TeacherView.as_view()),
-    path('course/', CourseAddView.as_view()),
     path('course/<int:course_id>/', CourseView.as_view()),
+    path('course/<int:course_id>/review_add/', ReviewAddView.as_view()),
     path('report/', ReportIndex.as_view()),
     path('api/report/check-cookie-status/', check_cookie_status),
     re_path(r'^report/*$', ReportIndex.as_view()),  # 会有人访问 /// 这样的坑爹路径

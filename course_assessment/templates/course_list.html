@@ -1,37 +1,31 @@
 {% extends "base_course.html" %}
 
 {% block course_content %}
-    <div class="row">
-        <h1 class="col">课程列表</h1>
-        <span class="col-auto">
-            <a type="button" class="btn btn-primary" href="/course/">
-                新增课程
-            </a>
-        </span>
-    </div>
 
-    <p>
-    目前共有 {{ course_list.count }} 门课程, {{ review_count }} 条评价.
+    <h1 class="title">课程列表</h1>
+    <p class="mb-2">
+    目前共有 {{ review_count }} 条评价.
     </p>
 
     <form>
-        <div class="row container">
-            <input type="search" class="form-control col gx-4" placeholder="搜索课程、老师" aria-label="search" name="s" id="searchInput">
-            <button type="submit" class="btn btn-primary bi bi-search col-auto"></button>
+        <div class="field is-horizontal">
+            <input type="search" class="input mr-3" placeholder="搜索课程、老师" aria-label="search" name="s" id="searchInput">
+            <button type="submit" class="button bi bi-search"></button>
         </div>
     </form>
 
     {% for course in course_list %}
-        <div class="card m-2">
-            <div class="card-body">
-                <h5 class="card-title">
-                    <a href="/course/{{ course.id }}">{{ course.name }}</a>
-                </h5>
-                <h6 class="card-subtitle mb-2 text-muted">
-                    {{ course.teacher.name }} {{ course.get_classification_display }}
-                    {{ course.school }}
-                </h6>
-                <p class="card-text">
+        <div class="card my-4">
+            <header class="card-header">
+                    <p class="card-header-title">
+                        <a href="/course/{{ course.id }}">{{ course.name }}</a>
+                    </p>
+            </header>
+            <div class="card-content">
+                <p><strong>
+                    {{ course.get_teachers }} {{ course.get_classification_display }}
+                </strong></p>
+                <p>
                     {% if course.rating %}
                         {{ course.rating | floatformat }} / 5 分
                         ({{ course.review_set.count }} 人评价)
@@ -42,7 +36,7 @@
             </div>
         </div>
     {% endfor %}
-    <p style="font-size: small; text-align: center;">没有找到想要评价的课程? <a href="/course/">点击添加</a></p>
+    <p class="has-text-centered is-size-7">没有找到想要评价的课程? 请反馈给我们</p>
 
     <script>
         document.getElementById('searchInput').value = '{{ search_string }}'
