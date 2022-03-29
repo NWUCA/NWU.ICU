@@ -39,7 +39,7 @@ class Command(BaseCommand):
             ]
 
             # 已经爬取过当前课程
-            courses = Course.objects.filter(course_id=course['kch'])
+            courses = Course.objects.filter(name=course['kcmc'])
             for c in courses:
                 # logger.info(list(c.teacher.all()))
                 # logger.info(teacher_obj_list)
