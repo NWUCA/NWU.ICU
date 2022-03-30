@@ -17,6 +17,10 @@ def about(request):
     return render(request, 'about.html')
 
 
+def tos(request):
+    return render(request, 'tos.html')
+
+
 @login_required
 def settings(request):
     context = {"VAPID_PUBLIC_KEY": dj_settings.WEBPUSH_SETTINGS["VAPID_PUBLIC_KEY"]}
