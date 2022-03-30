@@ -128,9 +128,10 @@
 
 
     <div id="content" class='container'>
+    <section class="section">
         {% for announcement in announcements %}
             {% if announcement.type == 'all' %}
-                <div class="notification is-info is-light m-2">
+                <div class="notification is-info is-light">
                     公告: {{ announcement.content | linebreaks }} 最后更新时间: {{ announcement.update_time }}
                 </div>
             {% endif %}
@@ -139,16 +140,17 @@
         {% block messages %}
             {% for message in messages %}
                 <div
-                        {% if message.tags == 'error' %} class="notification is-danger is-light m-2"
-                        {% else %} class="notification is-success is-light m-2"
+                        {% if message.tags == 'error' %} class="notification is-danger is-light"
+                        {% else %} class="notification is-success is-light"
                         {% endif %}
                 >
                     {% if 'safe' in message.tags %}{{ message | safe }}{% else %}{{ message }}{% endif %}
                 </div>
             {% endfor %}
         {% endblock %}
+    </section>
 
-        <section class="section">
+        <section class="section pt-0">
             {% block content %}{% endblock %}
         </section>
     </div>

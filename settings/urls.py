@@ -24,6 +24,7 @@ from common.views import (
     send_test_notification,
     service_worker,
     settings,
+    tos,
 )
 from course_assessment.views import CourseList, CourseView, ReviewAddView
 from report.views import ReportIndex, check_cookie_status
@@ -35,6 +36,7 @@ urlpatterns = [
     path('manifest.json', manifest),
     path('serviceworker.js', service_worker),
     path('', index),
+    path('tos/', tos),
     path('about/', about),
     path('settings/', settings),
     path('api/save-subscription/', save_push_subscription),
