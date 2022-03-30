@@ -9,7 +9,7 @@ for (let form of forms) {
 
         let btn = form.querySelectorAll("button[type='submit']")[0];
         btn.disabled = true;
-        btn.innerHTML = `<span class="spinner-border spinner-border-sm" role="status"
-                            aria-hidden="true"></span>加载中...`;
+        btn.classList.toggle("is-loading");
+        btn.innerHTML = `加载中...`;
     })
 }
