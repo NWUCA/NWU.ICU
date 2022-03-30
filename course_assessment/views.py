@@ -14,6 +14,7 @@ from .models import ReviewForm
 class CourseList(ListView):
     template_name = 'course_list.html'
     model = Course
+    paginate_by = 15
 
     def get_queryset(self):
         search_string = self.request.GET.get('s', "")
@@ -24,7 +25,7 @@ class CourseList(ListView):
         )
         if search_string:
             course_set = course_set.filter(
-                Q(name__contains=search_string) | Q(teacher__name__contains=search_string)
+                Q(name__contains=search_string) | Q(teachers__name__contains=search_string)
             )
         return course_set
 

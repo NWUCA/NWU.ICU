@@ -2,10 +2,18 @@
 
 {% block course_content %}
 
-    <h1 class="title">课程列表</h1>
-    <p class="mb-2">
-    目前共有 {{ review_count }} 条评价.
-    </p>
+    {% if search_string %}
+        <div class="level">
+            <h2 class="subtitle is-size-3 level-left">搜索 「{{ search_string }}」</h2>
+            <a href="?" class="level-right">←返回课程列表</a>
+        </div>
+
+    {% else %}
+        <h1 class="title">课程列表</h1>
+        <p class="mb-2">
+            目前共有 {{ review_count }} 条评价.
+        </p>
+    {% endif %}
 
     <form>
         <div class="field is-horizontal">
@@ -14,12 +22,12 @@
         </div>
     </form>
 
-    {% for course in course_list %}
+    {% for course in page_obj %}
         <div class="card my-4">
             <header class="card-header">
-                    <p class="card-header-title">
-                        <a href="/course/{{ course.id }}">{{ course.name }}</a>
-                    </p>
+                <p class="card-header-title">
+                    <a href="/course/{{ course.id }}">{{ course.name }}</a>
+                </p>
             </header>
             <div class="card-content">
                 <p><strong>
@@ -36,6 +44,37 @@
             </div>
         </div>
     {% endfor %}
+
+    <nav class="pagination" role="navigation" aria-label="pagination">
+        <ul class="pagination-list">
+            {% if page_obj.has_previous %}
+                <li><a class="pagination-link" href="?page=1&s={{ search_string }}">1</a></li>
+                {% if page_obj.previous_page_number != 1 %}
+                    <li><span class="pagination-ellipsis">&hellip;</span></li>
+                    <li><a class="pagination-link"
+                           href="?page={{ page_obj.previous_page_number }}&s={{ search_string }}">
+                        {{ page_obj.previous_page_number }}
+                    </a></li>
+                {% else %}
+
+                {% endif %}
+            {% endif %}
+            <li><a class="pagination-link is-current" aria-current="page">{{ page_obj.number }}</a></li>
+
+            {% if page_obj.has_next %}
+                {% if page_obj.next_page_number != page_obj.paginator.num_pages %}
+                    <li><a class="pagination-link" href="?page={{ page_obj.next_page_number }}&s={{ search_string }}">
+                        {{ page_obj.next_page_number }}
+                    </a></li>
+                    <li><span class="pagination-ellipsis">&hellip;</span></li>
+                {% endif %}
+                <li><a class="pagination-link" href="?page={{ page_obj.paginator.num_pages }}&s={{ search_string }}">
+                    {{ page_obj.paginator.num_pages }}
+                </a></li>
+            {% endif %}
+        </ul>
+    </nav>
+
     <p class="has-text-centered is-size-7">没有找到想要评价的课程? 请反馈给我们</p>
 
     <script>
