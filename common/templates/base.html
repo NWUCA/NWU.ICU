@@ -3,20 +3,11 @@
 <!DOCTYPE html>
 <html lang="zh-hans">
 <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>NWU.ICU-{% block subtitle %}{% endblock %}</title>
 
     <style>
-        body {
-            padding-top: 5rem;
-            margin-bottom: 80px !important; /* Margin bottom by footer height */
-        }
-
-        @media (min-width: 768px) {
-            form {
-                padding-right: 30%;
-            }
-        }
-
         html, body {
             height: 100%;
             margin: 0;
@@ -43,20 +34,8 @@
     <link rel="apple-touch-icon-precomposed" href="{% static 'img/icon-192.png' %}">
     <link rel="icon" href="{% static 'img/icon-192.png' %}">
 
-    {# Bootstarp #}
-    {#    <link href="https://unpkg.com/bootstrap@5.0.1/dist/css/bootstrap.min.css" rel="stylesheet"#}
-    {#          crossorigin="anonymous">#}
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-
     {# Bootstarp Icons #}
     <link rel="stylesheet" href="https://unpkg.com/bootstrap-icons@1.5.0/font/bootstrap-icons.css">
-
-    {#    <script src="https://unpkg.com/bootstrap@5.1.0/dist/js/bootstrap.bundle.min.js"#}
-    {#        crossorigin="anonymous"></script>#}
-
-    {# vue #}
-    <script src="https://unpkg.com/vue@3.0.9/dist/vue.global.js"></script>
 
     {# bulma #}
     <link rel="stylesheet" href="https://unpkg.com/bulma@0.9.3/css/bulma.min.css">
@@ -80,6 +59,8 @@
             tracesSampleRate: 1.0,
         });
     </script>
+
+    {% block additional_heads %}{% endblock %}
 </head>
 
 
@@ -159,7 +140,7 @@
 <footer class="container has-text-centered mt-4">
         <span>2019-2022 nwu.icu</span>
         <a href="/about/">关于我们</a>
-        <span style="margin-left: 5px">version: {{ version }}</span>
+        <span class="ml-2">version: {{ version }}</span>
 </footer>
 
 <script src="{% static 'misc.js' %}"></script>
