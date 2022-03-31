@@ -2,6 +2,16 @@
 
 {% block subtitle %}自动填报{% endblock %}
 
+{% block additional_heads %}
+    {# Bootstarp #}
+    <link href="https://unpkg.com/bootstrap@5.0.1/dist/css/bootstrap.min.css" rel="stylesheet"
+              crossorigin="anonymous">
+    <script src="https://unpkg.com/bootstrap@5.1.0/dist/js/bootstrap.bundle.min.js"
+            crossorigin="anonymous"></script>
+    {# vue #}
+    <script src="https://unpkg.com/vue@3.0.9/dist/vue.global.js"></script>
+{% endblock %}
+
 {% block content %}
     {% for announcement in announcements %}
         {% if announcement.type == 'report' %}

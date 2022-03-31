@@ -2,14 +2,14 @@
 目前拥有导航, 课程评价和自动填报三个模块, 更多功能正在计划中..
 
 ## 起步
-本项目使用 Django 开发, 并使用 pipenv 来管理依赖.
+本项目使用 Django 开发, 并使用 poetry 来管理依赖.
 - 安装依赖:
     ```
-    pipenv sync --dev
+    poetry install
     ```
 - 进入虚拟环境:
     ```
-    pipenv shell
+    poetry shell
     ```
 - 根据 `development.py.sample` 建立 `development.py` 配置文件.
 - 建立数据库:
