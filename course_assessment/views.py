@@ -39,12 +39,27 @@ class CourseList(ListView):
 class CourseView(View):
     def get(self, request, course_id):
         course = get_object_or_404(Course, id=course_id)
+        reviews = Review.objects.filter(course_id=course_id).select_related('created_by')
+        aggregation = reviews.aggregate(
+            Avg('rating'), Avg('grade'), Avg('homework'), Avg('reward'), Avg('difficulty')
+        )
+
         context = {
             'course': course,
-            'reviews': Review.objects.filter(course_id=course_id).select_related('created_by'),
-            'rating': Review.objects.filter(course_id=course_id).aggregate(Avg('rating'))[
-                'rating__avg'
-            ],
+            'reviews': reviews,
+            'rating': aggregation['rating__avg'],
+            'grade': Review.GRADE_CHOICES[round(aggregation['grade__avg']) - 1][1]
+            if aggregation['grade__avg']
+            else '暂无',
+            'homework': Review.HOMEWORK_CHOICES[round(aggregation['homework__avg']) - 1][1]
+            if aggregation['homework__avg']
+            else '暂无',
+            'reward': Review.REWARD_CHOICES[round(aggregation['reward__avg']) - 1][1]
+            if aggregation['reward__avg']
+            else '暂无',
+            'difficulty': Review.DIFFICULTY_CHOICES[round(aggregation['difficulty__avg']) - 1][1]
+            if aggregation['difficulty__avg']
+            else '暂无',
             'review_form': ReviewForm(),
         }
         return render(request, 'course_detail.html', context=context)
