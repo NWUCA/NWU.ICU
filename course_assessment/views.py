@@ -36,7 +36,7 @@ class CourseList(ListView):
         return context
 
 
-class CourseView(LoginRequiredMixin, View):
+class CourseView(View):
     def get(self, request, course_id):
         course = get_object_or_404(Course, id=course_id)
         context = {

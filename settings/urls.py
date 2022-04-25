@@ -17,13 +17,13 @@ from django.contrib import admin
 from django.urls import path, re_path
 
 from common.views import (
+    Settings,
     about,
     index,
     manifest,
     save_push_subscription,
     send_test_notification,
     service_worker,
-    settings,
     tos,
 )
 from course_assessment.views import CourseList, CourseView, ReviewAddView
@@ -38,7 +38,7 @@ urlpatterns = [
     path('', index),
     path('tos/', tos),
     path('about/', about),
-    path('settings/', settings),
+    path('settings/', Settings.as_view()),
     path('api/save-subscription/', save_push_subscription),
     path('api/send-test-notification', send_test_notification),
     path('course_list/', CourseList.as_view()),

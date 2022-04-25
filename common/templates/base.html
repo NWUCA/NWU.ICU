@@ -91,7 +91,11 @@
                 {% if user.is_authenticated %}
                     <div class="navbar-item has-dropdown is-hoverable">
                         <a class="navbar-link">
-                            {{ user.name }}
+                            {% if user.nickname %}
+                                {{ user.nickname }}
+                            {% else %}
+                                {{ user.name }}
+                            {% endif %}
                         </a>
 
                         <div class="navbar-dropdown">

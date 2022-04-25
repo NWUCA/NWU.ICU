@@ -3,11 +3,36 @@
 {% block subtitle %}设置{% endblock %}
 
 {% block content %}
-    <h1 id="title">设置</h1>
-    {% csrf_token %}
-    <button class="btn btn-primary" onclick="turnOnNotification()">
-        开启通知 (每个设备的通知状态相互独立, 目前只能在一个设备启用) (BETA)
-    </button>
+    <section class="section">
+        <h1 id="title" class="title">设置</h1>
+        <form method="POST">
+            {% csrf_token %}
+            <div class="field">
+                <label class="label">昵称</label>
+                <div class="control">
+                    <input
+                            class="input" type="text" name="nickname"
+                            value="{{ user.nickname }}" required
+                    >
+                </div>
+            </div>
+
+            <div class="field">
+                <div class="control">
+                    <button type="submit" class="button is-link">提交</button>
+                </div>
+            </div>
+        </form>
+    </section>
+
+    <section class="section">
+        <h1 class="title">实验性功能</h1>
+        <button class="btn btn-primary" onclick="turnOnNotification()">
+            开启通知
+        </button>
+        <p>每个设备的通知状态相互独立, 目前只能在一个设备启用, 目前暂无实际用处.</p>
+        <p>实测仅 PC 及部分原生 Android 可以开启.</p>
+    </section>
 
     <script>
         function urlBase64ToUint8Array(base64String) {
@@ -29,7 +54,7 @@
             static success(msg) {
                 let title = document.getElementById('title')
                 let alert = document.createElement('div');
-                alert.className = "alert alert-success";
+                alert.className = "notification is-info is-light";
                 alert.innerText = msg;
                 title.before(alert);
             }
@@ -64,7 +89,6 @@
                 messages.success(err)
             })
         }
-
 
     </script>
 
