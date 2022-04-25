@@ -1,9 +1,13 @@
 import json
 
+from django import forms
 from django.conf import settings as dj_settings
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required, permission_required
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpResponse
-from django.shortcuts import render
+from django.shortcuts import redirect, render
+from django.views import View
 from pywebpush import webpush
 
 from .models import WebPushSubscription
@@ -21,10 +25,28 @@ def tos(request):
     return render(request, 'tos.html')
 
 
-@login_required
-def settings(request):
-    context = {"VAPID_PUBLIC_KEY": dj_settings.WEBPUSH_SETTINGS["VAPID_PUBLIC_KEY"]}
-    return render(request, 'settings.html', context=context)
+class SettingsForm(forms.Form):
+    nickname = forms.CharField(max_length=30)
+
+
+class Settings(LoginRequiredMixin, View):
+    def get(self, request):
+        settings_form = SettingsForm()
+        context = {
+            "VAPID_PUBLIC_KEY": dj_settings.WEBPUSH_SETTINGS["VAPID_PUBLIC_KEY"],
+            "form": settings_form,
+        }
+        return render(request, 'settings.html', context=context)
+
+    def post(self, request):
+        f = SettingsForm(request.POST)
+        if f.is_valid():
+            request.user.nickname = f.cleaned_data['nickname']
+            request.user.save()
+            messages.success(request, "修改成功")
+        else:
+            messages.error(request, "昵称不合法")
+        return redirect('/settings')
 
 
 @login_required

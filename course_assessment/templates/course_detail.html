@@ -33,10 +33,10 @@
         <div class="box">
             <p class="subtitle">
                 <span>
-                    {% if review.anonymous %}
-                        <td>匿名</td>
+                    {% if review.created_by.nickname %}
+                        <td>{{ review.created_by.nickname }}</td>
                     {% else %}
-                        <td>{{ review.created_by.name }}</td>
+                        <td>匿名</td>
                     {% endif %}
                 </span>
                 <span class="ml-5">
