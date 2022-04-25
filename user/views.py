@@ -158,6 +158,7 @@ class Login(View):
                         name=name,
                         cookie=pickle.dumps(cookies),
                         cookie_last_update=datetime.now(),
+                        nickname="",
                     )
                 login(request, user)
                 messages.add_message(request, messages.SUCCESS, '登录成功')
