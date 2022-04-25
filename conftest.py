@@ -17,5 +17,12 @@ def user(db):
         name='test_name',
         cookie=b"",
         cookie_last_update=datetime.now(),
+        nickname="nickname",
     )
     return user
+
+
+@pytest.fixture
+def logged_in_client(user, client):
+    client.force_login(user)
+    return client
