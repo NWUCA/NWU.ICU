@@ -1,7 +1,83 @@
 {% extends "base_course.html" %}
-{% load crispy_forms_tags %}
 
 {% block course_content %}
-    <h2>添加评价 {{ course_id }}</h2>
-    {% crispy form %}
+    <h2 class="title">添加评价 {{ course_id }}</h2>
+    <h3 class="subtitle">{{ course.name }} - {{ course.get_teachers }}</h3>
+    <form method="post">
+        {% csrf_token %}
+
+        <div class="field">
+            <div class="control">
+                <label class="label">打分 (满分 5 分)</label>
+                {% for i in "12345" %}
+                    <label class="radio">
+                        <input type="radio" name="rating" value="{{ i }}" required>
+                        {{ i }} 分
+                    </label>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="field">
+            <div class="control">
+                <label class="label">{{ form.fields.difficulty.label }}</label>
+                {% for value, name in form.fields.difficulty.choices|slice:"1:" %}
+                    <label class="radio">
+                        <input type="radio" name="difficulty" value="{{ value }}" required>
+                        {{ name }}
+                    </label>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="field">
+            <div class="control">
+                <label class="label">{{ form.fields.grade.label }}</label>
+                {% for value, name in form.fields.grade.choices|slice:"1:" %}
+                    <label class="radio">
+                        <input type="radio" name="grade" value="{{ value }}" required>
+                        {{ name }}
+                    </label>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="field">
+            <div class="control">
+                <label class="label">{{ form.fields.homework.label }}</label>
+                {% for value, name in form.fields.homework.choices|slice:"1:" %}
+                    <label class="radio">
+                        <input type="radio" name="homework" value="{{ value }}" required>
+                        {{ name }}
+                    </label>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="field">
+            <div class="control">
+                <label class="label">{{ form.fields.reward.label }}</label>
+                {% for value, name in form.fields.reward.choices|slice:"1:" %}
+                    <label class="radio">
+                        <input type="radio" name="reward" value="{{ value }}" required>
+                        {{ name }}
+                    </label>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="field">
+            <label class="label">评价内容</label>
+            <div class="control">
+                <textarea class="textarea" placeholder="内容..." name="content" required></textarea>
+            </div>
+        </div>
+
+        <div class="field">
+          <div class="control">
+            <input type="submit" class="button is-link" value="提交">
+          </div>
+        </div>
+
+    </form>
 {% endblock %}

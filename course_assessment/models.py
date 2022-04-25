@@ -1,5 +1,3 @@
-from crispy_forms.helper import FormHelper
-from crispy_forms.layout import Submit
 from django import forms
 from django.db import models
 
@@ -42,15 +40,6 @@ class Teacher(models.Model):
         ordering = ['school']
 
 
-class TeacherForm(forms.ModelForm):
-    helper = FormHelper()
-    helper.add_input(Submit('submit', '提交'))
-
-    class Meta:
-        model = Teacher
-        fields = ['name', 'school']
-
-
 class Course(models.Model):
     classification_choices = (
         ('general', '通识'),
@@ -80,22 +69,27 @@ class Course(models.Model):
         ordering = ['school']
 
 
-class CourseForm(forms.ModelForm):
-    helper = FormHelper()
-    helper.add_input(Submit('submit', '提交'))
-
-    class Meta:
-        model = Course
-        fields = ['name', 'teachers', 'classification', 'school']
-        help_texts = {'teacher': '没有找到想要的老师? <a href="/teacher/">点击添加</a>'}
-
-
 class Review(models.Model):
-    step_choices = (
-        ('low', '低'),
-        ('medium', '中'),
-        ('high', '高'),
-    )
+    DIFFICULTY_CHOICES = [
+        (1, '简单'),
+        (2, '中等'),
+        (3, '困难'),
+    ]
+    GRADE_CHOICES = [
+        (1, '超好'),
+        (2, '一般'),
+        (3, '杀手'),
+    ]
+    HOMEWORK_CHOICES = [
+        (1, '不多'),
+        (2, '中等'),
+        (3, '超多'),
+    ]
+    REWARD_CHOICES = [
+        (1, '很多'),
+        (2, '一般'),
+        (3, '没有'),
+    ]
 
     source_choice = (('user', '用户生成'),)
 
@@ -106,10 +100,12 @@ class Review(models.Model):
     anonymous = models.BooleanField(verbose_name='匿名评价', default=True)
     created_time = models.DateTimeField(auto_now_add=True)
     like = models.IntegerField(default=0, verbose_name='点赞')
-    difficulty = models.PositiveSmallIntegerField(verbose_name='课程难度')
-    grade = models.PositiveSmallIntegerField(verbose_name='给分高低')
-    homework = models.PositiveSmallIntegerField(verbose_name='作业多少')
-    reward = models.PositiveSmallIntegerField(verbose_name='收获多少')
+    difficulty = models.PositiveSmallIntegerField(
+        verbose_name='课程难度', choices=DIFFICULTY_CHOICES
+    )
+    grade = models.PositiveSmallIntegerField(verbose_name='给分高低', choices=GRADE_CHOICES)
+    homework = models.PositiveSmallIntegerField(verbose_name='作业多少', choices=HOMEWORK_CHOICES)
+    reward = models.PositiveSmallIntegerField(verbose_name='收获多少', choices=REWARD_CHOICES)
     source = models.CharField(verbose_name='来源', default='user', max_length=20)
     # TODO: 文件/图片上传
 
@@ -120,11 +116,6 @@ class Review(models.Model):
 
 
 class ReviewForm(forms.ModelForm):
-    helper = FormHelper()
-    helper.add_input(Submit('submit', '提交'))
-
     class Meta:
         model = Review
-        fields = ['content', 'rating', 'anonymous']
-        widgets = {'rating': forms.Select(choices=[(i, f'{i}分') for i in range(1, 6)])}
-        help_texts = {'content': '可以从课程难度、作业多少、给分好坏、收获大小等方面阐述'}
+        fields = ['content', 'rating', 'difficulty', 'grade', 'homework', 'reward']
