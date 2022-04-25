@@ -52,12 +52,19 @@ class CourseView(LoginRequiredMixin, View):
 
 class ReviewAddView(LoginRequiredMixin, View):
     def get(self, request, course_id):
-        return render(request, 'review_add.html', context={'form': ReviewForm()})
+        course = get_object_or_404(Course, id=course_id)
+        form = ReviewForm()
+        # print(type(form['difficulty']))
+        # print(form['difficulty'])
+        return render(request, 'review_add.html', context={'form': form, 'course': course})
 
     def post(self, request, course_id):
         f = ReviewForm(request.POST)
         f.instance.created_by = request.user
         f.instance.course_id = course_id
+        if not f.is_valid():
+            messages.error(request, '表单字段错误')
+            return redirect(f'/course/{course_id}/')
         try:
             f.save()
             messages.success(request, '添加成功')

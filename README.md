@@ -38,6 +38,7 @@
 - [x] 首页添加类似 ustc.life 的导航
 - [x] PWA
 - [ ] 课程评价的 UX 改进
+- [ ] 使用 templatetags 代替手写 bulma 风格的 forms
 
 ## TODO
 - [x] 生产环境的配置, static files, DEBUG, 以及启动脚本
