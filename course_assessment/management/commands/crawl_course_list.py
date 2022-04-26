@@ -34,8 +34,7 @@ class Command(BaseCommand):
 
             teacher_str_list = course['rkjs'].split(';')
             teacher_obj_list = [
-                Teacher.objects.get_or_create(name=t, school=school)[0]
-                for t in teacher_str_list
+                Teacher.objects.get_or_create(name=t, school=school)[0] for t in teacher_str_list
             ]
 
             # 已经爬取过当前课程
