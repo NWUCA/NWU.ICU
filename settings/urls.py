@@ -13,8 +13,9 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
+from django.conf import settings
 from django.contrib import admin
-from django.urls import path, re_path
+from django.urls import include, path, re_path
 
 from common.views import (
     Settings,
@@ -51,3 +52,6 @@ urlpatterns = [
     re_path(r'^report/*$', ReportIndex.as_view()),  # 会有人访问 /// 这样的坑爹路径
     path('refresh_cookies/', RefreshCookies.as_view()),
 ]
+
+if "debug_toolbar" in settings.INSTALLED_APPS:
+    urlpatterns += (path('__debug__/', include('debug_toolbar.urls')),)
