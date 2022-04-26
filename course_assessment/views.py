@@ -26,11 +26,14 @@ class CourseList(ListView):
             self.model.objects.all()
             .annotate(rating=Avg('review__rating'), num=Count('review'))
             .order_by('-num')
+            .prefetch_related('teachers', 'review_set')
         )
         if search_string:
-            course_set = course_set.filter(
-                Q(name__contains=search_string) | Q(teachers__name__contains=search_string)
-            )
+            items = search_string.split(' ')
+            for item in items:
+                course_set = course_set.filter(
+                    Q(name__contains=item) | Q(teachers__name__contains=item)
+                )
         return course_set
 
     def get_context_data(self, **kwargs):
