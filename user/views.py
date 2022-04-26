@@ -79,9 +79,7 @@ def unified_login(username, raw_password):
             response_login = session.post(
                 login_page_url,
                 data={
-                    'execution': soup.find(id='continue').find(attrs={"name": "execution"})[
-                        'value'
-                    ],
+                    'execution': soup.find(id='continue').find(attrs={"name": "execution"})['value'],
                     '_eventId': 'continue',
                 },
             )
@@ -139,9 +137,10 @@ class Login(View):
 
     def post(self, request):
         form = LoginForm(request.POST)
-        username = request.POST['username']
-        password = request.POST['password']
+
         if form.is_valid():
+            username = form.cleaned_data['username']
+            password = form.cleaned_data['password']
             success, msg, name, cookies = unified_login(username, password)
             logger.info(f'{name} 认证状态:{success}-{msg}')
             if '获取个人信息失败' in msg:
@@ -168,6 +167,7 @@ class Login(View):
                 handle_login_error(request, msg)
                 return self.render_login_page(request)
         else:
+            messages.error(request, "登陆表单异常")
             return self.render_login_page(request)
 
 
