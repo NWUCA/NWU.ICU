@@ -160,10 +160,15 @@ LOGGING = {
         },
     },
     'root': {
-        'handlers': ['console', 'telegram_with_context'],
+        'handlers': ['console', 'telegram'],
         'level': 'INFO',
     },
     'loggers': {
+        "django": {
+            "handlers": ["console", "telegram_with_context"],
+            "level": "INFO",
+            'propagate': False,
+        },
         'report.management.commands.trigger_report': {
             'handlers': ['console', 'telegram'],
             'propagate': False,

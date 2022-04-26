@@ -17,6 +17,11 @@ def test_login(monkeypatch, user, client):
     r = client.post('/login/', data={'username': another, 'password': 'bar'})
     print(User.objects.all())
     assert User.objects.get(username=another)
+    client.logout()
+
+    # test malformed login
+    r = client.post('/login/', data={'username': user.username})
+    assert "登陆表单异常" in r.content.decode()
 
 
 def test_need_to_set_nickname(user, logged_in_client):

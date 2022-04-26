@@ -1,3 +1,5 @@
+import logging
+
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import IntegrityError
@@ -9,6 +11,8 @@ from django.views.generic import ListView
 from course_assessment.models import Course, Review
 
 from .models import ReviewForm
+
+logger = logging.getLogger(__name__)
 
 
 class CourseList(ListView):
@@ -81,8 +85,9 @@ class ReviewAddView(LoginRequiredMixin, View):
             messages.error(request, '表单字段错误')
             return redirect(f'/course/{course_id}/')
         try:
-            f.save()
+            review = f.save()
             messages.success(request, '添加成功')
+            logger.error(f"{request.user} 为 {review.course} 课程添加了一条评价, 内容为: {review.content}")
         except IntegrityError:
             messages.error(request, '你已经评价过本课程了')
         return redirect(f'/course/{course_id}/')
