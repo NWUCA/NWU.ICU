@@ -52,9 +52,7 @@ class Settings(LoginRequiredMixin, View):
 @login_required
 def save_push_subscription(request):
     data = json.loads(request.body)
-    WebPushSubscription.objects.update_or_create(
-        user=request.user, defaults={'subscription': data}
-    )
+    WebPushSubscription.objects.update_or_create(user=request.user, defaults={'subscription': data})
     return HttpResponse()
 
 
@@ -67,9 +65,7 @@ def send_test_notification(request):
                 s.subscription,
                 msg,
                 vapid_private_key=dj_settings.WEBPUSH_SETTINGS['VAPID_PRIVATE_KEY'],
-                vapid_claims={
-                    "sub": f"mailto:{dj_settings.WEBPUSH_SETTINGS['VAPID_ADMIN_EMAIL']}"
-                },
+                vapid_claims={"sub": f"mailto:{dj_settings.WEBPUSH_SETTINGS['VAPID_ADMIN_EMAIL']}"},
             )
         return HttpResponse('OK')
     except KeyError:
