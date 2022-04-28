@@ -46,7 +46,11 @@ class CourseList(ListView):
 class CourseView(View):
     def get(self, request, course_id):
         course = get_object_or_404(Course, id=course_id)
-        reviews = Review.objects.filter(course_id=course_id).select_related('created_by')
+        reviews = (
+            Review.objects.filter(course_id=course_id)
+            .select_related('created_by')
+            .order_by('created_by')
+        )
         aggregation = reviews.aggregate(
             Avg('rating'), Avg('grade'), Avg('homework'), Avg('reward'), Avg('difficulty')
         )
