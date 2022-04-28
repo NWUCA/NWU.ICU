@@ -15,13 +15,14 @@ class Code(Enum):
     FAILURE = auto()
 
 
-# TODO: 已有课程的处理
 class Command(BaseCommand):
     help = '爬取全校课表'
 
     def add_arguments(self, parser):
         # Positional arguments
-        parser.add_argument('cookies', nargs=1, help="cookies for jwxt")
+        parser.add_argument('--cookies', nargs=1, help="cookies for jwxt")
+        parser.add_argument('--migrate_old', action='store_true')
+        parser.add_argument('--show', action='store_true')
 
     def process_course(self, course: dict[str, str]):
         try:
@@ -33,16 +34,17 @@ class Command(BaseCommand):
                 logger.warning(f"添加新学院 {course['kkxy']}")
 
             teacher_str_list = course['rkjs'].split(';')
-            teacher_obj_list = [
+            teacher_obj_list = set(
                 Teacher.objects.get_or_create(name=t, school=school)[0] for t in teacher_str_list
-            ]
+            )
 
-            # 已经爬取过当前课程
+            # 忽略已经爬取过的课程
+            # 这是因为一门课程可能有多个教学班
             courses = Course.objects.filter(name=course['kcmc'])
             for c in courses:
                 # logger.info(list(c.teacher.all()))
                 # logger.info(teacher_obj_list)
-                if list(c.teachers.all()) == teacher_obj_list:
+                if set(c.teachers.all()) == teacher_obj_list:
                     logger.info(f"Skipping {c}")
                     return Code.SKIPPING
 
@@ -68,6 +70,31 @@ class Command(BaseCommand):
             logger.warning(f"Some key not found: {e}")
             logger.warning(f"Raw data: {course}")
             return Code.FAILURE
+
+    def migrate_old_course(self, show=False):
+        old_courses = Course.objects.filter(created_by__isnull=False)
+        for course in old_courses:
+            candidates = Course.objects.filter(
+                name__contains=course.name[:3], teachers__name__contains=course.teachers.all()[0]
+            ).exclude(id=course.id)
+            if candidates:
+                if show:
+                    logger.info(course, "->", candidates)
+                else:
+                    logger.info(f"Migrating to {course}")
+                    logger.info("Choose one course from: (default is 0, type any character to skip)")
+                    for index, candidate in enumerate(candidates):
+                        logger.info(f"{index}) {candidate}")
+                    num = input()
+                    try:
+                        num = int(num) if num else 0
+                    except ValueError:
+                        continue
+                    for review in course.review_set.all():
+                        review.course = candidates[num]
+                        review.save()
+                    course.delete()
+                    logger.info(f"{course} deleted")
 
     def crawl(self, cookies: dict[str, str]):
         url = (
@@ -108,6 +135,9 @@ class Command(BaseCommand):
         logger.info(f"Failure: {failure}")
 
     def handle(self, *args, **options):
-        cookie_str = options['cookies'][0]
-        cookie = dict(x.split('=') for x in cookie_str.split(';'))
-        self.crawl(cookie)
+        if options['migrate_old']:
+            self.migrate_old_course(show=options['show'])
+        else:
+            cookie_str = options['cookies'][0]
+            cookie = dict(x.split('=') for x in cookie_str.split(';'))
+            self.crawl(cookie)
