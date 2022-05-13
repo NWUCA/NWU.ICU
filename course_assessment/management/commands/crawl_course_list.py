@@ -3,6 +3,7 @@ from enum import Enum, auto
 
 import requests
 from django.core.management.base import BaseCommand
+from tqdm import tqdm
 
 from course_assessment.models import Course, School, Semeseter, Teacher
 
@@ -15,6 +16,20 @@ class Code(Enum):
     FAILURE = auto()
 
 
+def _parse_semester(semester: str) -> (str, str):
+    """
+    返回教务系统中定义的学年名和学期名
+    """
+    semester_year = int(semester.split('-')[0])
+    semester_season = semester.split('-')[1]
+
+    assert semester_season in ["春", "秋"]
+    if semester_season == "春":
+        return str(semester_year - 1), "12"
+    else:
+        return str(semester_year), "3"
+
+
 class Command(BaseCommand):
     help = '爬取全校课表'
 
@@ -24,9 +39,9 @@ class Command(BaseCommand):
         parser.add_argument('--migrate_old', action='store_true')
         parser.add_argument('--show', action='store_true')
 
-    def process_course(self, course: dict[str, str]):
+    def process_course(self, course: dict[str, str], semester: str):
         try:
-            semester, _ = Semeseter.objects.get_or_create(name="2022-春")
+            semester, _ = Semeseter.objects.get_or_create(name=semester)
             try:
                 school = School.objects.get(name__contains=course.get('kkxy', '未知'))
             except School.DoesNotExist:
@@ -34,9 +49,13 @@ class Command(BaseCommand):
                 logger.warning(f"添加新学院 {course['kkxy']}")
 
             teacher_str_list = course['rkjs'].split(';')
-            teacher_obj_list = set(
-                Teacher.objects.get_or_create(name=t, school=school)[0] for t in teacher_str_list
-            )
+            try:
+                teacher_obj_list = set(
+                    Teacher.objects.get_or_create(name=t, school=school)[0] for t in teacher_str_list
+                )
+            except Teacher.MultipleObjectsReturned:
+                logger.error(teacher_str_list)
+                return Code.FAILURE
 
             # 忽略已经爬取过的课程
             # 这是因为一门课程可能有多个教学班
@@ -45,7 +64,7 @@ class Command(BaseCommand):
                 # logger.info(list(c.teacher.all()))
                 # logger.info(teacher_obj_list)
                 if set(c.teachers.all()) == teacher_obj_list:
-                    logger.info(f"Skipping {c}")
+                    # logger.info(f"Skipping {c}")
                     return Code.SKIPPING
 
             classification = ""
@@ -64,7 +83,7 @@ class Command(BaseCommand):
             c.semester.add(semester)
             c.teachers.set(teacher_obj_list)
             c.save()
-            logger.info(f"Created course {c}")
+            # logger.info(f"Created course {c}")
             return Code.SUCCESS
         except KeyError as e:
             logger.warning(f"Some key not found: {e}")
@@ -96,7 +115,7 @@ class Command(BaseCommand):
                     course.delete()
                     logger.info(f"{course} deleted")
 
-    def crawl(self, cookies: dict[str, str]):
+    def crawl(self, cookies: dict[str, str], semester: str):
         url = (
             'https://jwgl.nwu.edu.cn/jwglxt/design/funcData_cxFuncDataList.html?'
             'func_widget_guid=5920CCA8B9E61FBAE0530100007F0493&gnmkdm=N219933'
@@ -109,15 +128,18 @@ class Command(BaseCommand):
         while True:
             logger.info(f"Crawling page {cur_page}")
             data = {
-                'xnm': "2021",
-                "xqm": "12",
+                'xnm': _parse_semester(semester)[0],
+                "xqm": _parse_semester(semester)[1],
                 "queryModel.showCount": "500",
                 "queryModel.currentPage": f"{cur_page}",
             }
             r = requests.post(url, data=data, cookies=cookies).json()
 
-            for course in r['items']:
-                ret = self.process_course(course)
+            logger.info("Processing courses...")
+            pbar = tqdm(r['items'], ncols=100)
+            for course in pbar:
+                pbar.set_description(f"Processing {course['kcmc']}")
+                ret = self.process_course(course, semester)
                 if ret == Code.SKIPPING:
                     skipping += 1
                 elif ret == Code.SUCCESS:
@@ -140,4 +162,6 @@ class Command(BaseCommand):
         else:
             cookie_str = options['cookies'][0]
             cookie = dict(x.split('=') for x in cookie_str.split(';'))
-            self.crawl(cookie)
+            semesters = ["2021-秋", "2022-春"]
+            for semester in semesters:
+                self.crawl(cookie, semester)

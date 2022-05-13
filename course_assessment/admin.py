@@ -14,7 +14,7 @@ class ReviewAdmin(admin.ModelAdmin):
 
 @admin.register(Course)
 class CourseAdmin(admin.ModelAdmin):
-    list_display = ('name', 'classification', 'get_teachers', 'school', 'created_by')
+    list_display = ('id', 'name', 'classification', 'get_teachers', 'school', 'created_by')
     search_fields = ('teachers__name', 'name')
 
     def get_queryset(self, request):
