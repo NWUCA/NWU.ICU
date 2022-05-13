@@ -35,3 +35,11 @@ def test_add_review(logged_in_client, course):
     )
     # print(r.content)
     assert course.review_set.count() == 1
+
+
+def test_crawl_course_list():
+    from course_assessment.management.commands.crawl_course_list import _parse_semester
+
+    assert _parse_semester("2022-春") == ("2021", "12")
+    assert _parse_semester("2021-秋") == ("2021", "3")
+    assert _parse_semester("2022-秋") == ("2022", "3")
