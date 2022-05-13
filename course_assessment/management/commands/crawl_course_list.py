@@ -36,11 +36,12 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         # Positional arguments
         parser.add_argument('--cookies', nargs=1, help="cookies for jwxt")
-        parser.add_argument('--migrate_old', action='store_true')
+        parser.add_argument('--migrate-old', action='store_true')
         parser.add_argument('--show', action='store_true')
 
     def process_course(self, course: dict[str, str], semester: str):
         try:
+            # TODO: 一门课添加多个学期
             semester, _ = Semeseter.objects.get_or_create(name=semester)
             try:
                 school = School.objects.get(name__contains=course.get('kkxy', '未知'))
@@ -97,23 +98,25 @@ class Command(BaseCommand):
                 name__contains=course.name[:3], teachers__name__contains=course.teachers.all()[0]
             ).exclude(id=course.id)
             if candidates:
+                logger.info(f"Migrating: {course} -> {candidates}")
                 if show:
-                    logger.info(course, "->", candidates)
+                    return
                 else:
-                    logger.info(f"Migrating to {course}")
-                    logger.info("Choose one course from: (default is 0, type any character to skip)")
+                    print("Choose one course from: (default is 0, type any character to skip)")
                     for index, candidate in enumerate(candidates):
-                        logger.info(f"{index}) {candidate}")
+                        print(f"{index}) {candidate}")
                     num = input()
                     try:
                         num = int(num) if num else 0
                     except ValueError:
+                        # skip any character
                         continue
                     for review in course.review_set.all():
                         review.course = candidates[num]
                         review.save()
+                    name = course.name
                     course.delete()
-                    logger.info(f"{course} deleted")
+                    logger.info(f"{name} deleted")
 
     def crawl(self, cookies: dict[str, str], semester: str):
         url = (
@@ -164,4 +167,5 @@ class Command(BaseCommand):
             cookie = dict(x.split('=') for x in cookie_str.split(';'))
             semesters = ["2021-秋", "2022-春"]
             for semester in semesters:
+                logger.info(f"Crawling semester {semester}")
                 self.crawl(cookie, semester)
