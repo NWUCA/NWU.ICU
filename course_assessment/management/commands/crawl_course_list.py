@@ -100,7 +100,7 @@ class Command(BaseCommand):
             if candidates:
                 logger.info(f"Migrating: {course} -> {candidates}")
                 if show:
-                    return
+                    continue
                 else:
                     print("Choose one course from: (default is 0, type any character to skip)")
                     for index, candidate in enumerate(candidates):
