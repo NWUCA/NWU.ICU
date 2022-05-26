@@ -25,6 +25,7 @@ class Command(BaseCommand):
                 status=True,
             )
         for report in reports:
-            logger.info(f"正在关闭 {report.user.username}-{report.user.name} 的填报")
-            report.status = False
-            report.save()
+            logger.info(f"正在删除 {report.user.username}-{report.user.name} 的填报")
+            report.delete()
+        logger.info("正在删除所有已关闭的填报")
+        Report.objects.filter(status=False).delete()
