@@ -24,7 +24,9 @@ class Command(BaseCommand):
         # retry 10 times
         while True:
             try:
-                requests.get("https://app.nwu.edu.cn/")
+                url = "https://app.nwu.edu.cn/"
+                logger.info(f"Connecting to {url}, retry={i}")
+                requests.get(url)
                 return True
             except (requests.exceptions.ConnectionError, requests.exceptions.SSLError):
                 i = i + 1
