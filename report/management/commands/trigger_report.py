@@ -19,7 +19,25 @@ MAX_WORKERS = 100
 class Command(BaseCommand):
     help = '执行自动填报'
 
+    def test_connectivity(self):
+        i = 0
+        # retry 10 times
+        while True:
+            try:
+                requests.get("https://app.nwu.edu.cn/")
+                return True
+            except (requests.exceptions.ConnectionError, requests.exceptions.SSLError):
+                i = i + 1
+                sleep(1)
+                if i < 10:
+                    continue
+                else:
+                    return False
+
     def handle(self, *args, **options):
+        if not self.test_connectivity():
+            logger.critical("连接 https://app.nwu.edu.cn/ 失败!")
+            return
         start_time = time.time()
         report_list = Report.objects.filter(status=True).select_related('user')
         workers = min(MAX_WORKERS, len(report_list))
@@ -37,8 +55,6 @@ class Command(BaseCommand):
                 net_error += 1
         logger.critical(
             f'成功人数: {success}/{len(report_list)}, 开启二级验证人数{veri}, 网络错误人数{net_error}, '
-            f'人数差={len(report_list) - veri - net_error}=成功人数'
-            f'{success==len(report_list) - veri - net_error},'
             f' 用时: {time.time() - start_time:.2f}s'
         )
 
