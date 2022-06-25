@@ -4,6 +4,7 @@ import pickle
 import time
 from concurrent import futures
 from datetime import datetime
+from random import random
 from time import sleep
 
 import requests
@@ -21,17 +22,17 @@ class Command(BaseCommand):
 
     def test_connectivity(self):
         i = 0
-        # retry 10 times
+        # retry 5 times
         while True:
             try:
                 url = "https://app.nwu.edu.cn/"
                 logger.info(f"Connecting to {url}, retry={i}")
-                requests.get(url)
+                requests.get(url, timeout=5)
                 return True
             except (requests.exceptions.ConnectionError, requests.exceptions.SSLError):
                 i = i + 1
-                sleep(1)
-                if i < 10:
+                sleep(random() * 5)
+                if i < 5:
                     continue
                 else:
                     return False
