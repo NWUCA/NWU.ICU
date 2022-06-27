@@ -29,7 +29,7 @@ class Command(BaseCommand):
                 logger.info(f"Connecting to {url}, retry={i}")
                 requests.get(url, timeout=5)
                 return True
-            except (requests.exceptions.ConnectionError, requests.exceptions.SSLError):
+            except requests.exceptions.RequestException:
                 i = i + 1
                 sleep(random() * 5)
                 if i < 5:
