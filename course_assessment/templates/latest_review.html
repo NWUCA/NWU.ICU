@@ -18,6 +18,10 @@
                         <td>匿名</td>
                     {% endif %}
                 </span>
+                <span>点评了</span>
+                <span><a href="/course/{{ review.course.id }}">
+                    {{ review.course.name }}
+                </a></span>
                 <span class="ml-5">
                     {{ review.rating }} 分
                 </span>

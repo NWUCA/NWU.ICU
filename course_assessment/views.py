@@ -106,7 +106,9 @@ class LatestReviewView(ListView):
     paginate_by = 10
 
     def get_queryset(self):
-        review_set = self.model.objects.all().order_by('-created_time').select_related('created_by')
+        review_set = (
+            self.model.objects.all().order_by('-created_time').select_related('created_by', 'course')
+        )
         return review_set
 
     def get_context_data(self, **kwargs):
