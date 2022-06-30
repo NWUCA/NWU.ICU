@@ -103,11 +103,14 @@ class ReviewAddView(LoginRequiredMixin, View):
 class LatestReviewView(ListView):
     template_name = 'latest_review.html'
     model = Review
-    paginate_by = 10
+    paginate_by = 7
 
     def get_queryset(self):
         review_set = (
-            self.model.objects.all().order_by('-created_time').select_related('created_by', 'course')
+            self.model.objects.all()
+            .order_by('-created_time')
+            .select_related('created_by', 'course')
+            .prefetch_related('course__teachers')
         )
         return review_set
 
