@@ -98,3 +98,18 @@ class ReviewAddView(LoginRequiredMixin, View):
         except IntegrityError:
             messages.error(request, '你已经评价过本课程了')
         return redirect(f'/course/{course_id}/')
+
+
+class LatestReviewView(ListView):
+    template_name = 'latest_review.html'
+    model = Review
+    paginate_by = 10
+
+    def get_queryset(self):
+        review_set = self.model.objects.all().order_by('-created_time').select_related('created_by')
+        return review_set
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['review_count'] = Review.objects.count()
+        return context
