@@ -1,0 +1,33 @@
+{% extends "base_course.html" %}
+
+{% block course_content %}
+    <div class="tabs">
+        <ul>
+            <li><a href="/course_list/">课程列表</a></li>
+            <li class="is-active"><a href="/latest_review/">最新评价</a></li>
+        </ul>
+    </div>
+
+    {% for review in page_obj %}
+        <div class="box">
+            <p class="subtitle">
+                <span>
+                    {% if review.created_by.nickname %}
+                        <td>{{ review.created_by.nickname }}</td>
+                    {% else %}
+                        <td>匿名</td>
+                    {% endif %}
+                </span>
+                <span class="ml-5">
+                    {{ review.rating }} 分
+                </span>
+            </p>
+            <p>
+                {{ review.content | linebreaks }}
+            </p>
+            <p class="is-size-7">
+                {{ review.created_time }}
+            </p>
+        </div>
+    {% endfor %}
+{% endblock %}
