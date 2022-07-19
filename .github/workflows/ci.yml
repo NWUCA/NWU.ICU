@@ -1,0 +1,27 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  pre-commit:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions/setup-python@v4
+    - uses: pre-commit/action@v2.0.0
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      # These steps are from https://github.com/actions/setup-python
+      - uses: actions/checkout@v3
+      - name: Install poetry
+        run: pipx install poetry
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          cache: 'poetry'
+      - run: poetry install
+      - run: poetry run pytest
