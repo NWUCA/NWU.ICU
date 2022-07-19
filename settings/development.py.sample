@@ -14,3 +14,27 @@ WEBPUSH_SETTINGS = {
     "VAPID_PRIVATE_KEY":"Vapid Private Key",
     "VAPID_ADMIN_EMAIL": "admin@example.com"
 }
+
+INSTALLED_APPS += ["debug_toolbar"]
+MIDDLEWARE += ["debug_toolbar.middleware.DebugToolbarMiddleware"]
+
+INTERNAL_IPS = [
+    "127.0.0.1",
+]
+
+# remove telegram related stuff
+LOGGING['loggers'] = {
+        "django": {
+            "handlers": ["console"],
+            "level": "INFO",
+            'propagate': False,
+        },
+        'report.management.commands.trigger_report': {
+            'handlers': ['console'],
+            'propagate': False,
+        },
+}
+LOGGING['root'] = {
+        'handlers': ['console'],
+        'level': 'INFO',
+}
