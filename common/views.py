@@ -10,6 +10,8 @@ from django.shortcuts import redirect, render
 from django.views import View
 from pywebpush import webpush
 
+from user.models import User
+
 from .models import WebPushSubscription
 
 
@@ -41,12 +43,21 @@ class Settings(LoginRequiredMixin, View):
     def post(self, request):
         f = SettingsForm(request.POST)
         if f.is_valid():
-            request.user.nickname = f.cleaned_data['nickname']
-            request.user.save()
-            messages.success(request, "修改成功")
+            # 考虑到数据库中可能已有重复昵称, 那么使用 model 中的 UniqueConstraint 会带来额外的迁移成本
+            # 故直接在 view 中处理重复昵称
+            if (
+                User.objects.exclude(id=request.user.id)
+                .filter(nickname=f.cleaned_data['nickname'])
+                .exists()
+            ):
+                messages.error(request, "昵称已被使用")
+            else:
+                request.user.nickname = f.cleaned_data['nickname']
+                request.user.save()
+                messages.success(request, "修改成功")
         else:
             messages.error(request, "昵称不合法")
-        return redirect('/settings')
+        return redirect('/settings/')
 
 
 @login_required
