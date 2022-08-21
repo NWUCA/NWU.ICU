@@ -119,7 +119,7 @@ def unified_login(username, raw_password, captcha, captcha_cookies):
 
 def handle_login_error(request, msg):
     messages.error(request, msg)
-    if '验证码' in msg or '初始密码' in msg:
+    if '初始密码' in msg:
         messages.error(
             request,
             '请手动使用统一身份认证登录一次, 入口在<a target="_blank" '
