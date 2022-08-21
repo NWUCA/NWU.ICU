@@ -14,7 +14,7 @@ from django.db import OperationalError
 from report.models import Report
 
 logger = logging.getLogger(__name__)
-MAX_WORKERS = 100
+MAX_WORKERS = 40
 
 
 class Command(BaseCommand):
