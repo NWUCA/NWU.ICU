@@ -34,7 +34,7 @@ from course_assessment.views import (
     ReviewAddView,
 )
 from report.views import ReportIndex, check_cookie_status
-from user.views import Login, Logout, RefreshCookies
+from user.views import CAPTCHA, Login, Logout, RefreshCookies
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -57,6 +57,7 @@ urlpatterns = [
     path('api/report/check-cookie-status/', check_cookie_status),
     re_path(r'^report/*$', ReportIndex.as_view()),  # 会有人访问 /// 这样的坑爹路径
     path('refresh_cookies/', RefreshCookies.as_view()),
+    path('get_captcha/', CAPTCHA.as_view()),
 ]
 
 if "debug_toolbar" in settings.INSTALLED_APPS:

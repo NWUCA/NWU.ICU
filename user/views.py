@@ -11,9 +11,11 @@ from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad
 from django.contrib import messages
 from django.contrib.auth import login, logout
+from django.http import HttpResponse
 from django.shortcuts import redirect, render
 from django.utils.crypto import get_random_string
 from django.views import View
+from requests.utils import dict_from_cookiejar
 
 from settings.log import upload_pastebin_and_send_to_tg
 from user.models import User
@@ -24,16 +26,18 @@ logger = logging.getLogger(__name__)
 LoginResult = namedtuple('LoginResult', 'success msg name cookies')
 
 
-def unified_login(username, raw_password):
+AUTH_SERVER_HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+    '(KHTML, like Gecko) Chrome/70.0.3538.77 Safari/537.36'
+}
+
+
+def unified_login(username, raw_password, captcha, captcha_cookies):
     login_page_url = "http://authserver.nwu.edu.cn/authserver/login"
     session = requests.sessions.Session()
     # 欺骗学校的防火墙
-    session.headers.update(
-        {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-            '(KHTML, like Gecko) Chrome/70.0.3538.77 Safari/537.36'
-        }
-    )
+    session.headers.update(AUTH_SERVER_HEADERS)
+    session.cookies.update(captcha_cookies)
     try:
         response = session.get(login_page_url, timeout=5)
         if response.status_code != 200:
@@ -68,6 +72,7 @@ def unified_login(username, raw_password):
         "password": password,
         "rmShown": rm_shown,
         "username": username,
+        "captchaResponse": captcha,
     }
 
     response_login = session.post(login_page_url, data=data)
@@ -124,6 +129,14 @@ def handle_login_error(request, msg):
         )
 
 
+class CAPTCHA(View):
+    def get(self, request):
+        captcha_url = "https://authserver.nwu.edu.cn/authserver/captcha.html"
+        r = requests.get(captcha_url, headers=AUTH_SERVER_HEADERS)
+        request.session['captcha_cookies'] = dict_from_cookiejar(r.cookies)
+        return HttpResponse(r.content, headers={'Content-Type': 'image/jpeg'})
+
+
 class Login(View):
     def render_login_page(self, request):
         return render(request, 'login.html', {'login_form': LoginForm()})
@@ -138,36 +151,41 @@ class Login(View):
     def post(self, request):
         form = LoginForm(request.POST)
 
-        if form.is_valid():
-            username = form.cleaned_data['username']
-            password = form.cleaned_data['password']
-            success, msg, name, cookies = unified_login(username, password)
-            logger.info(f'{name} 认证状态:{success}-{msg}')
-            if '获取个人信息失败' in msg:
-                logger.error('获取个人信息失败', extra={'request': request})
-            if success:
-                try:
-                    user = User.objects.get(username=username)
-                    user.cookie = pickle.dumps(cookies)
-                    user.cookie_last_update = datetime.now()
-                    user.save()
-                except User.DoesNotExist:
-                    user = User.objects.create(
-                        username=username,
-                        name=name,
-                        cookie=pickle.dumps(cookies),
-                        cookie_last_update=datetime.now(),
-                        nickname="",
-                    )
-                login(request, user)
-                messages.add_message(request, messages.SUCCESS, '登录成功')
-                next_url = request.GET.get('next')
-                return redirect(next_url if next_url else '/')
-            else:
-                handle_login_error(request, msg)
-                return self.render_login_page(request)
-        else:
+        if not form.is_valid():
             messages.error(request, "登陆表单异常")
+            return self.render_login_page(request)
+
+        if not (captcha_cookies := request.session.get('captcha_cookies')):
+            messages.error(request, "未获取到验证码, 请刷新重试")
+            return self.render_login_page(request)
+
+        username = form.cleaned_data['username']
+        password = form.cleaned_data['password']
+        captcha = form.cleaned_data['captcha']
+        success, msg, name, cookies = unified_login(username, password, captcha, captcha_cookies)
+        logger.info(f'{name} 认证状态:{success}-{msg}')
+        if '获取个人信息失败' in msg:
+            logger.error('获取个人信息失败', extra={'request': request})
+        if success:
+            try:
+                user = User.objects.get(username=username)
+                user.cookie = pickle.dumps(cookies)
+                user.cookie_last_update = datetime.now()
+                user.save()
+            except User.DoesNotExist:
+                user = User.objects.create(
+                    username=username,
+                    name=name,
+                    cookie=pickle.dumps(cookies),
+                    cookie_last_update=datetime.now(),
+                    nickname="",
+                )
+            login(request, user)
+            messages.add_message(request, messages.SUCCESS, '登录成功')
+            next_url = request.GET.get('next')
+            return redirect(next_url if next_url else '/')
+        else:
+            handle_login_error(request, msg)
             return self.render_login_page(request)
 
 
