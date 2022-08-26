@@ -14,7 +14,7 @@ from django.db import OperationalError
 from report.models import Report
 
 logger = logging.getLogger(__name__)
-MAX_WORKERS = 40
+MAX_WORKERS = 1
 
 
 class Command(BaseCommand):
@@ -77,6 +77,7 @@ class Command(BaseCommand):
                 retry += 1
 
     def do_report(self, report: Report):
+        time.sleep(random() * 10)  # FIXME: shit mountain
         url = 'https://app.nwu.edu.cn/ncov/wap/open-report/save'
 
         headers = {
