@@ -14,7 +14,7 @@ beautifulsoup4 = "^4.10.0"
 pyTelegramBotAPI = "^4.4.0"
 django-crispy-forms = "^1.14.0"
 crispy-bootstrap5 = "^0.6"
-django-silk = "^4.3.0"
+django-silk = "^5.0.0"
 pywebpush = "^1.14.0"
 tqdm = "^4.64.0"
 
