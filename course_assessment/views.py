@@ -2,7 +2,6 @@ import logging
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db import IntegrityError
 from django.db.models import Avg, Count, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
@@ -71,7 +70,7 @@ class CourseView(View):
             'difficulty': Review.DIFFICULTY_CHOICES[round(aggregation['difficulty__avg']) - 1][1]
             if aggregation['difficulty__avg']
             else '暂无',
-            'review_form': ReviewForm(),
+            'is_reviewed': reviews.filter(created_by=request.user).exists(),
         }
         return render(request, 'course_detail.html', context=context)
 
@@ -79,24 +78,44 @@ class CourseView(View):
 class ReviewAddView(LoginRequiredMixin, View):
     def get(self, request, course_id):
         course = get_object_or_404(Course, id=course_id)
-        form = ReviewForm()
+        context = {'course': course}
+        try:
+            user_review = Review.objects.get(course_id=course_id, created_by=request.user)
+            form = ReviewForm(instance=user_review)
+            context['modify'] = True
+        except Review.DoesNotExist:
+            form = ReviewForm()
+            context['modify'] = False
+        context['form'] = form
         # print(type(form['difficulty']))
         # print(form['difficulty'])
-        return render(request, 'review_add.html', context={'form': form, 'course': course})
+        return render(request, 'review_add.html', context=context)
 
     def post(self, request, course_id):
-        f = ReviewForm(request.POST)
+        try:
+            user_review = Review.objects.get(course_id=course_id, created_by=request.user)
+            modify = True
+            f = ReviewForm(request.POST, instance=user_review)
+        except Review.DoesNotExist:
+            modify = False
+            f = ReviewForm(request.POST)
         f.instance.created_by = request.user
         f.instance.course_id = course_id
         if not f.is_valid():
             messages.error(request, '表单字段错误')
             return redirect(f'/course/{course_id}/')
-        try:
-            review = f.save()
+
+        review = f.save()
+        if not modify:
             messages.success(request, '添加成功')
             logger.error(f"{request.user} 为 {review.course} 课程添加了一条评价, 内容为: {review.content}")
-        except IntegrityError:
-            messages.error(request, '你已经评价过本课程了')
+        else:
+            messages.success(request, '修改成功')
+            logger.error(
+                f"{request.user} 修改了 {review.course} 课程的一条评价.\n"
+                f"现内容为: {review.content}\n"
+                f"原内容为: {user_review.content}"
+            )
         return redirect(f'/course/{course_id}/')
 
 
