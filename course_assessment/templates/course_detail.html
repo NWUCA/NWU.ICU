@@ -39,7 +39,11 @@
     <div class="level">
         <h2 class="level-left title is-3">评价列表</h2>
         <a class="level-right button is-dark" href="/course/{{ course.id }}/review_add/">
-            新增评价
+            {% if not is_reviewed %}
+                新增评价
+            {% else %}
+                修改评价
+            {% endif %}
         </a>
     </div>
 
@@ -60,8 +64,13 @@
             <p>
                 {{ review.content | linebreaks }}
             </p>
-            <p class="is-size-7">
-                {{ review.created_time }}
+            <p class="is-size-7 level">
+                <span class="level-left">{{ review.created_time }}</span>
+                <span class="level-right">
+                    {% if review.created_by == user %}
+                        <a href="/course/{{ course.id }}/review_add/">编辑</a>
+                    {% endif %}
+                </span>
             </p>
         </div>
     {% endfor %}
