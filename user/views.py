@@ -33,7 +33,7 @@ AUTH_SERVER_HEADERS = {
 
 
 def unified_login(username, raw_password, captcha, captcha_cookies):
-    login_page_url = "http://authserver.nwu.edu.cn/authserver/login"
+    login_page_url = "https://authserver.nwu.edu.cn/authserver/login"
     session = requests.sessions.Session()
     # 欺骗学校的防火墙
     session.headers.update(AUTH_SERVER_HEADERS)
@@ -101,15 +101,6 @@ def unified_login(username, raw_password, captcha, captcha_cookies):
                 upload_pastebin_and_send_to_tg(response_login.text)
                 return LoginResult(False, '获取个人信息失败, 请稍后重试..', None, None)
 
-            # 获取 app.nwu.edu.cn 域下的 cookies
-            try:
-                r = session.get('https://app.nwu.edu.cn/uc/wap/login')
-                if r.url != 'https://app.nwu.edu.cn/site/center/personal':
-                    logger.warning(f'用户[{name}]获取 app.nwu.edu.cn 的 cookie 失败...')
-            except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
-                return LoginResult(False, '连接 app.nwu.edu.cn 失败, 请稍后重试..', None, None)
-            for cookie in session.cookies:
-                cookie.expires = None
             return LoginResult(True, '登陆成功', name, session.cookies)
         else:
             msg = span[0].text

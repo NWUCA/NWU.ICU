@@ -33,7 +33,7 @@ from course_assessment.views import (
     LatestReviewView,
     ReviewAddView,
 )
-from report.views import ReportIndex, check_cookie_status
+from report.views import ReportClose
 from user.views import CAPTCHA, Login, Logout, RefreshCookies
 
 urlpatterns = [
@@ -53,9 +53,8 @@ urlpatterns = [
     path('course/<int:course_id>/', CourseView.as_view()),
     path('course/<int:course_id>/review_add/', ReviewAddView.as_view()),
     path('latest_review/', LatestReviewView.as_view()),
-    path('report/', ReportIndex.as_view()),
-    path('api/report/check-cookie-status/', check_cookie_status),
-    re_path(r'^report/*$', ReportIndex.as_view()),  # 会有人访问 /// 这样的坑爹路径
+    path('report/', ReportClose.as_view()),
+    re_path(r'^report/*$', ReportClose.as_view()),  # 会有人访问 /// 这样的坑爹路径
     path('refresh_cookies/', RefreshCookies.as_view()),
     path('get_captcha/', CAPTCHA.as_view()),
 ]
