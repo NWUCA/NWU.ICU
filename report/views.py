@@ -15,6 +15,11 @@ from report.models import Report
 logger = logging.getLogger(__name__)
 
 
+class ReportClose(View):
+    def get(self, request):
+        return render(request, 'close.html')
+
+
 class ReportIndex(LoginRequiredMixin, View):
     def get(self, request):
         user = request.user
