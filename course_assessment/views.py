@@ -54,6 +54,12 @@ class CourseView(View):
             Avg('rating'), Avg('grade'), Avg('homework'), Avg('reward'), Avg('difficulty')
         )
 
+        is_reviewed = (
+            False
+            if not request.user.is_authenticated
+            else reviews.filter(created_by=request.user).exists()
+        )
+
         context = {
             'course': course,
             'reviews': reviews,
@@ -70,7 +76,7 @@ class CourseView(View):
             'difficulty': Review.DIFFICULTY_CHOICES[round(aggregation['difficulty__avg']) - 1][1]
             if aggregation['difficulty__avg']
             else '暂无',
-            'is_reviewed': reviews.filter(created_by=request.user).exists(),
+            'is_reviewed': is_reviewed,
         }
         return render(request, 'course_detail.html', context=context)
 
