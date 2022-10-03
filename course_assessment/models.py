@@ -99,6 +99,7 @@ class Review(models.Model):
     created_by = models.ForeignKey(User, on_delete=models.CASCADE)
     anonymous = models.BooleanField(verbose_name='匿名评价', default=True)
     created_time = models.DateTimeField(auto_now_add=True)
+    modify_time = models.DateTimeField(auto_now=True)
     like = models.IntegerField(default=0, verbose_name='点赞')
     difficulty = models.PositiveSmallIntegerField(verbose_name='课程难度', choices=DIFFICULTY_CHOICES)
     grade = models.PositiveSmallIntegerField(verbose_name='给分高低', choices=GRADE_CHOICES)
@@ -109,6 +110,12 @@ class Review(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=['course', 'created_by'], name='unique_review')]
+
+
+class ReviewHistory(models.Model):
+    review = models.ForeignKey(Review, on_delete=models.CASCADE)
+    content = models.TextField(verbose_name='内容')
+    created_time = models.DateTimeField(auto_now_add=True)
 
 
 class ReviewForm(forms.ModelForm):

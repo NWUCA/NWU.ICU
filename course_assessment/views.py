@@ -7,9 +7,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
 from django.views.generic import ListView
 
-from course_assessment.models import Course, Review
-
-from .models import ReviewForm
+from course_assessment.models import Course, Review, ReviewForm, ReviewHistory
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +75,9 @@ class CourseView(View):
             if aggregation['difficulty__avg']
             else '暂无',
             'is_reviewed': is_reviewed,
+            'review_histories': ReviewHistory.objects.filter(review__id__in=reviews),
         }
+        print(context['review_histories'])
         return render(request, 'course_detail.html', context=context)
 
 
