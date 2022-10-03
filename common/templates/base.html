@@ -116,7 +116,9 @@
         {% for announcement in announcements %}
             {% if announcement.type == 'all' %}
                 <div class="notification is-info is-light">
-                    公告: {{ announcement.content | linebreaks }} 最后更新时间: {{ announcement.update_time }}
+                    公告: {{ announcement.content | linebreaks }}
+                    <sub>最后更新时间: {{ announcement.update_time }}</sub>
+{#                FIXME: 抽象公告组件#}
                 </div>
             {% endif %}
         {% endfor %}
