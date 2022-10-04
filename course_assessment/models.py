@@ -98,8 +98,11 @@ class Review(models.Model):
     rating = models.SmallIntegerField(verbose_name='打分 (满分 5 分)')
     created_by = models.ForeignKey(User, on_delete=models.CASCADE)
     anonymous = models.BooleanField(verbose_name='匿名评价', default=True)
-    created_time = models.DateTimeField(auto_now_add=True)
+    create_time = models.DateTimeField(auto_now_add=True)
     modify_time = models.DateTimeField(auto_now=True)
+    # 不能使用 create_time 和 modify_time 是否相等来判断是否已编辑
+    # 因为在 save model 的时候两者的时间会有微小的差异
+    edited = models.BooleanField(verbose_name="已编辑", default=False)
     like = models.IntegerField(default=0, verbose_name='点赞')
     difficulty = models.PositiveSmallIntegerField(verbose_name='课程难度', choices=DIFFICULTY_CHOICES)
     grade = models.PositiveSmallIntegerField(verbose_name='给分高低', choices=GRADE_CHOICES)
@@ -115,7 +118,7 @@ class Review(models.Model):
 class ReviewHistory(models.Model):
     review = models.ForeignKey(Review, on_delete=models.CASCADE)
     content = models.TextField(verbose_name='内容')
-    created_time = models.DateTimeField(auto_now_add=True)
+    create_time = models.DateTimeField(auto_now_add=True)
 
 
 class ReviewForm(forms.ModelForm):

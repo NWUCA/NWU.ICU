@@ -60,12 +60,15 @@
                 <span class="ml-5">
                     {{ review.rating }} 分
                 </span>
+                {% if review.edited %}
+                    <span class="is-size-7 ml-4">已编辑</span>
+                {% endif %}
             </p>
             <p>
                 {{ review.content | linebreaks }}
             </p>
             <p class="is-size-7 level">
-                <span class="level-left">{{ review.created_time }}</span>
+                <span class="level-left">{{ review.create_time }}</span>
                 <span class="level-right">
                     {% if review.created_by == user %}
                         <a href="/course/{{ course.id }}/review_add/">编辑</a>
