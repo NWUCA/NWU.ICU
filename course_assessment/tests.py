@@ -1,6 +1,6 @@
 import pytest
 
-from course_assessment.models import Course, School, Semeseter, Teacher
+from course_assessment.models import Course, ReviewHistory, School, Semeseter, Teacher
 
 
 @pytest.fixture
@@ -21,20 +21,56 @@ def course():
     return c
 
 
-def test_add_review(logged_in_client, course):
+@pytest.fixture
+def make_review():
+    def _make_review(content="", rating=3, difficulty=2, grade=2, homework=2, reward=2):
+        return {
+            "content": content,
+            "rating": rating,
+            "difficulty": difficulty,
+            "grade": grade,
+            "homework": homework,
+            "reward": reward,
+        }
+
+    return _make_review
+
+
+def test_add_review(logged_in_client, course, make_review):
     logged_in_client.post(
         f'/course/{course.id}/review_add/',
-        data={
-            'content': 'content',
-            'rating': 3,
-            'difficulty': 2,
-            'grade': 1,
-            'homework': 3,
-            'reward': 3,
-        },
+        data=make_review(content="test"),
     )
     # print(r.content)
     assert course.review_set.count() == 1
+
+
+def test_review_history(logged_in_client, user, course, make_review):
+    content = "test"
+    logged_in_client.post(
+        f'/course/{course.id}/review_add/',
+        data=make_review(content=content),
+    )
+    review = course.review_set.get(created_by=user.id)
+    assert review.edited is False
+
+    modified_content = "test2"
+    logged_in_client.post(
+        f'/course/{course.id}/review_add/',
+        data=make_review(content=modified_content),
+    )
+
+    review.refresh_from_db()
+    assert review.content == modified_content
+    assert review.edited is True
+    assert ReviewHistory.objects.get(review=review).content == content
+
+    another_content = "test3"
+    logged_in_client.post(
+        f'/course/{course.id}/review_add/',
+        data=make_review(content=another_content),
+    )
+    assert ReviewHistory.objects.count() == 2
 
 
 def test_crawl_course_list():
