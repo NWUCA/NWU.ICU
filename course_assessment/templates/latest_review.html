@@ -1,13 +1,8 @@
 {% extends "base_course.html" %}
 
 {% block course_content %}
-    <div class="tabs">
-        <ul>
-            <li><a href="/course_list/">课程列表</a></li>
-            <li class="is-active"><a href="/latest_review/">最新评价</a></li>
-        </ul>
-    </div>
-
+    <p class="block">目前共有 {{ review_count }} 条评价.
+    共 {{ course.count }} 门课程 </p>
     {% for review in page_obj %}
         <div class="box">
             <p class="subtitle">

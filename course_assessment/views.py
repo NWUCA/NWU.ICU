@@ -46,7 +46,7 @@ class CourseView(View):
         reviews = (
             Review.objects.filter(course_id=course_id)
             .select_related('created_by')
-            .order_by('created_by')
+            .order_by('-create_time')
         )
         aggregation = reviews.aggregate(
             Avg('rating'), Avg('grade'), Avg('homework'), Avg('reward'), Avg('difficulty')
@@ -134,7 +134,7 @@ class ReviewAddView(LoginRequiredMixin, View):
 class LatestReviewView(ListView):
     template_name = 'latest_review.html'
     model = Review
-    paginate_by = 7
+    paginate_by = 10
 
     def get_queryset(self):
         review_set = (
@@ -148,4 +148,5 @@ class LatestReviewView(ListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['review_count'] = Review.objects.count()
+        context['course'] = Course.objects.all()
         return context
