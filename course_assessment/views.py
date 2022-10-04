@@ -75,9 +75,9 @@ class CourseView(View):
             if aggregation['difficulty__avg']
             else '暂无',
             'is_reviewed': is_reviewed,
-            'review_histories': ReviewHistory.objects.filter(review__id__in=reviews),
+            # 'review_histories': ReviewHistory.objects.filter(review__id__in=reviews),
         }
-        print(context['review_histories'])
+        # print(context['review_histories'])
         return render(request, 'course_detail.html', context=context)
 
 
@@ -99,9 +99,11 @@ class ReviewAddView(LoginRequiredMixin, View):
 
     def post(self, request, course_id):
         try:
-            user_review = Review.objects.get(course_id=course_id, created_by=request.user)
+            old_review = Review.objects.get(course_id=course_id, created_by=request.user)
+            old_content = old_review.content
             modify = True
-            f = ReviewForm(request.POST, instance=user_review)
+            f = ReviewForm(request.POST, instance=old_review)
+            f.instance.edited = True
         except Review.DoesNotExist:
             modify = False
             f = ReviewForm(request.POST)
@@ -116,11 +118,15 @@ class ReviewAddView(LoginRequiredMixin, View):
             messages.success(request, '添加成功')
             logger.error(f"{request.user} 为 {review.course} 课程添加了一条评价, 内容为: {review.content}")
         else:
+            ReviewHistory.objects.create(
+                review=review,
+                content=old_content,
+            )
             messages.success(request, '修改成功')
             logger.error(
                 f"{request.user} 修改了 {review.course} 课程的一条评价.\n"
                 f"现内容为: {review.content}\n"
-                f"原内容为: {user_review.content}"
+                f"原内容为: {old_content}"
             )
         return redirect(f'/course/{course_id}/')
 
@@ -133,7 +139,7 @@ class LatestReviewView(ListView):
     def get_queryset(self):
         review_set = (
             self.model.objects.all()
-            .order_by('-created_time')
+            .order_by('-create_time')
             .select_related('created_by', 'course')
             .prefetch_related('course__teachers')
         )
