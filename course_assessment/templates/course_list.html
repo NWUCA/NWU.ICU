@@ -2,33 +2,6 @@
 
 {% block course_content %}
 
-    {% if search_string %}
-        <div class="level">
-            <h2 class="subtitle is-size-3 level-left">搜索 「{{ search_string }}」</h2>
-            <a href="?" class="level-right">←返回课程列表</a>
-        </div>
-
-    {% else %}
-        <div class="tabs">
-          <ul>
-            <li class="is-active"><a href="/course_list/">课程列表</a></li>
-            <li><a href="/latest_review/">最新评价</a></li>
-          </ul>
-        </div>
-    {% endif %}
-
-    <form class="block">
-        <div class="field has-addons">
-            <input type="search" class="input mr-3"
-                   placeholder="搜索课程、老师 (可用空格分隔同时匹配多个关键词)"
-                   aria-label="search" name="s" id="searchInput">
-            <button type="submit" class="button bi bi-search"></button>
-        </div>
-    </form>
-
-    <p class="block">目前共有 {{ review_count }} 条评价.
-        共 {{ paginator.count }} 门课 (当前第 {{ page_obj.number }} 页)</p>
-
     {% for course in page_obj %}
         <div class="card my-4">
             <header class="card-header">
