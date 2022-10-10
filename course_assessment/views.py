@@ -150,3 +150,18 @@ class LatestReviewView(ListView):
         context['review_count'] = Review.objects.count()
         context['course'] = Course.objects.all()
         return context
+
+
+class MyReviewView(LoginRequiredMixin, ListView):
+    template_name = 'my_review.html'
+    model = Review
+    paginate_by = 10
+
+    def get_queryset(self):
+        review_set = (
+            self.model.objects.filter(created_by=self.request.user)
+            .order_by('-create_time')
+            .select_related('created_by', 'course')
+            .prefetch_related('course__teachers')
+        )
+        return review_set

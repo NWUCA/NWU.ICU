@@ -34,6 +34,9 @@
             <li
                     {% if request.path == "/course_list/" %}class="is-active"{% endif %}
             ><a href="/course_list/">课程列表</a></li>
+            <li
+                    {% if request.path == "/my_review/" %}class="is-active"{% endif %}
+            ><a href="/my_review/">我的评价</a></li>
           </ul>
         </div>
     {% endif %}
