@@ -3,30 +3,7 @@
 {% block course_content %}
     <p class="block">目前共有 {{ review_count }} 条评价.
     共 {{ course.count }} 门课程 </p>
-    {% for review in page_obj %}
-        <div class="box">
-            <p class="subtitle">
-                <span>
-                    {% if review.created_by.nickname %}
-                        <td>{{ review.created_by.nickname }}</td>
-                    {% else %}
-                        <td>匿名</td>
-                    {% endif %}
-                </span>
-                <span>点评了</span>
-                <span><a href="/course/{{ review.course.id }}">
-                    {{ review.course.name }}({{ review.course.get_teachers }})
-                </a></span>
-                <span class="ml-5">
-                    {{ review.rating }} 分
-                </span>
-            </p>
-            <p>
-                {{ review.content | linebreaks }}
-            </p>
-            <p class="is-size-7">
-                {{ review.create_time }}
-            </p>
-        </div>
-    {% endfor %}
+
+    {% include "review_snippet.html" with reviews=page_obj display_course=True latest_review=True display_name=True %}
+
 {% endblock %}

@@ -1,0 +1,5 @@
+{% extends "base_course.html" %}
+
+{% block course_content %}
+    {% include "review_snippet.html" with reviews=page_obj display_course=True %}
+{% endblock %}

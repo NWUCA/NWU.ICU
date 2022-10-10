@@ -41,6 +41,7 @@
 - [ ] 使用 templatetags 代替手写 bulma 风格的 forms
 - [ ] 调研是否能够集成 mypy
   - 目前 django-stubs (1.12) 尚不支持 django 4.1
+- 图表统计 (metabase? 看起来非常不错)
 
 ## TODO
 - [x] 生产环境的配置, static files, DEBUG, 以及启动脚本
@@ -52,7 +53,7 @@
 
 ### 课程评价
 - [ ] 查看自己的评价
-- [ ] 一条评价的历史 (评价的修改)
+- [ ] 评价的编辑历史
 - [ ] 用星星显示评分
 - [ ] 富文本编辑 ([quill?](https://quilljs.com/))
 - [x] 课程的分页

@@ -31,6 +31,7 @@ from course_assessment.views import (
     CourseList,
     CourseView,
     LatestReviewView,
+    MyReviewView,
     ReviewAddView,
 )
 from report.views import ReportClose
@@ -53,6 +54,7 @@ urlpatterns = [
     path('course/<int:course_id>/', CourseView.as_view()),
     path('course/<int:course_id>/review_add/', ReviewAddView.as_view()),
     path('latest_review/', LatestReviewView.as_view()),
+    path('my_review/', MyReviewView.as_view()),
     path('report/', ReportClose.as_view()),
     re_path(r'^report/*$', ReportClose.as_view()),  # 会有人访问 /// 这样的坑爹路径
     path('refresh_cookies/', RefreshCookies.as_view()),

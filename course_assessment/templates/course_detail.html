@@ -47,35 +47,6 @@
         </a>
     </div>
 
-    {% for review in reviews %}
-        <div class="box">
-            <p class="subtitle">
-                <span>
-                    {% if review.created_by.nickname %}
-                        <td>{{ review.created_by.nickname }}</td>
-                    {% else %}
-                        <td>匿名</td>
-                    {% endif %}
-                </span>
-                <span class="ml-5">
-                    {{ review.rating }} 分
-                </span>
-                {% if review.edited %}
-                    <span class="is-size-7 ml-4">已编辑</span>
-                {% endif %}
-            </p>
-            <p>
-                {{ review.content | linebreaks }}
-            </p>
-            <p class="is-size-7 level">
-                <span class="level-left">{{ review.create_time }}</span>
-                <span class="level-right">
-                    {% if review.created_by == user %}
-                        <a href="/course/{{ course.id }}/review_add/">编辑</a>
-                    {% endif %}
-                </span>
-            </p>
-        </div>
-    {% endfor %}
+    {% include "review_snippet.html" with reviews=reviews display_name=True %}
 
 {% endblock %}
