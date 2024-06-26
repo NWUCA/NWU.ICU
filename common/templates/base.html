@@ -5,7 +5,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="google-site-verification" content="SnlTZVHoF3EXYMW-ch2-SayraQecVszrYZxGVmQ9iHM" />
+    <meta name="google-site-verification" content="SnlTZVHoF3EXYMW-ch2-SayraQecVszrYZxGVmQ9iHM"/>
     <title>NWU.ICU-{% block subtitle %}{% endblock %}</title>
 
     <style>
@@ -17,6 +17,7 @@
         .wrapper {
             min-height: 100%;
             margin-bottom: -50px;
+            background-color: #f1f1f1;
         }
 
         {# for django-crispy-forms, get rid of the `*` denoting the required fields #}
@@ -112,30 +113,30 @@
     </nav>
 
 
-    <div id="content" class='container'>
-    <section class="section pt-4">
-        {% for announcement in announcements %}
-            {% if announcement.type == 'all' %}
-                <div class="notification is-info is-light">
-                    公告: {{ announcement.content | linebreaks }}
-                    <sub>最后更新时间: {{ announcement.update_time }}</sub>
-{#                FIXME: 抽象公告组件#}
-                </div>
-            {% endif %}
-        {% endfor %}
-
-        {% block messages %}
-            {% for message in messages %}
-                <div
-                        {% if message.tags == 'error' %} class="notification is-danger is-light"
-                        {% else %} class="notification is-success is-light"
-                        {% endif %}
-                >
-                    {% if 'safe' in message.tags %}{{ message | safe }}{% else %}{{ message }}{% endif %}
-                </div>
+    <div id="content" class='main-container'>
+        <section class="section pt-4">
+            {% for announcement in announcements %}
+                {% if announcement.type == 'all' %}
+                    <div class="notification is-info is-light">
+                        公告: {{ announcement.content | linebreaks }}
+                        <sub>最后更新时间: {{ announcement.update_time }}</sub>
+                        {#                FIXME: 抽象公告组件#}
+                    </div>
+                {% endif %}
             {% endfor %}
-        {% endblock %}
-    </section>
+
+            {% block messages %}
+                {% for message in messages %}
+                    <div
+                            {% if message.tags == 'error' %} class="notification is-danger is-light"
+                            {% else %} class="notification is-success is-light"
+                            {% endif %}
+                    >
+                        {% if 'safe' in message.tags %}{{ message | safe }}{% else %}{{ message }}{% endif %}
+                    </div>
+                {% endfor %}
+            {% endblock %}
+        </section>
 
         <section class="section pt-0">
             {% block content %}{% endblock %}
@@ -144,10 +145,10 @@
 </div>
 
 <footer class="container has-text-centered mt-4">
-        <span>2019-2022 nwu.icu</span>
-        <a href="/about/">关于我们</a>
-        <a href="mailto:admin@nwu.icu" target="_blank" class="ml-2">联系我们</a>
-        <span class="ml-2">version: {{ version }}</span>
+    <span>2019-{% now "Y" %} nwu.icu</span>
+    <a href="/about/">关于我们</a>
+    <a href="mailto:admin#nwu.icu" target="_blank" class="ml-2">联系我们</a>
+    <span class="ml-2">version: {{ version }}</span>
 </footer>
 
 <script src="{% static 'misc.js' %}"></script>
