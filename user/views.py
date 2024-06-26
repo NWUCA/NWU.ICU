@@ -124,15 +124,23 @@ def register(request):
 
 
 class PasswordReset(View):
+    def render_password_reset_page(self, request):
+        return render(request, 'password_reset.html')
+
     def get(self, request):
-        if request.method == 'POST':
-            form = PasswordResetForm(request.POST)
-            if form.is_valid():
-                # 在这里处理表单数据，例如发送重置链接
-                return redirect('password_reset_done')
+        form = PasswordResetForm()
+        return render(request, 'password_reset.html', {'form': form})
+
+    def post(self, request):
+        form = PasswordResetForm(request.POST)
+        if form.is_valid():
+            messages.error(request, "修改成功, 请使用新密码登录")
+            return redirect('login')
+
         else:
             form = PasswordResetForm()
-        return render(request, 'password_reset.html', {'form': form})
+            messages.error(request, "验证码输入错误, 请仔细查看后输入")
+            return render(request, 'password_reset.html', {'form': form})  # todo 这里写成局部刷新, 不然之前填写的邮箱就没了
 
 
 class Register(View):
@@ -149,7 +157,8 @@ class CAPTCHA(View):
 
 
 class Login(View):
-    def render_login_page(self, request):
+    @staticmethod
+    def render_login_page(request):
         return render(request, 'login.html', {'login_form': LoginForm()})
 
     def get(self, request):
