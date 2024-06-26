@@ -9,7 +9,7 @@ html, body {
     background-color: #ffffff;
 }
 
-/* for django-crispy-forms, get rid of the `*` denoting the required fields */
+
 .asteriskField {
     display: none;
 }
@@ -21,7 +21,7 @@ html, body {
     transform: translateX(-50%);
     width: 300px;
     z-index: 1000;
-    text-align: center; /* optional: to center text inside the alert */
+    text-align: center;
 }
 
 .alert {

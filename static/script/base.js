@@ -1,3 +1,13 @@
+// 消息自动消失
+document.addEventListener("DOMContentLoaded", function () {
+    const messages = document.querySelectorAll('.alert');
+    messages.forEach(message => {
+        setTimeout(() => {
+            message.style.display = 'none';
+        }, 5000);
+    });
+});
+
 // mics.js
 let forms = document.querySelectorAll("form");
 for (let form of forms) {
