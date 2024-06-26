@@ -29,6 +29,26 @@ def tos(request):
     return render(request, 'tos.html')
 
 
+def announcement_view(request):
+    announcements = [
+        {
+            'title': '搜索性能和排序改进',
+            'content': '之前评价社区的搜索功能依赖 <b>SQL LIKE</b>，性能比较差，每次快速查询时，服务器都会被打挂。例如 <i>2024 年 1 月的新学期快速课程构建时，单日动态查询的高并发达到 45 万次，尽管提前升级到了 16 核 CPU，但选课刚开始的那一个小时还是被打趴了。</i>',
+            'publisher': '管理员',
+            'publish_time': '2024年5月12日 23:08',
+            'update_time': '2024年5月13日 00:01'
+        },
+        {
+            'title': '升级富文本编辑器到 CKEditor 5',
+            'content': '非常感谢 <b>taoky</b> 的贡献，把富文本编辑器升级到 <b>CKEditor 5</b>，总算是有一个看起来比较现代的富文本编辑器。',
+            'publisher': '管理员',
+            'publish_time': '2024年2月6日 23:04',
+            'update_time': '2024年2月6日 23:04'
+        }
+    ]
+    return render(request, 'announcements.html', {'announcements': announcements})
+
+
 class SettingsForm(forms.Form):
     nickname = forms.CharField(max_length=30)
 

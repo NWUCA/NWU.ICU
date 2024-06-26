@@ -26,6 +26,7 @@ from common.views import (
     send_test_notification,
     service_worker,
     tos,
+    announcement_view
 )
 from course_assessment.views import (
     CourseList,
@@ -62,6 +63,7 @@ urlpatterns = [
     path('refresh_cookies/', RefreshCookies.as_view()),
     path('get_captcha/', CAPTCHA.as_view()),
     path('captcha/', include('captcha.urls')),
+    path('announcements/', announcement_view, name='announcements'),
 ]
 
 if "debug_toolbar" in settings.INSTALLED_APPS:
