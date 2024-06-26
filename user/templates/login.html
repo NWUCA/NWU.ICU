@@ -1,77 +1,55 @@
-{% extends "base.html" %}
-
-{% block subtitle %}登录{% endblock %}
-
-{% block content %}
-    <h2 class="title">登录</h2>
-
-    <form method="POST" name="login_form">
-        {% csrf_token %}
-        <div class="field is-horizontal">
-            <div class="field-label is-normal">
-                <label class="label">用户名</label>
-            </div>
-            <div class="field-body">
-                <div class="field is-expanded">
-                    <div class="control">
-                        <input class="input" type="text" name="username">
-                    </div>
-                    <p class="help">请使用西北大学统一身份认证登录</p>
-                </div>
-            </div>
-        </div>
-
-        <div class="field is-horizontal">
-            <div class="field-label is-normal">
-                <label class="label">密码</label>
-            </div>
-            <div class="field-body">
-                <div class="field">
-                    <div class="control">
-                        <input class="input" type="password" name="password">
-                    </div>
-                </div>
-            </div>
-        </div>
-
-
-        <div class="field is-horizontal">
-            <div class="field-label is-normal">
-                <label class="label">验证码</label>
-            </div>
-            <div class="field-body">
-                <div class="field has-addons">
-                    <div class="control">
-                        <input class="input" type="text" name="captcha">
-                    </div>
-                    <div class="control">
-                        <img src="/get_captcha" alt="captcha_image">
-                    </div>
-                </div>
-            </div>
-        </div>
-
-
-        <div class="field is-horizontal">
-            <div class="field-label">
-                <!-- Left empty for spacing -->
-            </div>
-            <div class="control field-body">
-                <label class="checkbox">
-                    <input type="checkbox" checked>
-                    同意<a target="_blank" href="/tos/">隐私政策和用户协议</a>
-                </label>
-            </div>
-
-        </div>
-
-        <div class="field is-horizontal">
-            <div class="field-label">
-                <!-- Left empty for spacing -->
-            </div>
-            <div class="field-body control">
-                <button type="submit" class="button is-link" id="login_btn">登录</button>
-            </div>
-        </div>
-    </form>
+{% extends 'base.html' %}
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+{% block additional_heads %}
+    <script src="{% static 'script/login.js' %}"></script>
 {% endblock %}
+<body>
+{% block subtitle %}登录{% endblock %}
+{% block content %}
+    <div class="container">
+        <div class="columns is-centered">
+            <div class="column is-4-desktop">
+                <h1 class="title">登录</h1>
+                <form method="post" action="{% url 'login' %}">
+                    {% csrf_token %}
+                    <div class="field">
+                        <label class="label">用户名</label>
+                        <div class="control">
+                            <label>
+                                <input class="input" type="text" name="username" required placeholder="请输入用户名">
+                            </label>
+                        </div>
+                    </div>
+                    <div class="field has-addons">
+                        <div class="control is-expanded">
+                            <label for="password"></label><input class="input" type="password" name="password"
+                                                                 id="password" required
+                                                                 placeholder="请输入密码">
+                        </div>
+                        <div class="control">
+                            <button type="button" class="button is-light" onclick="togglePassword()">
+                                <i class="bi bi-eye" id="togglePasswordIcon"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <a href="{% url 'password_reset' %}" class="is-pulled-right">忘记密码？</a>
+                    </div>
+                    <div class="field is-grouped">
+                        <div class="control">
+                            <button class="button is-link" type="submit">登录</button>
+                        </div>
+                        <div class="control">
+                            <a href="{% url 'register' %}" class="button is-light">注册</a>
+                        </div>
+                    </div>
+                </form>
+                <p class="help is-danger">{{ form.non_field_errors }}</p>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+</body>
+</html>

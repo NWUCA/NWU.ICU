@@ -6,9 +6,9 @@ from collections import namedtuple
 from datetime import datetime
 
 import requests
-from bs4 import BeautifulSoup
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad
+from bs4 import BeautifulSoup
 from django.contrib import messages
 from django.contrib.auth import login, logout
 from django.http import HttpResponse
@@ -19,16 +19,15 @@ from requests.utils import dict_from_cookiejar
 
 from settings.log import upload_pastebin_and_send_to_tg
 from user.models import User
-
 from .forms import LoginForm
+from .forms import PasswordResetForm
 
 logger = logging.getLogger(__name__)
 LoginResult = namedtuple('LoginResult', 'success msg name cookies')
 
-
 AUTH_SERVER_HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-    '(KHTML, like Gecko) Chrome/70.0.3538.77 Safari/537.36'
+                  '(KHTML, like Gecko) Chrome/70.0.3538.77 Safari/537.36'
 }
 
 
@@ -118,6 +117,27 @@ def handle_login_error(request, msg):
             '<i class="bi bi-box-arrow-up-right"></i></a>',
             extra_tags='safe',
         )
+
+
+def register(request):
+    return render(request, 'register.html')
+
+
+class PasswordReset(View):
+    def get(self, request):
+        if request.method == 'POST':
+            form = PasswordResetForm(request.POST)
+            if form.is_valid():
+                # 在这里处理表单数据，例如发送重置链接
+                return redirect('password_reset_done')
+        else:
+            form = PasswordResetForm()
+        return render(request, 'password_reset.html', {'form': form})
+
+
+class Register(View):
+    def get(self, request):
+        return render(request, 'register.html')
 
 
 class CAPTCHA(View):

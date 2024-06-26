@@ -104,8 +104,10 @@
                         </div>
                     </div>
 
-                {% else %}
+                {% elif login_status %}
                     <a class="navbar-item" href="/login/">登录</a>
+                {% else %}
+                    <p></p>
                 {% endif %}
             </div>
         </div>

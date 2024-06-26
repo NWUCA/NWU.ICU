@@ -35,7 +35,7 @@ from course_assessment.views import (
     ReviewAddView,
 )
 from report.views import ReportClose
-from user.views import CAPTCHA, Login, Logout, RefreshCookies
+from user.views import CAPTCHA, Login, Logout, RefreshCookies, PasswordReset, Register
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -49,8 +49,10 @@ urlpatterns = [
     path('api/save-subscription/', save_push_subscription),
     path('api/send-test-notification', send_test_notification),
     path('course_list/', CourseList.as_view()),
-    path('login/', Login.as_view()),
-    path('logout/', Logout.as_view()),
+    path('login/', Login.as_view(), name='login'),
+    path('password_reset/', PasswordReset.as_view(), name='password_reset'),
+    path('logout/', Logout.as_view(), name='logout'),
+    path('register/', Register.as_view(), name='register'),
     path('course/<int:course_id>/', CourseView.as_view()),
     path('course/<int:course_id>/review_add/', ReviewAddView.as_view()),
     path('latest_review/', LatestReviewView.as_view()),
@@ -59,6 +61,7 @@ urlpatterns = [
     re_path(r'^report/*$', ReportClose.as_view()),  # 会有人访问 /// 这样的坑爹路径
     path('refresh_cookies/', RefreshCookies.as_view()),
     path('get_captcha/', CAPTCHA.as_view()),
+    path('captcha/', include('captcha.urls')),
 ]
 
 if "debug_toolbar" in settings.INSTALLED_APPS:

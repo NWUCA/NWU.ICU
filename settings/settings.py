@@ -33,6 +33,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'captcha',
 ]
 
 MIDDLEWARE = [
@@ -62,6 +63,7 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'common.context_processors.announcements',
                 'common.context_processors.version',
+                'common.context_processors.login_status_get',
             ],
         },
     },
@@ -176,8 +178,13 @@ LOGGING = {
 SESSION_COOKIE_AGE = 365 * 24 * 60 * 60  # 365 days, in seconds
 
 CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
-CRISPY_TEMPLATE_PACK = "bootstrap5"
-
+CAPTCHA_FONT_SIZE = 36
+CAPTCHA_LENGTH = 4
+CAPTCHA_CHALLENGE_FUNCT = 'captcha.helpers.random_char_challenge'
+CAPTCHA_NOISE_FUNCTIONS = ('captcha.helpers.noise_arcs', 'captcha.helpers.noise_dots')
+CAPTCHA_FILTER_FUNCTIONS = ('captcha.helpers.post_smooth',)
+CAPTCHA_TIMEOUT = 5 * 60  # 5 minutes
+CAPTCHA_IMAGE_BEFORE_FIELD = False
 # django-silk is disabled due to lack of django 3.2 support
 # SILKY_AUTHENTICATION = True  # User must login
 # SILKY_AUTHORISATION = True  # User must have permissions
