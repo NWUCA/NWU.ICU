@@ -1,0 +1,56 @@
+html, body {
+    height: 100%;
+    margin: 0;
+}
+
+.wrapper {
+    min-height: 100%;
+    margin-bottom: -50px;
+    background-color: #ffffff;
+}
+
+/* for django-crispy-forms, get rid of the `*` denoting the required fields */
+.asteriskField {
+    display: none;
+}
+
+.messages {
+    position: fixed;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 300px;
+    z-index: 1000;
+    text-align: center; /* optional: to center text inside the alert */
+}
+
+.alert {
+    padding: 15px;
+    margin-bottom: 10px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+}
+
+.alert-success {
+    color: #3c763d;
+    background-color: #dff0d8;
+    border-color: #d6e9c6;
+}
+
+.alert-error {
+    color: #a94442;
+    background-color: #f2dede;
+    border-color: #ebccd1;
+}
+
+.alert-warning {
+    color: #8a6d3b;
+    background-color: #fcf8e3;
+    border-color: #faebcc;
+}
+
+.alert-info {
+    color: #31708f;
+    background-color: #d9edf7;
+    border-color: #bce8f1;
+}
