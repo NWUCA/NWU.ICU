@@ -134,13 +134,14 @@ class PasswordReset(View):
     def post(self, request):
         form = PasswordResetForm(request.POST)
         if form.is_valid():
-            messages.error(request, "修改成功, 请使用新密码登录")
+            messages.success(request, "修改成功, 请使用新密码登录")
             return redirect('login')
-
         else:
-            form = PasswordResetForm()
+            # 提取 email 数据并重新初始化表单
+            email = request.POST.get('email', '')
+            form = PasswordResetForm(initial={'email': email})
             messages.error(request, "验证码输入错误, 请仔细查看后输入")
-            return render(request, 'password_reset.html', {'form': form})  # todo 这里写成局部刷新, 不然之前填写的邮箱就没了
+            return render(request, 'password_reset.html', {'form': form})
 
 
 class Register(View):
