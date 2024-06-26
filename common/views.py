@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 
 from django import forms
 from django.conf import settings as dj_settings
@@ -11,7 +12,6 @@ from django.views import View
 from pywebpush import webpush
 
 from user.models import User
-
 from .models import WebPushSubscription
 
 
@@ -20,7 +20,9 @@ def index(request):
 
 
 def about(request):
-    return render(request, 'about.html')
+    day_difference = (datetime.now().date() - datetime(2019, 6, 8).date()).days
+    cost_money = round(int(day_difference) * 662.51 / 365, 2)
+    return render(request, 'about.html', {'day_difference': day_difference, 'cost_money': cost_money})
 
 
 def tos(request):
@@ -46,9 +48,9 @@ class Settings(LoginRequiredMixin, View):
             # 考虑到数据库中可能已有重复昵称, 那么使用 model 中的 UniqueConstraint 会带来额外的迁移成本
             # 故直接在 view 中处理重复昵称
             if (
-                User.objects.exclude(id=request.user.id)
-                .filter(nickname=f.cleaned_data['nickname'])
-                .exists()
+                    User.objects.exclude(id=request.user.id)
+                            .filter(nickname=f.cleaned_data['nickname'])
+                            .exists()
             ):
                 messages.error(request, "昵称已被使用")
             else:
