@@ -30,7 +30,7 @@ def tos(request):
 
 
 def bulletin_view(request):
-    bulletins = Bulletins.objects.filter(enabled=True)
+    bulletins = Bulletins.objects.filter(enabled=True).order_by('-update_time') # todo 是否考虑分片?
     # 从数据库中读取数据
     bulletin_list = [
         {
