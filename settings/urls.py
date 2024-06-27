@@ -43,7 +43,7 @@ urlpatterns = [
     # path('silk/', include('silk.urls', namespace='silk')),
     path('manifest.json', manifest),
     path('serviceworker.js', service_worker),
-    path('', index),
+    path('', index, name='homepage'),
     path('tos/', tos),
     path('about/', about),
     path('settings/', Settings.as_view()),

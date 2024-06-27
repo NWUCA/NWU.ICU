@@ -14,19 +14,24 @@
                 <h1 class="title">登录</h1>
                 <form method="post" action="{% url 'login' %}">
                     {% csrf_token %}
-                    <div class="field">
+                    <div class="field{% if form.username.errors %} has-error{% endif %}">
                         <label class="label">用户名</label>
                         <div class="control">
                             <label>
-                                <input class="input" type="text" name="username" required placeholder="请输入用户名">
+                                {{ form.username }}
                             </label>
+                            {% for error in form.username.errors %}
+                                <p class="help is-danger">{{ error }}</p>
+                            {% endfor %}
                         </div>
                     </div>
-                    <div class="field has-addons">
+                    <div class="field has-addons{% if form.password.errors %} has-error{% endif %}">
                         <div class="control is-expanded">
-                            <label for="password"></label><input class="input" type="password" name="password"
-                                                                 id="password" required
-                                                                 placeholder="请输入密码">
+                            <label for="password"></label>
+                            {{ form.password }}
+                            {% for error in form.password.errors %}
+                                <p class="help is-danger">{{ error }}</p>
+                            {% endfor %}
                         </div>
                         <div class="control">
                             <button type="button" class="button is-light" onclick="togglePassword()">
