@@ -25,6 +25,7 @@ INSTALLED_APPS = [
     # below are 3rd apps
     'crispy_forms',
     "crispy_bootstrap5",
+    'captcha',
     # 'silk',
     # below are django apps
     'django.contrib.admin',
@@ -33,7 +34,6 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'captcha',
 ]
 
 MIDDLEWARE = [
