@@ -6,16 +6,16 @@
     <div class="container">
         <h2 class="title is-3 has-text-centered mt-5">公告栏</h2>
         <div class="section">
-            {% for announcement in announcements %}
+            {% for bulletin in bulletin_list %}
                 <div class="box">
-                    <h3 class="title is-4">{{ announcement.title }}</h3>
+                    <h3 class="title is-4">{{ bulletin.title }}</h3>
                     <div class="content">
-                        {{ announcement.content | safe }}
+                        {{ bulletin.content | safe }}
                     </div>
                     <p>
-                        <strong>发布者:</strong> {{ announcement.publisher }}<br>
-                        <strong>发布时间:</strong> {{ announcement.publish_time }}<br>
-                        <strong>修改时间:</strong> {{ announcement.update_time }}
+                        <strong>发布者:</strong> {{ bulletin.publisher }}<br>
+                        <strong>发布时间:</strong> {{ bulletin.publish_time }}<br>
+                        <strong>修改时间:</strong> {{ bulletin.update_time }}
                     </p>
                 </div>
             {% endfor %}
