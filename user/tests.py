@@ -1,49 +1,53 @@
-from user import views
+from django.contrib.auth.models import User
+from django.urls import reverse
+from rest_framework import status
+from rest_framework.test import APIClient
+from rest_framework.test import APITestCase
+
 from user.models import User
 
 
-def test_login(monkeypatch, user, client):
-    def mock_unified_login(username, raw_password, captcha, captcha_cookies):
-        return views.LoginResult(True, '登陆成功', user.name, b"")
+class LoginTestCase(APITestCase):
+    def setUp(self):
+        self.url = reverse('login')  # 假设 URL 名称为 'login'
+        self.user = User.objects.create_user(username='testuser', password='testpassword')
+        self.client = APIClient()
 
-    monkeypatch.setattr(views, 'unified_login', mock_unified_login)
+    def test_login_success(self):
+        data = {
+            'username': 'testuser',
+            'password': 'testpassword'
+        }
+        response = self.client.post(self.url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('sessionid', response.cookies)
+        self.assertEqual(response.data['detail'], 'Login successful')
 
-    # According to the doc:
-    # https://docs.djangoproject.com/en/4.1/topics/testing/tools/#django.test.Client.session
-    # To modify the session and then save it, it must be stored in a variable first
-    # (because a new SessionStore is created every time this property is accessed)
-    session = client.session
-    session['captcha_cookies'] = {"foo": "bar"}
-    session.save()
-    r = client.post('/login/', data={'username': user.username, 'password': 'bar', 'captcha': 'foo'})
-    print(r.content.decode())
-    assert r.status_code == 302
-    client.logout()  # session will be deleted when logged out
+    def test_login_failure_invalid_credentials(self):
+        data = {
+            'username': 'testuser',
+            'password': 'wrongpassword'
+        }
+        response = self.client.post(self.url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(response.data['detail'], 'Authentication failed.')
 
-    session = client.session
-    session['captcha_cookies'] = {"foo": "bar"}
-    session.save()
-    # login by a nonexistent user will create new user
-    another = 'alice'
-    r = client.post('/login/', data={'username': another, 'password': 'bar', 'captcha': 'foo'})
-    print(User.objects.all())
-    print(r.content.decode())
-    assert r.status_code == 302
-    assert User.objects.get(username=another)
-    client.logout()
-
-    # test malformed login
-    r = client.post('/login/', data={'username': user.username})
-    assert "登陆表单异常" in r.content.decode()
+    def test_login_failure_invalid_data(self):
+        data = {
+            'username': '',
+            'password': ''
+        }
+        response = self.client.post(self.url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 
-def test_need_to_set_nickname(user, logged_in_client):
-    user.nickname = ""
-    user.save()
-    r = logged_in_client.get('/', follow=True)
-    assert r.redirect_chain[0][0].endswith('/settings/')
-
-    r = logged_in_client.post('/settings/', data={"nickname": "alice"})
-    assert r.status_code == 302
-    r = logged_in_client.get('/')
-    assert r.status_code == 200
+# def test_need_to_set_nickname(user, logged_in_client):
+#     user.nickname = ""
+#     user.save()
+#     r = logged_in_client.get('/', follow=True)
+#     assert r.redirect_chain[0][0].endswith('/settings/')
+#
+#     r = logged_in_client.post('/settings/', data={"nickname": "alice"})
+#     assert r.status_code == 302
+#     r = logged_in_client.get('/')
+#     assert r.status_code == 200

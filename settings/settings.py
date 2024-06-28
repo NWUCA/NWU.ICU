@@ -12,6 +12,10 @@ https://docs.djangoproject.com/en/3.1/ref/settings/
 
 from pathlib import Path
 
+import environ
+
+env = environ.Env()
+environ.Env.read_env()
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -21,11 +25,12 @@ INSTALLED_APPS = [
     'course_assessment',
     'common',
     'user',
-    'report',
     # below are 3rd apps
     'crispy_forms',
     "crispy_bootstrap5",
     'captcha',
+    'rest_framework',
+    'drf_spectacular',
     # 'silk',
     # below are django apps
     'django.contrib.admin',
@@ -47,7 +52,16 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'common.middleware.ensure_nickname_middleware',
 ]
-
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.SessionAuthentication',
+        # 'rest_framework.authentication.TokenAuthentication',  # Uncomment if you use token-based authentication
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.AllowAny',
+    ],
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+}
 ROOT_URLCONF = 'settings.urls'
 
 TEMPLATES = [
@@ -145,36 +159,25 @@ LOGGING = {
             'class': 'logging.StreamHandler',
             'formatter': 'simple',
         },
-        'telegram': {
-            'class': 'settings.log.TelegramBotHandler',
-            'formatter': 'simple',
-            'filters': ['require_debug_false'],
-            'level': 'ERROR',
-        },
-        'telegram_with_context': {
-            'class': 'settings.log.TelegramBotHandlerWithContext',
-            'formatter': 'simple',
-            'filters': ['require_debug_false'],
-            'level': 'ERROR',
-        },
     },
     'root': {
-        'handlers': ['console', 'telegram'],
+        'handlers': ['console'],
         'level': 'INFO',
     },
     'loggers': {
         "django": {
-            "handlers": ["console", "telegram_with_context"],
+            "handlers": ["console"],
             "level": "INFO",
-            'propagate': False,
-        },
-        'report.management.commands.trigger_report': {
-            'handlers': ['console', 'telegram'],
             'propagate': False,
         },
     },
 }
-
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'NWU.ICU API',
+    'DESCRIPTION': 'NWU, but ICU',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+}
 SESSION_COOKIE_AGE = 365 * 24 * 60 * 60  # 365 days, in seconds
 
 CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
@@ -193,3 +196,9 @@ CAPTCHA_IMAGE_SIZE = (120, 50)
 # SILKY_META = True
 # SILKY_MAX_RECORDED_REQUESTS = 10 ** 4
 # SILKY_MAX_RESPONSE_BODY_SIZE = 1024  # If response body>1024 bytes, ignore
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = env('EMAIL_HOST')
+EMAIL_PORT = env('EMAIL_PORT')
+EMAIL_USE_SSL = env('EMAIL_USE_SSL')
+EMAIL_HOST_USER = env('EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD')
