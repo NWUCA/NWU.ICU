@@ -16,7 +16,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('content', models.TextField()),
-                ('type', models.TextField(choices=[('all', '全局'), ('course', '课程评价'), ('report', '自动填报')])),
+                ('type', models.TextField(choices=[('all', '全局'), ('course', '课程评价')])),
                 ('create_time', models.DateTimeField(auto_now_add=True)),
                 ('update_time', models.DateTimeField(auto_now=True)),
                 ('enabled', models.BooleanField(default=True)),

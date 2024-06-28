@@ -6,7 +6,6 @@ class Announcement(models.Model):
     TYPE_CHOICES = [
         ('all', '全局'),
         ('course', '课程评价'),
-        ('report', '自动填报'),
     ]
 
     content = models.TextField()
