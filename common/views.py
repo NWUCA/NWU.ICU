@@ -10,39 +10,30 @@ from django.http import HttpResponse
 from django.shortcuts import redirect, render
 from django.views import View
 from pywebpush import webpush
+from rest_framework import status
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from user.models import User
-from .models import WebPushSubscription, Bulletins
+from .models import Bulletins
+from .models import WebPushSubscription
+from .serializers import AboutSerializer
+from .serializers import BulletinSerializer
+
+
+class BulletinListView(APIView):
+    def get(self, request):
+        bulletins = Bulletins.objects.filter(enabled=True).order_by('-update_time')
+        serializer = BulletinSerializer(bulletins, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 def index(request):
     return render(request, 'index.html')
 
 
-def about(request):
-    day_difference = (datetime.now().date() - datetime(2019, 6, 8).date()).days
-    cost_money = round(int(day_difference) * 662.51 / 365, 2)
-    return render(request, 'about.html', {'day_difference': day_difference, 'cost_money': cost_money})
-
-
 def tos(request):
     return render(request, 'tos.html')
-
-
-def bulletin_view(request):
-    bulletins = Bulletins.objects.filter(enabled=True).order_by('-update_time') # todo 是否考虑分片?
-    # 从数据库中读取数据
-    bulletin_list = [
-        {
-            'title': bulletin.title,
-            'content': bulletin.content,
-            'publisher': bulletin.publisher,
-            'publish_time': bulletin.create_time.strftime('%Y年%m月%d日 %H:%M'),
-            'update_time': bulletin.update_time.strftime('%Y年%m月%d日 %H:%M')
-        } for bulletin in bulletins if bulletin.enabled
-    ]
-
-    return render(request, 'bulletin.html', {'bulletin_list': bulletin_list})
 
 
 class SettingsForm(forms.Form):

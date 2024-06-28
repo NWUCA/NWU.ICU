@@ -1,146 +1,134 @@
-import base64
 import logging
-import pickle
-import re
-from collections import namedtuple
-from datetime import datetime
+import random
+import string
 
-import requests
-from Crypto.Cipher import AES
-from Crypto.Util.Padding import pad
-from bs4 import BeautifulSoup
-from django.contrib import messages
-from django.contrib.auth import authenticate, login, logout
-from django.http import HttpResponse
-from django.shortcuts import redirect, render
-from django.utils.crypto import get_random_string
+from django.contrib.auth import authenticate, login
+from django.contrib.auth import logout
+from django.contrib.auth.models import User
+from django.contrib.auth.tokens import default_token_generator
+from django.core.mail import send_mail
+from django.shortcuts import render
+from django.template.loader import render_to_string
+from django.utils.encoding import force_bytes, force_str
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.views import View
-from requests.utils import dict_from_cookiejar
+from drf_spectacular.utils import extend_schema, OpenApiResponse
+from rest_framework import status
+from rest_framework.permissions import AllowAny
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
-from settings.log import upload_pastebin_and_send_to_tg
-from .forms import LoginForm
-from .forms import PasswordResetForm
+from .models import User
+from .models import VerificationCode
+from .serializers import LoginSerializer
+from .serializers import PasswordResetRequestSerializer, PasswordResetSerializer
+from .serializers import RegisterSerializer
+from .serializers import UserRegistrationSerializer, VerificationCodeSerializer
 
 logger = logging.getLogger(__name__)
-LoginResult = namedtuple('LoginResult', 'success msg name cookies')
-
-AUTH_SERVER_HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-                  '(KHTML, like Gecko) Chrome/70.0.3538.77 Safari/537.36'
-}
 
 
-def unified_login(username, raw_password, captcha, captcha_cookies):
-    login_page_url = "https://authserver.nwu.edu.cn/authserver/login"
-    session = requests.sessions.Session()
-    # 欺骗学校的防火墙
-    session.headers.update(AUTH_SERVER_HEADERS)
-    session.cookies.update(captcha_cookies)
-    try:
-        response = session.get(login_page_url, timeout=5)
-        if response.status_code != 200:
-            raise requests.exceptions.ConnectionError
-    except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
-        return LoginResult(False, '连接统一身份认证服务失败, 请稍后重试..', None, None)
+class RegisterView(APIView):
 
-    ds = BeautifulSoup(response.text, "html.parser")
-    if 'IP被冻结' in ds.text:
-        return LoginResult(False, '我们的服务器 IP 被统一身份认证冻结, 请稍后重试..', None, None)
-
-    lt = ds.select('input[name="lt"]')[0].get('value')
-    dllt = ds.select('input[name="dllt"]')[0].get('value')
-    execution = ds.select('input[name="execution"]')[0].get('value')
-    _eventId = ds.select('input[name="_eventId"]')[0].get('value')
-    rm_shown = ds.select('input[name="rmShown"]')[0].get('value')
-
-    # key 被单独写在一个 <script> 标签里
-    aes_key = re.search('var pwdDefaultEncryptSalt = "(.*)";', response.text)[1]
-
-    raw_password_byte = (get_random_string(64) + raw_password).encode()  # 随机字符串为统一身份认证的行为
-    raw_password_byte = pad(raw_password_byte, AES.block_size)
-    # PyCryptodome 提供的 iv 似乎会包含统一身份认证不会识别的字符, 导致返回用户名或密码错误
-    cipher = AES.new(aes_key.encode(), AES.MODE_CBC, get_random_string(16).encode())
-    password = base64.b64encode(cipher.encrypt(raw_password_byte))
-
-    data = {
-        "_eventId": _eventId,
-        "dllt": dllt,
-        "execution": execution,
-        "lt": lt,
-        "password": password,
-        "rmShown": rm_shown,
-        "username": username,
-        "captchaResponse": captcha,
-    }
-
-    response_login = session.post(login_page_url, data=data)
-
-    if response_login is not None:
-        soup = BeautifulSoup(response_login.text, 'html.parser')
-
-        if '踢出会话' in response_login.text:
-            response_login = session.post(
-                login_page_url,
-                data={
-                    'execution': soup.find(id='continue').find(attrs={"name": "execution"})['value'],
-                    '_eventId': 'continue',
-                },
-            )
-            soup = BeautifulSoup(response_login.text, 'html.parser')
-
-        if soup.find(id='improveInfoForm'):
-            return LoginResult(False, '您的密码仍为初始密码, 请更新您的密码后重试..', None, None)
-
-        span = soup.select('span[id="msg"]')
-        if len(span) == 0:
-            try:
-                name = soup.find(class_='auth_username').span.span.text.strip()
-            except AttributeError:
-                upload_pastebin_and_send_to_tg(response_login.text)
-                return LoginResult(False, '获取个人信息失败, 请稍后重试..', None, None)
-
-            return LoginResult(True, '登陆成功', name, session.cookies)
-        else:
-            msg = span[0].text
-            return LoginResult(False, msg, None, None)
-    return LoginResult(False, '网络错误', None, None)
+    def post(self, request, *args, **kwargs):
+        serializer = RegisterSerializer(data=request.data)
+        if serializer.is_valid():
+            user = serializer.save()
+            return Response({
+                "user": {
+                    "username": user.username,
+                    "email": user.email
+                }
+            }, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-def handle_login_error(request, msg):
-    messages.error(request, msg)
-    if '初始密码' in msg:
-        messages.error(
-            request,
-            '请手动使用统一身份认证登录一次, 入口在<a target="_blank" '
-            'href="http://authserver.nwu.edu.cn">这里'
-            '<i class="bi bi-box-arrow-up-right"></i></a>',
-            extra_tags='safe',
-        )
-
-
-def register(request):
-    return render(request, 'register.html')
-
-
-class PasswordReset(View):
-    def render_password_reset_page(self, request):
-        return render(request, 'password_reset.html')
-
-    def get(self, request):
-        form = PasswordResetForm()
-        return render(request, 'password_reset.html', {'form': form})
+class UserRegistrationView(APIView):
+    permission_classes = [AllowAny]
 
     def post(self, request):
-        form = PasswordResetForm(request.POST)
-        if form.is_valid():
-            messages.success(request, "修改成功, 请使用新密码登录")
-            return redirect('login')
-        else:
-            # 提取 email 数据并重新初始化表单
-            email = request.POST.get('email', '')
-            form = PasswordResetForm(initial={'email': email})
-            messages.error(request, "验证码输入错误, 请仔细查看后输入")
-            return render(request, 'password_reset.html', {'form': form})
+        serializer = UserRegistrationSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"detail": "Registration successful"}, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class RequestVerificationCodeView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = VerificationCodeSerializer(data=request.data)
+        if serializer.is_valid():
+            email = serializer.validated_data['email']
+            code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+
+            VerificationCode.objects.update_or_create(email=email, defaults={'code': code})
+
+            send_mail(
+                'Your verification code',
+                f'Your verification code is {code}',
+                'from@example.com',
+                [email]
+            )
+            return Response({"detail": "Verification code sent."}, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class PasswordResetRequestView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = PasswordResetRequestSerializer(data=request.data)
+        if serializer.is_valid():
+            email = serializer.validated_data['email']
+            try:
+                user = User.objects.get(email=email)
+            except User.DoesNotExist:
+                return Response({"detail": "User with this email does not exist."}, status=status.HTTP_400_BAD_REQUEST)
+
+            token = default_token_generator.make_token(user)
+            uid = urlsafe_base64_encode(force_bytes(user.pk))
+            reset_link = request.build_absolute_uri(f'/reset-password/{uid}/{token}/')
+
+            mail_subject = 'Password Reset Request'
+            message = render_to_string('password_reset_email.html', {
+                'user': user,
+                'reset_link': reset_link,
+            })
+            send_mail(mail_subject, message, 'from@example.com', [user.email])
+            return Response({"detail": "Password reset link sent."}, status=status.HTTP_200_OK)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class PasswordResetView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, uidb64, token):
+        serializer = PasswordResetSerializer(data=request.data)
+        if serializer.is_valid():
+            new_password = serializer.validated_data['new_password']
+            confirm_password = serializer.validated_data['confirm_password']
+
+            if new_password != confirm_password:
+                return Response({"detail": "Passwords do not match."}, status=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                uid = force_str(urlsafe_base64_decode(uidb64))
+                user = User.objects.get(pk=uid)
+            except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+                user = None
+
+            if user is not None and default_token_generator.check_token(user, token):
+                user.set_password(new_password)
+                user.save()
+                return Response({"detail": "Password has been reset."}, status=status.HTTP_200_OK)
+            else:
+                return Response({"detail": "Token is invalid or has expired."}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class Register(View):
@@ -148,66 +136,46 @@ class Register(View):
         return render(request, 'register.html')
 
 
-class CAPTCHA(View):
-    def get(self, request):
-        captcha_url = "https://authserver.nwu.edu.cn/authserver/captcha.html"
-        r = requests.get(captcha_url, headers=AUTH_SERVER_HEADERS)
-        request.session['captcha_cookies'] = dict_from_cookiejar(r.cookies)
-        return HttpResponse(r.content, headers={'Content-Type': 'image/jpeg'})
+class Login(APIView):
+    permission_classes = [AllowAny]
 
-
-class Login(View):
-    @staticmethod
-    def render_login_page(request, form=None):
-        if form is None:
-            form = LoginForm()
-        return render(request, 'login.html', {'form': form})
-
-    def get(self, request):
-        if not request.user.is_authenticated:
-            return self.render_login_page(request)
-        else:
-            next_url = request.GET.get('next')
-            return redirect(next_url if next_url else '/')
-
-    from django.shortcuts import redirect
-    from django.contrib.auth import authenticate, login
-    from django.contrib import messages
-
+    @extend_schema(
+        request=LoginSerializer,
+        responses={
+            200: OpenApiResponse(description='Login successful'),
+            401: OpenApiResponse(description='Authentication failed'),
+            400: OpenApiResponse(description='Invalid input')
+        },
+    )
     def post(self, request):
-        form = LoginForm(request.POST)
-        if form.is_valid():
-            username = form.cleaned_data['username']
-            password = form.cleaned_data['password']
+        serializer = LoginSerializer(data=request.data)
+        if serializer.is_valid():
+            username = serializer.validated_data['username']
+            password = serializer.validated_data['password']
             user = authenticate(request, username=username, password=password)
             if user is not None:
                 login(request, user)
-                messages.add_message(request, messages.SUCCESS, '登录成功')
-                next_url = request.GET.get('next')
-                return redirect(next_url if next_url else '/')
+
+                # 将会话 ID 作为 cookie 返回
+                response = Response({"detail": "Login successful"}, status=status.HTTP_200_OK)
+                response.set_cookie(
+                    key='sessionid',
+                    value=request.session.session_key,
+                    httponly=True,
+                    secure=False,  # 在生产环境中使用 True
+                    samesite='Lax'  # 根据需要设置
+                )
+                return response
             else:
-                messages.add_message(request, messages.ERROR, '登录失败')
-        return self.render_login_page(request, form=form)
+                return Response({"detail": "Authentication failed."}, status=status.HTTP_401_UNAUTHORIZED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class Logout(View):
-    def get(self, request):
-        logout(request)
-        messages.add_message(request, messages.SUCCESS, '注销成功')
-        return redirect('/')
+class Logout(APIView):
+    permission_classes = [IsAuthenticated]
 
-
-class RefreshCookies(View):
     def post(self, request):
-        user = request.user
-        password = request.POST['password']
-        redirect_url = request.POST.get('redirect')  # FIXME: 是否为最优的方案?
-        success, msg, name, cookies = unified_login(user.username, password)
-        if success:
-            user.cookie = pickle.dumps(cookies)
-            user.cookie_last_update = datetime.now()
-            user.save()
-            messages.success(request, '刷新 Cookies 成功, 请重新开启填报')
-        else:
-            handle_login_error(request, msg)
-        return redirect(redirect_url)
+        logout(request)
+        response = Response({"detail": "Logout successful"}, status=status.HTTP_200_OK)
+        response.delete_cookie('sessionid')
+        return response

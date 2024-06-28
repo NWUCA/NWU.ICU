@@ -15,18 +15,19 @@ Including another URLconf
 """
 from django.conf import settings
 from django.contrib import admin
-from django.urls import include, path, re_path
+from django.urls import include
+from django.urls import path
+from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
 
 from common.views import (
     Settings,
-    about,
     index,
     manifest,
     save_push_subscription,
     send_test_notification,
     service_worker,
     tos,
-    bulletin_view
+    BulletinListView
 )
 from course_assessment.views import (
     CourseList,
@@ -35,35 +36,32 @@ from course_assessment.views import (
     MyReviewView,
     ReviewAddView,
 )
-from report.views import ReportClose
-from user.views import CAPTCHA, Login, Logout, RefreshCookies, PasswordReset, Register
+from user.views import Login, Logout, RegisterView, RequestVerificationCodeView
 
 urlpatterns = [
+    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
+    path('api/schema/swagger-ui/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+    path('api/schema/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
     path('admin/', admin.site.urls),
     # path('silk/', include('silk.urls', namespace='silk')),
     path('manifest.json', manifest),
     path('serviceworker.js', service_worker),
     path('', index, name='homepage'),
     path('tos/', tos),
-    path('about/', about),
     path('settings/', Settings.as_view()),
     path('api/save-subscription/', save_push_subscription),
     path('api/send-test-notification', send_test_notification),
     path('course_list/', CourseList.as_view()),
     path('login/', Login.as_view(), name='login'),
-    path('password_reset/', PasswordReset.as_view(), name='password_reset'),
     path('logout/', Logout.as_view(), name='logout'),
-    path('register/', Register.as_view(), name='register'),
     path('course/<int:course_id>/', CourseView.as_view()),
     path('course/<int:course_id>/review_add/', ReviewAddView.as_view()),
     path('latest_review/', LatestReviewView.as_view()),
     path('my_review/', MyReviewView.as_view()),
-    path('report/', ReportClose.as_view()),
-    re_path(r'^report/*$', ReportClose.as_view()),  # 会有人访问 /// 这样的坑爹路径
-    path('refresh_cookies/', RefreshCookies.as_view()),
-    path('get_captcha/', CAPTCHA.as_view()),
     path('captcha/', include('captcha.urls')),
-    path('bulletin/', bulletin_view, name='bulletin'),
+    path('bulletins/', BulletinListView.as_view(), name='bulletin-list'),
+    path('register/', RegisterView.as_view(), name='register'),
+    path('request-verification-code/', RequestVerificationCodeView.as_view(), name='request-verification-code'),
 ]
 
 if "debug_toolbar" in settings.INSTALLED_APPS:
