@@ -1,5 +1,4 @@
 import json
-from datetime import datetime
 
 from django import forms
 from django.conf import settings as dj_settings
@@ -11,11 +10,12 @@ from django.shortcuts import redirect, render
 from django.views import View
 from pywebpush import webpush
 from rest_framework import status
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from user.models import User
-from .models import Bulletins
+from .models import Bulletin, About
 from .models import WebPushSubscription
 from .serializers import AboutSerializer
 from .serializers import BulletinSerializer
@@ -23,7 +23,7 @@ from .serializers import BulletinSerializer
 
 class BulletinListView(APIView):
     def get(self, request):
-        bulletins = Bulletins.objects.filter(enabled=True).order_by('-update_time')
+        bulletins = Bulletin.objects.filter(enabled=True).order_by('-update_time')
         serializer = BulletinSerializer(bulletins, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -34,6 +34,19 @@ def index(request):
 
 def tos(request):
     return render(request, 'tos.html')
+
+
+class AboutView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        about_content_database = About.objects.order_by('-update_time')
+        try:
+            about_content = AboutSerializer(about_content_database, many=True).data[0]
+        except IndexError:
+            about_content = "Get about content failed"
+        return Response({"detail": about_content, },
+                        status=status.HTTP_200_OK)
 
 
 class SettingsForm(forms.Form):

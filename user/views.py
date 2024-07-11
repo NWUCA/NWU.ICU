@@ -6,56 +6,63 @@ from django.contrib.auth import authenticate, login
 from django.contrib.auth import logout
 from django.contrib.auth.models import User
 from django.contrib.auth.tokens import default_token_generator
+from django.core.exceptions import ValidationError
 from django.core.mail import send_mail
-from django.shortcuts import render
 from django.template.loader import render_to_string
-from django.utils.encoding import force_bytes, force_str
-from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
-from django.views import View
-from drf_spectacular.utils import extend_schema, OpenApiResponse
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_encode
 from rest_framework import status
 from rest_framework.permissions import AllowAny
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-
+from rest_framework.serializers import ValidationError
+from settings import settings
 from .models import User
 from .models import VerificationCode
 from .serializers import LoginSerializer
-from .serializers import PasswordResetRequestSerializer, PasswordResetSerializer
+from .serializers import PasswordResetRequestSerializer
 from .serializers import RegisterSerializer
-from .serializers import UserRegistrationSerializer, VerificationCodeSerializer
+from .serializers import VerificationCodeSerializer
 
 logger = logging.getLogger(__name__)
 
 
 class RegisterView(APIView):
+    permission_classes = [AllowAny]
 
     def post(self, request, *args, **kwargs):
         serializer = RegisterSerializer(data=request.data)
         if serializer.is_valid():
+            password = request.data.get("password")
+            try:
+                serializer.validate_password_complexity(password)
+            except ValidationError as e:
+                custom_errors = {"fields": {"password": list(e.detail)}}
+                return Response({
+                    "status": 400,
+                    "message": "Registration failed.",
+                    "errors": custom_errors
+                }, status=status.HTTP_400_BAD_REQUEST)
+
             user = serializer.save()
             return Response({
-                "user": {
-                    "username": user.username,
-                    "email": user.email
-                }
+                "status": 200,
+                "message": "Successfully registered.",
+                "errors": None
             }, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        custom_errors = {"fields": {}}
+        for field, errors in serializer.errors.items():
+            custom_errors["fields"][field] = [str(error) for error in errors]
+
+        return Response({
+            "status": 400,
+            "message": "Registration failed.",
+            "errors": custom_errors
+        }, status=status.HTTP_400_BAD_REQUEST)
 
 
-class UserRegistrationView(APIView):
-    permission_classes = [AllowAny]
-
-    def post(self, request):
-        serializer = UserRegistrationSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response({"detail": "Registration successful"}, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
-class RequestVerificationCodeView(APIView):
+class VerificationCodeView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
@@ -103,50 +110,9 @@ class PasswordResetRequestView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class PasswordResetView(APIView):
-    permission_classes = [AllowAny]
-
-    def post(self, request, uidb64, token):
-        serializer = PasswordResetSerializer(data=request.data)
-        if serializer.is_valid():
-            new_password = serializer.validated_data['new_password']
-            confirm_password = serializer.validated_data['confirm_password']
-
-            if new_password != confirm_password:
-                return Response({"detail": "Passwords do not match."}, status=status.HTTP_400_BAD_REQUEST)
-
-            try:
-                uid = force_str(urlsafe_base64_decode(uidb64))
-                user = User.objects.get(pk=uid)
-            except (TypeError, ValueError, OverflowError, User.DoesNotExist):
-                user = None
-
-            if user is not None and default_token_generator.check_token(user, token):
-                user.set_password(new_password)
-                user.save()
-                return Response({"detail": "Password has been reset."}, status=status.HTTP_200_OK)
-            else:
-                return Response({"detail": "Token is invalid or has expired."}, status=status.HTTP_400_BAD_REQUEST)
-
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
-class Register(View):
-    def get(self, request):
-        return render(request, 'register.html')
-
-
 class Login(APIView):
     permission_classes = [AllowAny]
 
-    @extend_schema(
-        request=LoginSerializer,
-        responses={
-            200: OpenApiResponse(description='Login successful'),
-            401: OpenApiResponse(description='Authentication failed'),
-            400: OpenApiResponse(description='Invalid input')
-        },
-    )
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
         if serializer.is_valid():
@@ -155,14 +121,12 @@ class Login(APIView):
             user = authenticate(request, username=username, password=password)
             if user is not None:
                 login(request, user)
-
-                # 将会话 ID 作为 cookie 返回
                 response = Response({"detail": "Login successful"}, status=status.HTTP_200_OK)
                 response.set_cookie(
                     key='sessionid',
                     value=request.session.session_key,
                     httponly=True,
-                    secure=False,  # 在生产环境中使用 True
+                    secure=(settings.ENVIRONMENT == "production"),  # 在生产环境中使用 True
                     samesite='Lax'  # 根据需要设置
                 )
                 return response
@@ -172,10 +136,14 @@ class Login(APIView):
 
 
 class Logout(APIView):
-    permission_classes = [IsAuthenticated]
-
     def post(self, request):
-        logout(request)
-        response = Response({"detail": "Logout successful"}, status=status.HTTP_200_OK)
-        response.delete_cookie('sessionid')
+        current_url = request.data.get('currentUrl', "/")
+        if request.user.is_authenticated:
+            logout(request)
+            response = Response({"detail": "Logout successful", "redirectUrl": current_url}, status=status.HTTP_200_OK)
+            response.delete_cookie('sessionid')
+        else:
+            response = Response({"detail": "User is not logged in", "redirectUrl": current_url},
+                                status=status.HTTP_400_BAD_REQUEST)
+
         return response

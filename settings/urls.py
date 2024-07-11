@@ -27,17 +27,23 @@ from common.views import (
     send_test_notification,
     service_worker,
     tos,
-    BulletinListView
+    BulletinListView,
+    AboutView
+
 )
 from course_assessment.views import (
     CourseList,
     CourseView,
     LatestReviewView,
-    MyReviewView,
     ReviewAddView,
 )
-from user.views import Login, Logout, RegisterView, RequestVerificationCodeView
+from user.views import Login, Logout, RegisterView, VerificationCodeView
 
+api_patterns = [
+    path('about/', AboutView.as_view(), name='schema'),
+    path('review/', LatestReviewView.as_view()),
+    path('review/lastest', LatestReviewView.as_view()),
+]
 urlpatterns = [
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/schema/swagger-ui/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
@@ -57,11 +63,12 @@ urlpatterns = [
     path('course/<int:course_id>/', CourseView.as_view()),
     path('course/<int:course_id>/review_add/', ReviewAddView.as_view()),
     path('latest_review/', LatestReviewView.as_view()),
-    path('my_review/', MyReviewView.as_view()),
+
     path('captcha/', include('captcha.urls')),
     path('bulletins/', BulletinListView.as_view(), name='bulletin-list'),
     path('register/', RegisterView.as_view(), name='register'),
-    path('request-verification-code/', RequestVerificationCodeView.as_view(), name='request-verification-code'),
+    path('verification-code/', VerificationCodeView.as_view(), name='verification-code'),
+    path('api/', include((api_patterns, 'api'))),
 ]
 
 if "debug_toolbar" in settings.INSTALLED_APPS:

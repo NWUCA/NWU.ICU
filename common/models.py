@@ -15,7 +15,7 @@ class Announcement(models.Model):
     enabled = models.BooleanField(default=True)
 
 
-class Bulletins(models.Model):
+class Bulletin(models.Model):
     title = models.TextField()
     content = models.TextField()
     create_time = models.DateTimeField(auto_now_add=True)
@@ -28,3 +28,9 @@ class WebPushSubscription(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     update_time = models.DateTimeField(auto_now=True)
     subscription = models.JSONField()
+
+
+class About(models.Model):
+    content = models.TextField()
+    create_time = models.DateTimeField(auto_now_add=True)
+    update_time = models.DateTimeField(auto_now=True)

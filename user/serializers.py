@@ -1,3 +1,5 @@
+import re
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
@@ -14,6 +16,16 @@ class RegisterSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ('username', 'password', 'email')
+
+    def validate_password_complexity(self, password):
+        if len(password) < 8:
+            raise serializers.ValidationError("密码长度必须至少为8个字符。")
+        if not re.search(r'[A-Z]', password):
+            raise serializers.ValidationError("密码必须包含至少一个大写字母。")
+        if not re.search(r'[a-z]', password):
+            raise serializers.ValidationError("密码必须包含至少一个小写字母。")
+        if not re.search(r'[0-9]', password):
+            raise serializers.ValidationError("密码必须包含至少一个数字。")
 
     def create(self, validated_data):
         user = User.objects.create(

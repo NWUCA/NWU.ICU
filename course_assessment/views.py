@@ -2,10 +2,15 @@ import logging
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.serializers import serialize
 from django.db.models import Avg, Count, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
 from django.views.generic import ListView
+from rest_framework import status
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from course_assessment.models import Course, Review, ReviewForm, ReviewHistory
 
@@ -131,10 +136,21 @@ class ReviewAddView(LoginRequiredMixin, View):
         return redirect(f'/course/{course_id}/')
 
 
-class LatestReviewView(ListView):
-    template_name = 'latest_review.html'
+class LatestReviewView(APIView):
+    permission_classes = [AllowAny]
     model = Review
-    paginate_by = 10
+
+    def get(self, request):
+        review_set = self.model.objects.order_by('create_time')[:10]
+        review_list = []
+        for review in review_set:
+            temp_dict = {'author': "火星用户" if review.anonymous else review.created_by_id,
+                         'datetime': review.create_time,
+                         'course': review.course_id,
+                         'content': review.content,
+                         'edited': review.edited}
+            review_list.append(temp_dict)
+        return Response(review_list, status=status.HTTP_200_OK)
 
     def get_queryset(self):
         review_set = (
@@ -152,10 +168,8 @@ class LatestReviewView(ListView):
         return context
 
 
-class MyReviewView(LoginRequiredMixin, ListView):
-    template_name = 'my_review.html'
-    model = Review
-    paginate_by = 10
+class MyReviewView(APIView):
+    permission_classes = [AllowAny]
 
     def get_queryset(self):
         review_set = (
