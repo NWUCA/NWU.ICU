@@ -146,7 +146,7 @@ class LatestReviewView(APIView):
                          .order_by('-modify_time')
                          .select_related('created_by', 'course', 'course__school')
                          .prefetch_related('course__teachers')
-                     )[0:20]
+                     )[0:5]
         review_list = []
         for review in review_set:
             temp_dict = {
