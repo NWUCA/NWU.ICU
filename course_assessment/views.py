@@ -141,16 +141,29 @@ class LatestReviewView(APIView):
     model = Review
 
     def get(self, request):
-        review_set = self.model.objects.order_by('create_time')[:10]
+        review_set = (
+                         Review.objects.all()
+                         .order_by('-modify_time')
+                         .select_related('created_by', 'course', 'course__school')
+                         .prefetch_related('course__teachers')
+                     )[0:20]
         review_list = []
         for review in review_set:
-            temp_dict = {'author': "火星用户" if review.anonymous else review.created_by_id,
-                         'datetime': review.create_time,
-                         'course': review.course_id,
-                         'content': review.content,
-                         'edited': review.edited}
+            temp_dict = {
+                'author': "火星用户" if review.anonymous else review.created_by.nickname,
+                'datetime': review.modify_time,
+                'course': {"course_name": review.course.name, "course_id": review.course.id},
+                'content': review.content,
+                "teachers": [{"teacher_name": teacher.name, "teacher_id": teacher.id} for teacher in
+                             review.course.teachers.all()],
+                'edited': review.edited, }
             review_list.append(temp_dict)
-        return Response(review_list, status=status.HTTP_200_OK)
+        return Response({
+            "status": 200,
+            "message": "Get latest review successfully",
+            "errors": None,
+            "content": {"reviews": review_list, "total": len(review_list)}
+        }, status=status.HTTP_200_OK)
 
     def get_queryset(self):
         review_set = (
