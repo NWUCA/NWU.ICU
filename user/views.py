@@ -10,13 +10,13 @@ from django.core.exceptions import ValidationError
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
 from django.utils.encoding import force_bytes
-from django.utils.http import urlsafe_base64_encode
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.serializers import ValidationError
-from settings import settings
+from settings import development
 from .models import User
 from .models import VerificationCode
 from .serializers import LoginSerializer
@@ -62,7 +62,7 @@ class RegisterView(APIView):
         }, status=status.HTTP_400_BAD_REQUEST)
 
 
-class VerificationCodeView(APIView):
+class CaptchaView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
@@ -83,30 +83,41 @@ class VerificationCodeView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class PasswordResetRequestView(APIView):
+class PasswordResetView(APIView):
     permission_classes = [AllowAny]
+
+    def decode(self, uid: str, token: str):
+        uid = urlsafe_base64_decode(uid)
+        user = User.objects.get(pk=uid)
+        token_check = default_token_generator.check_token(user, token)
+        if token_check:
+            return Response({"detail": "Password reset link sent."}, status=status.HTTP_200_OK)
+        else:
+            Response({"detail": "Password reset link sent."}, status=status.HTTP_401_UNAUTHORIZED)
 
     def post(self, request):
         serializer = PasswordResetRequestSerializer(data=request.data)
         if serializer.is_valid():
+            username = serializer.validated_data['username']
             email = serializer.validated_data['email']
             try:
-                user = User.objects.get(email=email)
+                user = User.objects.get(username=username, email=email)
             except User.DoesNotExist:
-                return Response({"detail": "User with this email does not exist."}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"errors": "User with this email does not exist.", "content": None},
+                                status=status.HTTP_400_BAD_REQUEST)
 
             token = default_token_generator.make_token(user)
             uid = urlsafe_base64_encode(force_bytes(user.pk))
-            reset_link = request.build_absolute_uri(f'/reset-password/{uid}/{token}/')
+            reset_link = request.build_absolute_uri(f'/user/reset-password/{uid}/{token}/')
 
             mail_subject = 'Password Reset Request'
             message = render_to_string('password_reset_email.html', {
                 'user': user,
                 'reset_link': reset_link,
             })
-            send_mail(mail_subject, message, 'from@example.com', [user.email])
+            # send_mail(mail_subject, message, 'admin@nwu.icu', [user.email])
             return Response({"detail": "Password reset link sent."}, status=status.HTTP_200_OK)
-
+        # fixme: 加一个频率验证
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -126,7 +137,7 @@ class Login(APIView):
                     key='sessionid',
                     value=request.session.session_key,
                     httponly=True,
-                    secure=(settings.ENVIRONMENT == "production"),  # 在生产环境中使用 True
+                    secure=(not development.DEBUG),
                     samesite='Lax'  # 根据需要设置
                 )
                 return response

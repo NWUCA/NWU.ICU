@@ -38,12 +38,20 @@ from course_assessment.views import (
     ReviewAddView,
     MyReviewView
 )
-from user.views import Login, Logout, RegisterView, VerificationCodeView
+from user.views import Login, Logout, RegisterView, CaptchaView, PasswordResetView
 
 api_patterns = [
     path('about/', AboutView.as_view(), name='schema'),
+
+    # 课程评价
     path('review/my-review', MyReviewView.as_view()),
     path('review/lastest', LatestReviewView.as_view()),
+
+    # 用户
+    path('user/login/', Login.as_view(), name='login'),
+    path('user/logout/', Logout.as_view(), name='logout'),
+    path('user/register/', RegisterView.as_view(), name='register'),
+    path('user/reset/', PasswordResetView.as_view(), name='reset'),
 ]
 urlpatterns = [
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
@@ -59,16 +67,13 @@ urlpatterns = [
     path('api/save-subscription/', save_push_subscription),
     path('api/send-test-notification', send_test_notification),
     path('course_list/', CourseList.as_view()),
-    path('login/', Login.as_view(), name='login'),
-    path('logout/', Logout.as_view(), name='logout'),
     path('course/<int:course_id>/', CourseView.as_view()),
     path('course/<int:course_id>/review_add/', ReviewAddView.as_view()),
     path('latest_review/', LatestReviewView.as_view()),
-
     path('captcha/', include('captcha.urls')),
     path('bulletins/', BulletinListView.as_view(), name='bulletin-list'),
-    path('register/', RegisterView.as_view(), name='register'),
-    path('verification-code/', VerificationCodeView.as_view(), name='verification-code'),
+    path('verification-code/', CaptchaView.as_view(), name='verification-code'),
+
     path('api/', include((api_patterns, 'api'))),
 ]
 

@@ -75,7 +75,11 @@ class LoginSerializer(serializers.Serializer):
 
 
 class PasswordResetRequestSerializer(serializers.Serializer):
-    email = serializers.EmailField()
+    email = serializers.EmailField(required=True)
+    username = serializers.CharField(required=True)
+    new_password = serializers.CharField(write_only=True)
+    confirm_password = serializers.CharField(write_only=True)
+    # fixme: 在这里不应该输入新密码, 应该在重置链接的地方输入
 
 
 class PasswordResetSerializer(serializers.Serializer):
