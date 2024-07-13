@@ -167,8 +167,6 @@ class LatestReviewView(APIView):
                 'edited': review.edited, }
             review_list.append(temp_dict)
         return Response({
-            "status": 200,
-            "message": "Get latest review successfully",
             "errors": None,
             "content": {"reviews": review_list, "total": total}
         }, status=status.HTTP_200_OK)
