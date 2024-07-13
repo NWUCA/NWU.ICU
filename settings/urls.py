@@ -36,12 +36,13 @@ from course_assessment.views import (
     CourseView,
     LatestReviewView,
     ReviewAddView,
+    MyReviewView
 )
 from user.views import Login, Logout, RegisterView, VerificationCodeView
 
 api_patterns = [
     path('about/', AboutView.as_view(), name='schema'),
-    path('review/', LatestReviewView.as_view()),
+    path('review/my-review', MyReviewView.as_view()),
     path('review/lastest', LatestReviewView.as_view()),
 ]
 urlpatterns = [

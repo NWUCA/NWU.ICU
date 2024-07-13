@@ -2,7 +2,6 @@ import logging
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.core.serializers import serialize
 from django.db.models import Avg, Count, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
@@ -13,6 +12,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from course_assessment.models import Course, Review, ReviewForm, ReviewHistory
+from course_assessment.review_serializer import ReviewSerializer
 
 logger = logging.getLogger(__name__)
 
@@ -141,16 +141,24 @@ class LatestReviewView(APIView):
     model = Review
 
     def get(self, request):
-        review_set = (
-                         Review.objects.all()
-                         .order_by('-modify_time')
-                         .select_related('created_by', 'course', 'course__school')
-                         .prefetch_related('course__teachers')
-                     )[0:5]
+        current_page = int(request.query_params.get('currentPage', 1))
+        page_size = int(request.query_params.get('pageSize', 10))
+        desc = request.query_params.get('desc', '1')
+        review__all_set = (
+            Review.objects.all()
+            .order_by(('-' if desc == '1' else '') + 'modify_time')
+            .select_related('created_by', 'course', 'course__school')
+            .prefetch_related('course__teachers')
+        )
+        total = review__all_set.count()
+        review_set = review__all_set[(current_page - 1) * page_size:(current_page - 1) * page_size + page_size]
         review_list = []
         for review in review_set:
             temp_dict = {
-                'author': "火星用户" if review.anonymous else review.created_by.nickname,
+                'id': review.id,
+                'author': {"name": "匿名用户" if review.anonymous else review.created_by.nickname,
+                           "id": -1 if review.anonymous else review.created_by.id,
+                           "avatar_url": "https://www.loliapi.com/acg/pp/"},
                 'datetime': review.modify_time,
                 'course': {"course_name": review.course.name, "course_id": review.course.id},
                 'content': review.content,
@@ -162,33 +170,40 @@ class LatestReviewView(APIView):
             "status": 200,
             "message": "Get latest review successfully",
             "errors": None,
-            "content": {"reviews": review_list, "total": len(review_list)}
+            "content": {"reviews": review_list, "total": total}
         }, status=status.HTTP_200_OK)
-
-    def get_queryset(self):
-        review_set = (
-            self.model.objects.all()
-            .order_by('-create_time')
-            .select_related('created_by', 'course')
-            .prefetch_related('course__teachers')
-        )
-        return review_set
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['review_count'] = Review.objects.count()
-        context['course'] = Course.objects.all()
-        return context
 
 
 class MyReviewView(APIView):
     permission_classes = [AllowAny]
+    model = Review
 
-    def get_queryset(self):
+    def get(self, request):
+        desc = request.query_params.get('desc', '1')
         review_set = (
             self.model.objects.filter(created_by=self.request.user)
-            .order_by('-create_time')
+            .order_by(('-' if desc == '1' else '') + 'modify_time')
             .select_related('created_by', 'course')
             .prefetch_related('course__teachers')
         )
-        return review_set
+        my_review_list = []
+
+        for review in review_set:
+            content_history = ReviewSerializer(review).data
+            temp_dict = {
+                'id': review.id,
+                'anonymous': review.anonymous,
+                'datetime': review.modify_time,
+                'course': {"course_name": review.course.name, "course_id": review.course.id},
+                'content': {"current_content": review.content,
+                            "content_history": [x['content'] for x in content_history['review_history']]},
+                "teachers": [{"teacher_name": teacher.name, "teacher_id": teacher.id} for teacher in
+                             review.course.teachers.all()],
+            }
+            my_review_list.append(temp_dict)
+        return Response({
+            "status": 200,
+            "message": "Get my review successfully",
+            "errors": None,
+            "content": {"reviews": my_review_list}
+        }, status=status.HTTP_200_OK)
