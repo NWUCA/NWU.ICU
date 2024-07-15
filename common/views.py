@@ -7,19 +7,22 @@ from django.conf import settings as dj_settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, permission_required
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.http import FileResponse
 from django.http import HttpResponse
 from django.shortcuts import redirect, render
 from django.views import View
 from pywebpush import webpush
-from rest_framework import status
-from rest_framework.permissions import AllowAny
+from rest_framework import status, generics
+from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+import settings.settings
 from user.models import User
-from .models import Bulletin, About
+from .models import Bulletin, About, UploadedFile
 from .models import WebPushSubscription
-from .serializers import AboutSerializer, CaptchaSerializer
+from .serializers import AboutSerializer, CaptchaSerializer, UploadedFileSerializer
 from .serializers import BulletinSerializer
 
 
@@ -47,6 +50,37 @@ class BulletinListView(APIView):
 
 def index(request):
     return render(request, 'index.html')
+
+
+class FileUploadView(generics.CreateAPIView):
+    queryset = UploadedFile.objects.all()
+    serializer_class = UploadedFileSerializer
+    parser_classes = (MultiPartParser, FormParser)
+    permission_classes = [IsAuthenticated]
+
+    def create(self, request, *args, **kwargs):
+        file_obj = request.FILES['file']
+        if file_obj.size > settings.settings.FILE_UPLOAD_SIZE_LIMIT:
+            return Response({"error": "File too large. Size should not exceed 25 MB."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(created_by=request.user)
+
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+
+class FileDownloadView(APIView):
+    def get(self, request, file_uuid):
+        try:
+            file_instance = UploadedFile.objects.get(pk=file_uuid)
+        except UploadedFile.DoesNotExist:
+            return Response({"error": "File not found."}, status=status.HTTP_404_NOT_FOUND)
+        response = FileResponse(file_instance.file)
+        response['Content-Disposition'] = f'attachment; filename="{file_instance.file.name}"'
+        return response
 
 
 class TosView(APIView):

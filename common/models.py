@@ -1,5 +1,9 @@
+import uuid
+
 from django.conf import settings
 from django.db import models
+
+from user.models import User
 
 
 class Announcement(models.Model):
@@ -39,3 +43,10 @@ class About(models.Model):
     create_time = models.DateTimeField(auto_now_add=True)
     update_time = models.DateTimeField(auto_now=True)
     type = models.TextField(choices=TYPE_CHOICES, default='about')
+
+
+class UploadedFile(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    file = models.FileField(upload_to='uploads/')
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)

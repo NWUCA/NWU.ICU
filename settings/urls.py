@@ -28,6 +28,8 @@ from common.views import (
     AboutView,
     CaptchaView,
     TosView,
+    FileDownloadView,
+    FileUploadView,
 )
 from course_assessment.views import (
     LatestReviewView,
@@ -53,6 +55,10 @@ api_patterns = [
 
     # tos
     path('tos/', TosView.as_view(), name='captcha'),
+
+    # 文件上传
+    path('upload/', FileUploadView.as_view(), name='file-upload'),
+    path('download/<uuid:file_uuid>/', FileDownloadView.as_view(), name='file-download'),
 ]
 urlpatterns = [
     path('admin/', admin.site.urls),

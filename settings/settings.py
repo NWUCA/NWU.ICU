@@ -131,6 +131,8 @@ STATIC_URL = '/static/'
 STATICFILES_DIRS = [
     BASE_DIR / 'static',
 ]
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
 
 AUTH_USER_MODEL = 'user.User'
 
@@ -176,3 +178,4 @@ CAPTCHA_FILTER_FUNCTIONS = ('captcha.helpers.post_smooth',)
 CAPTCHA_TIMEOUT = 5  # 5 minutes
 CAPTCHA_IMAGE_BEFORE_FIELD = False
 CAPTCHA_IMAGE_SIZE = (120, 50)
+FILE_UPLOAD_SIZE_LIMIT = 25 * 1024 * 1024  # 25 MB size limit
