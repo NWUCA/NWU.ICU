@@ -2,20 +2,22 @@ import re
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import User
-from django.core.exceptions import ValidationError
 from rest_framework import serializers
 
-from .models import VerificationCode
-
-User = get_user_model()
+from common.serializers import CaptchaSerializer
 
 
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=True)
 
     class Meta:
-        model = User
+        model = get_user_model()
         fields = ('username', 'password', 'email')
+
+    def validate(self, data):
+        password = data.get('password')
+        self.validate_password_complexity(password)
+        return data
 
     def validate_password_complexity(self, password):
         if len(password) < 8:
@@ -28,6 +30,7 @@ class RegisterSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("密码必须包含至少一个数字。")
 
     def create(self, validated_data):
+        User = self.Meta.model
         user = User.objects.create(
             username=validated_data['username'],
             email=validated_data['email']
@@ -37,51 +40,43 @@ class RegisterSerializer(serializers.ModelSerializer):
         return user
 
 
-class UserRegistrationSerializer(serializers.ModelSerializer):
-    email = serializers.EmailField()
-    password = serializers.CharField(write_only=True)
-    password_confirm = serializers.CharField(write_only=True)
-    verification_code = serializers.CharField(write_only=True)
-
-    class Meta:
-        model = User
-        fields = ('username', 'email', 'password', 'password_confirm', 'verification_code')
-
-    def validate(self, data):
-        if data['password'] != data['password_confirm']:
-            raise serializers.ValidationError("Passwords do not match.")
-
-        if not VerificationCode.objects.filter(email=data['email'], code=data['verification_code']).exists():
-            raise ValidationError("Invalid verification code.")
-
-        return data
-
-    def create(self, validated_data):
-        user = User.objects.create_user(
-            username=validated_data['username'],
-            email=validated_data['email'],
-            password=validated_data['password']
-        )
-        return user
-
-
-class VerificationCodeSerializer(serializers.Serializer):
-    email = serializers.EmailField()
-
-
 class LoginSerializer(serializers.Serializer):
     username = serializers.CharField(required=True)
     password = serializers.CharField(required=True, write_only=True)
 
 
-class PasswordResetRequestSerializer(serializers.Serializer):
+class PasswordResetRequestSerializer(serializers.Serializer):  # 网页填写重置密码的表单
     email = serializers.EmailField(required=True)
     username = serializers.CharField(required=True)
-    new_password = serializers.CharField(write_only=True)
-    confirm_password = serializers.CharField(write_only=True)
-    # fixme: 在这里不应该输入新密码, 应该在重置链接的地方输入
+    captcha_key = serializers.CharField(required=True)
+    captcha_value = serializers.CharField(required=True)
+
+    def validate(self, data):
+        captcha_serializer = CaptchaSerializer(data={
+            'captcha_key': data.get('captcha_key'),
+            'captcha_value': data.get('captcha_value'),
+        })
+
+        if not captcha_serializer.is_valid():
+            raise serializers.ValidationError("Invalid captcha")
+
+        return data
 
 
-class PasswordResetSerializer(serializers.Serializer):
+class PasswordResetMailRequestSerializer(serializers.Serializer):  # 点击邮箱重置链接的表单
     new_password = serializers.CharField(write_only=True)
     confirm_password = serializers.CharField(write_only=True)
+    captcha_key = serializers.CharField(required=True)
+    captcha_value = serializers.CharField(required=True)
+
+    def validate(self, data):
+        captcha_serializer = CaptchaSerializer(data={
+            'captcha_key': data.get('captcha_key'),
+            'captcha_value': data.get('captcha_value'),
+        })
+
+        if not captcha_serializer.is_valid():
+            raise serializers.ValidationError("Invalid captcha")
+
+        if data['password'] != data['password_confirm']:
+            raise serializers.ValidationError("Passwords do not match.")
