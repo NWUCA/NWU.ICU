@@ -1,37 +1,67 @@
 import re
 
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import User
 from rest_framework import serializers
 
 from common.serializers import CaptchaSerializer
 
 
 class RegisterSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(
+        required=True
+    )
+    email = serializers.EmailField(
+        required=True
+    )
     password = serializers.CharField(write_only=True, required=True)
+    captcha_key = serializers.CharField(required=True)
+    captcha_value = serializers.CharField(required=True)
 
     class Meta:
         model = get_user_model()
-        fields = ('username', 'password', 'email')
+        fields = ('username', 'password', 'email', 'captcha_key', 'captcha_value')
 
     def validate(self, data):
+        # 先验证验证码
+        captcha_serializer = CaptchaSerializer(data={
+            'captcha_key': data.get('captcha_key'),
+            'captcha_value': data.get('captcha_value'),
+        })
+
+        if not captcha_serializer.is_valid():
+            raise serializers.ValidationError(captcha_serializer.errors)
+
+        user_model = self.Meta.model
+        username = data.get('username')
+        email = data.get('email')
+
+        if user_model.objects.filter(username=username).exists():
+            raise serializers.ValidationError({"username": "已存在一位使用该名字的用户。"})
+        if user_model.objects.filter(email=email).exists():
+            raise serializers.ValidationError({"email": "此邮箱已被注册。"})
+
         password = data.get('password')
         self.validate_password_complexity(password)
+
         return data
 
     def validate_password_complexity(self, password):
         if len(password) < 8:
             raise serializers.ValidationError("密码长度必须至少为8个字符。")
-        if not re.search(r'[A-Z]', password):
-            raise serializers.ValidationError("密码必须包含至少一个大写字母。")
-        if not re.search(r'[a-z]', password):
-            raise serializers.ValidationError("密码必须包含至少一个小写字母。")
-        if not re.search(r'[0-9]', password):
-            raise serializers.ValidationError("密码必须包含至少一个数字。")
+
+        pattern_checks = [
+            (r'[A-Z]', "密码必须包含至少一个大写字母。"),
+            (r'[a-z]', "密码必须包含至少一个小写字母。"),
+            (r'[0-9]', "密码必须包含至少一个数字。")
+        ]
+
+        for pattern, error_message in pattern_checks:
+            if not re.search(pattern, password):
+                raise serializers.ValidationError(error_message)
 
     def create(self, validated_data):
-        User = self.Meta.model
-        user = User.objects.create(
+        user_model = self.Meta.model
+        user = user_model.objects.create(
             username=validated_data['username'],
             email=validated_data['email']
         )

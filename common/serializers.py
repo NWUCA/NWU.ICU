@@ -15,9 +15,9 @@ class CaptchaSerializer(serializers.Serializer):
             captcha = CaptchaStore.objects.get(hashkey=captcha_key)
             if captcha.response != captcha_value.lower():
                 captcha.delete()
-                raise serializers.ValidationError("Invalid captcha")
+                raise serializers.ValidationError({"captcha": "验证码错误"})
         except CaptchaStore.DoesNotExist:
-            raise serializers.ValidationError("Invalid captcha key")
+            raise serializers.ValidationError({"captcha": "验证码已失效"})
         captcha.delete()
         return data
 

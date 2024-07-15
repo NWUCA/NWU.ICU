@@ -4,7 +4,6 @@ from django.contrib.auth import authenticate, login
 from django.contrib.auth import logout
 from django.contrib.auth.models import User
 from django.contrib.auth.tokens import default_token_generator
-from django.core.exceptions import ValidationError
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
 from django.utils.encoding import force_bytes
@@ -12,7 +11,6 @@ from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
-from rest_framework.serializers import ValidationError
 from rest_framework.views import APIView
 
 from settings import development
@@ -27,36 +25,23 @@ logger = logging.getLogger(__name__)
 class RegisterView(APIView):
     permission_classes = [AllowAny]
 
-    def post(self, request, *args, **kwargs):
+    def post(self, request):
         serializer = RegisterSerializer(data=request.data)
         if serializer.is_valid():
-            password = request.data.get("password")
-            try:
-                serializer.validate_password_complexity(password)
-            except ValidationError as e:
-                custom_errors = {"fields": {"password": list(e.detail)}}
-                return Response({
-                    "status": 400,
-                    "message": "Registration failed.",
-                    "errors": custom_errors
-                }, status=status.HTTP_400_BAD_REQUEST)
-
-            user = serializer.save()
+            serializer.save()
             return Response({
-                "status": 200,
                 "message": "Successfully registered.",
                 "errors": None
             }, status=status.HTTP_201_CREATED)
+        else:
+            custom_errors = {"fields": {}}
+            for field, errors in serializer.errors.items():
+                custom_errors["fields"][field] = [str(error) for error in errors]
 
-        custom_errors = {"fields": {}}
-        for field, errors in serializer.errors.items():
-            custom_errors["fields"][field] = [str(error) for error in errors]
-
-        return Response({
-            "status": 400,
-            "message": "Registration failed.",
-            "errors": custom_errors
-        }, status=status.HTTP_400_BAD_REQUEST)
+            return Response({
+                "message": "Registration failed.",
+                "errors": custom_errors
+            }, status=status.HTTP_400_BAD_REQUEST)
 
 
 class PasswordResetView(APIView):
