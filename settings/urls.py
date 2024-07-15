@@ -26,16 +26,11 @@ from common.views import (
     save_push_subscription,
     send_test_notification,
     service_worker,
-    tos,
-    BulletinListView,
     AboutView,
     CaptchaView,
 )
 from course_assessment.views import (
-    CourseList,
-    CourseView,
     LatestReviewView,
-    ReviewAddView,
     MyReviewView
 )
 from user.views import Login, Logout, RegisterView, PasswordResetView
@@ -66,16 +61,10 @@ urlpatterns = [
     path('manifest.json', manifest),
     path('serviceworker.js', service_worker),
     path('', index, name='homepage'),
-    path('tos/', tos),
     path('settings/', Settings.as_view()),
     path('api/save-subscription/', save_push_subscription),
     path('api/send-test-notification', send_test_notification),
-    path('course_list/', CourseList.as_view()),
-    path('course/<int:course_id>/', CourseView.as_view()),
-    path('course/<int:course_id>/review_add/', ReviewAddView.as_view()),
-    path('latest_review/', LatestReviewView.as_view()),
     path('captcha/', include('captcha.urls')),
-    path('bulletins/', BulletinListView.as_view(), name='bulletin-list'),
 
     path('api/', include((api_patterns, 'api'))),
 ]
