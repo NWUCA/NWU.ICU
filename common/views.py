@@ -73,6 +73,8 @@ class FileUploadView(generics.CreateAPIView):
 
 
 class FileDownloadView(APIView):
+    permission_classes = [AllowAny]
+
     def get(self, request, file_uuid):
         try:
             file_instance = UploadedFile.objects.get(pk=file_uuid)
