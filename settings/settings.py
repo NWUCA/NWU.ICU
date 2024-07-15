@@ -84,11 +84,12 @@ WSGI_APPLICATION = 'settings.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-        'OPTIONS': {
-            'timeout': 10,
-        },
+        'ENGINE': 'django.db.backends.postgresql_psycopg2',
+        'NAME': 'your_datebase_name',
+        'USER': 'your_datebase_user',
+        'PASSWORD': 'your_datebase_password',
+        'HOST': 'your_datebase_host',
+        'PORT': 'your_datebase_port',
     }
 }
 
@@ -176,4 +177,3 @@ CAPTCHA_FILTER_FUNCTIONS = ('captcha.helpers.post_smooth',)
 CAPTCHA_TIMEOUT = 5  # 5 minutes
 CAPTCHA_IMAGE_BEFORE_FIELD = False
 CAPTCHA_IMAGE_SIZE = (120, 50)
-
