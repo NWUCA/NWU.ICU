@@ -168,7 +168,6 @@ LOGGING = {
 }
 SESSION_COOKIE_AGE = 365 * 24 * 60 * 60  # 365 days, in seconds
 
-CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
 CAPTCHA_FONT_SIZE = 36
 CAPTCHA_LENGTH = 4
 CAPTCHA_CHALLENGE_FUNCT = 'captcha.helpers.random_char_challenge'
@@ -177,10 +176,4 @@ CAPTCHA_FILTER_FUNCTIONS = ('captcha.helpers.post_smooth',)
 CAPTCHA_TIMEOUT = 5  # 5 minutes
 CAPTCHA_IMAGE_BEFORE_FIELD = False
 CAPTCHA_IMAGE_SIZE = (120, 50)
-# django-silk is disabled due to lack of django 3.2 support
-# SILKY_AUTHENTICATION = True  # User must login
-# SILKY_AUTHORISATION = True  # User must have permissions
-# SILKY_PYTHON_PROFILER = True
-# SILKY_META = True
-# SILKY_MAX_RECORDED_REQUESTS = 10 ** 4
-# SILKY_MAX_RESPONSE_BODY_SIZE = 1024  # If response body>1024 bytes, ignore
+
