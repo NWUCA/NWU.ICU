@@ -49,8 +49,17 @@ def index(request):
     return render(request, 'index.html')
 
 
-def tos(request):
-    return render(request, 'tos.html')
+class TosView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        tos_content_database = About.objects.order_by('-update_time').filter(type="tos")
+        try:
+            tos_content = AboutSerializer(tos_content_database, many=True).data[0]
+        except IndexError:
+            tos_content = "Get about content failed"
+        return Response({"detail": tos_content, },
+                        status=status.HTTP_200_OK)
 
 
 class AboutView(APIView):

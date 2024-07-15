@@ -28,6 +28,7 @@ from common.views import (
     service_worker,
     AboutView,
     CaptchaView,
+    TosView,
 )
 from course_assessment.views import (
     LatestReviewView,
@@ -51,6 +52,8 @@ api_patterns = [
     # 验证码
     path('captcha/', CaptchaView.as_view(), name='captcha'),
 
+    # tos
+    path('tos/', TosView.as_view(), name='captcha'),
 ]
 urlpatterns = [
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
