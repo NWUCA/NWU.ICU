@@ -17,7 +17,6 @@ from django.conf import settings
 from django.contrib import admin
 from django.urls import include
 from django.urls import path
-from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
 
 from common.views import (
     Settings,
@@ -56,9 +55,6 @@ api_patterns = [
     path('tos/', TosView.as_view(), name='captcha'),
 ]
 urlpatterns = [
-    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
-    path('api/schema/swagger-ui/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
-    path('api/schema/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
     path('admin/', admin.site.urls),
     # path('silk/', include('silk.urls', namespace='silk')),
     path('manifest.json', manifest),

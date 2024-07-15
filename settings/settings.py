@@ -26,7 +26,6 @@ INSTALLED_APPS = [
     "crispy_bootstrap5",
     'captcha',
     'rest_framework',
-    'drf_spectacular',
     # 'silk',
     # below are django apps
     'django.contrib.admin',
@@ -56,7 +55,6 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
     ),
-    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 ROOT_URLCONF = 'settings.urls'
 
@@ -167,12 +165,6 @@ LOGGING = {
             'propagate': False,
         },
     },
-}
-SPECTACULAR_SETTINGS = {
-    'TITLE': 'NWU.ICU API',
-    'DESCRIPTION': 'NWU, but ICU',
-    'VERSION': '1.0.0',
-    'SERVE_INCLUDE_SCHEMA': False,
 }
 SESSION_COOKIE_AGE = 365 * 24 * 60 * 60  # 365 days, in seconds
 
