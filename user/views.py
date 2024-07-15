@@ -1,6 +1,4 @@
 import logging
-import random
-import string
 
 from django.contrib.auth import authenticate, login
 from django.contrib.auth import logout
@@ -14,15 +12,14 @@ from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
-from rest_framework.views import APIView
 from rest_framework.serializers import ValidationError
+from rest_framework.views import APIView
+
 from settings import development
 from .models import User
-from .models import VerificationCode
 from .serializers import LoginSerializer
 from .serializers import PasswordResetRequestSerializer
 from .serializers import RegisterSerializer
-from .serializers import VerificationCodeSerializer
 
 logger = logging.getLogger(__name__)
 
@@ -62,38 +59,8 @@ class RegisterView(APIView):
         }, status=status.HTTP_400_BAD_REQUEST)
 
 
-class CaptchaView(APIView):
-    permission_classes = [AllowAny]
-
-    def post(self, request):
-        serializer = VerificationCodeSerializer(data=request.data)
-        if serializer.is_valid():
-            email = serializer.validated_data['email']
-            code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
-
-            VerificationCode.objects.update_or_create(email=email, defaults={'code': code})
-
-            send_mail(
-                'Your verification code',
-                f'Your verification code is {code}',
-                'from@example.com',
-                [email]
-            )
-            return Response({"detail": "Verification code sent."}, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
 class PasswordResetView(APIView):
     permission_classes = [AllowAny]
-
-    def decode(self, uid: str, token: str):
-        uid = urlsafe_base64_decode(uid)
-        user = User.objects.get(pk=uid)
-        token_check = default_token_generator.check_token(user, token)
-        if token_check:
-            return Response({"detail": "Password reset link sent."}, status=status.HTTP_200_OK)
-        else:
-            Response({"detail": "Password reset link sent."}, status=status.HTTP_401_UNAUTHORIZED)
 
     def post(self, request):
         serializer = PasswordResetRequestSerializer(data=request.data)
@@ -110,15 +77,33 @@ class PasswordResetView(APIView):
             uid = urlsafe_base64_encode(force_bytes(user.pk))
             reset_link = request.build_absolute_uri(f'/user/reset-password/{uid}/{token}/')
 
-            mail_subject = 'Password Reset Request'
-            message = render_to_string('password_reset_email.html', {
+            mail_subject = '[NWU.ICU] Reset Password / 重置密码'
+            html_message = render_to_string('password_reset_email.html', {
                 'user': user,
                 'reset_link': reset_link,
             })
-            # send_mail(mail_subject, message, 'admin@nwu.icu', [user.email])
+            send_mail(
+                subject=mail_subject,
+                message=f'Hello {user}, Please go to the following page and choose a new password: {reset_link}',
+                from_email=development.EMAIL_HOST_USER,
+                recipient_list=[user.email],
+                html_message=html_message,
+            )
             return Response({"detail": "Password reset link sent."}, status=status.HTTP_200_OK)
-        # fixme: 加一个频率验证
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class PasswordMailResetView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, uid: str, token: str):
+        uid = urlsafe_base64_decode(uid)
+        user = User.objects.get(pk=uid)
+        token_check = default_token_generator.check_token(user, token)
+        if token_check:
+            return Response({"detail": "Password reset link sent."}, status=status.HTTP_200_OK)
+        else:
+            Response({"detail": "Password reset link sent."}, status=status.HTTP_401_UNAUTHORIZED)
 
 
 class Login(APIView):
