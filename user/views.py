@@ -95,21 +95,16 @@ class Login(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
+        if request.user.is_authenticated:
+            return Response({"detail": "You have already login"}, status=status.HTTP_400_BAD_REQUEST)
         serializer = LoginSerializer(data=request.data)
         if serializer.is_valid():
             username = serializer.validated_data['username']
             password = serializer.validated_data['password']
-            user = authenticate(request, username=username, password=password)
+            user = authenticate(username=username, password=password)
             if user is not None:
                 login(request, user)
                 response = Response({"detail": "Login successful"}, status=status.HTTP_200_OK)
-                response.set_cookie(
-                    key='sessionid',
-                    value=request.session.session_key,
-                    httponly=True,
-                    secure=(not development.DEBUG),
-                    samesite='Lax'  # 根据需要设置
-                )
                 return response
             else:
                 return Response({"detail": "Authentication failed."}, status=status.HTTP_401_UNAUTHORIZED)
