@@ -182,7 +182,7 @@ CAPTCHA_LENGTH = 4
 CAPTCHA_CHALLENGE_FUNCT = 'captcha.helpers.random_char_challenge'
 CAPTCHA_NOISE_FUNCTIONS = ('captcha.helpers.noise_arcs', 'captcha.helpers.noise_dots')
 CAPTCHA_FILTER_FUNCTIONS = ('captcha.helpers.post_smooth',)
-CAPTCHA_TIMEOUT = 5 * 60  # 5 minutes
+CAPTCHA_TIMEOUT = 5  # 5 minutes
 CAPTCHA_IMAGE_BEFORE_FIELD = False
 CAPTCHA_IMAGE_SIZE = (120, 50)
 # django-silk is disabled due to lack of django 3.2 support
