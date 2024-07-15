@@ -1,5 +1,7 @@
 import json
 
+from captcha.helpers import captcha_image_url
+from captcha.models import CaptchaStore
 from django import forms
 from django.conf import settings as dj_settings
 from django.contrib import messages
@@ -17,8 +19,23 @@ from rest_framework.views import APIView
 from user.models import User
 from .models import Bulletin, About
 from .models import WebPushSubscription
-from .serializers import AboutSerializer
+from .serializers import AboutSerializer, CaptchaSerializer
 from .serializers import BulletinSerializer
+
+
+class CaptchaView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        new_key = CaptchaStore.generate_key()
+        image_url = captcha_image_url(new_key)
+        return Response({"key": new_key, "image_url": image_url})
+
+    def post(self, request):
+        serializer = CaptchaSerializer(data=request.data)
+        if serializer.is_valid():
+            return Response({"message": "Captcha validated successfully!"}, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class BulletinListView(APIView):

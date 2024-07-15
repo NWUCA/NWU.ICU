@@ -28,8 +28,8 @@ from common.views import (
     service_worker,
     tos,
     BulletinListView,
-    AboutView
-
+    AboutView,
+    CaptchaView,
 )
 from course_assessment.views import (
     CourseList,
@@ -38,7 +38,7 @@ from course_assessment.views import (
     ReviewAddView,
     MyReviewView
 )
-from user.views import Login, Logout, RegisterView, CaptchaView, PasswordResetView
+from user.views import Login, Logout, RegisterView, PasswordResetView
 
 api_patterns = [
     path('about/', AboutView.as_view(), name='schema'),
@@ -52,6 +52,10 @@ api_patterns = [
     path('user/logout/', Logout.as_view(), name='logout'),
     path('user/register/', RegisterView.as_view(), name='register'),
     path('user/reset/', PasswordResetView.as_view(), name='reset'),
+
+    # 验证码
+    path('captcha/', CaptchaView.as_view(), name='captcha'),
+
 ]
 urlpatterns = [
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
@@ -72,7 +76,6 @@ urlpatterns = [
     path('latest_review/', LatestReviewView.as_view()),
     path('captcha/', include('captcha.urls')),
     path('bulletins/', BulletinListView.as_view(), name='bulletin-list'),
-    path('verification-code/', CaptchaView.as_view(), name='verification-code'),
 
     path('api/', include((api_patterns, 'api'))),
 ]
