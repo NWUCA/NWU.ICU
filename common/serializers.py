@@ -1,8 +1,8 @@
 from captcha.models import CaptchaStore
+from django.conf import settings
 from rest_framework import serializers
 
 from .models import Bulletin, About
-from .models import UploadedFile
 
 
 class CaptchaSerializer(serializers.Serializer):
@@ -12,6 +12,8 @@ class CaptchaSerializer(serializers.Serializer):
     def validate(self, data):
         captcha_key = data.get('captcha_key')
         captcha_value = data.get('captcha_value')
+        if settings.DEBUG:
+            return data
         try:
             captcha = CaptchaStore.objects.get(hashkey=captcha_key)
             if captcha.response != captcha_value.lower():
@@ -40,10 +42,3 @@ class AboutSerializer(serializers.Serializer):
     class Meta:
         model = About
         fields = ['content', 'create_time', 'update_time']
-
-
-class UploadedFileSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = UploadedFile
-        fields = ('id', 'file', 'uploaded_at', 'created_by')
-        read_only_fields = ('created_by',)
