@@ -13,6 +13,6 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='user',
             name='cookie',
-            field=models.BinaryField(),
+            field=models.JSONField(),
         ),
     ]
