@@ -13,7 +13,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from settings import development
+from django.conf import settings
 from .models import User
 from .serializers import LoginSerializer
 from .serializers import PasswordResetRequestSerializer
@@ -70,7 +70,7 @@ class PasswordResetView(APIView):
             send_mail(
                 subject=mail_subject,
                 message=f'Hello {user}, Please go to the following page and choose a new password: {reset_link}',
-                from_email=development.EMAIL_HOST_USER,
+                from_email=settings.EMAIL_HOST_USER,
                 recipient_list=[user.email],
                 html_message=html_message,
             )

@@ -170,6 +170,7 @@ LOGGING = {
 }
 SESSION_COOKIE_AGE = 365 * 24 * 60 * 60  # 365 days, in seconds
 
+# 验证码设置
 CAPTCHA_FONT_SIZE = 36
 CAPTCHA_LENGTH = 4
 CAPTCHA_CHALLENGE_FUNCT = 'captcha.helpers.random_char_challenge'
@@ -178,4 +179,6 @@ CAPTCHA_FILTER_FUNCTIONS = ('captcha.helpers.post_smooth',)
 CAPTCHA_TIMEOUT = 5  # 5 minutes
 CAPTCHA_IMAGE_BEFORE_FIELD = False
 CAPTCHA_IMAGE_SIZE = (120, 50)
+
+# 文件上传设置
 FILE_UPLOAD_SIZE_LIMIT = 25 * 1024 * 1024  # 25 MB size limit
