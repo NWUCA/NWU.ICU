@@ -68,14 +68,20 @@ class PasswordResetView(APIView):
                 'user': user,
                 'reset_link': reset_link,
             })
-            send_mail(
-                subject=mail_subject,
-                message=f'Hello {user}, 请访问以下页面来设置一个新密码: {reset_link}',
-                from_email=settings.EMAIL_HOST_USER,
-                recipient_list=[user.email],
-                html_message=html_message,
-            )
-            return Response({"detail": "Password reset link sent."}, status=status.HTTP_200_OK)
+            if settings.DEBUG:
+                return Response({
+                    "message": "You are in debug mode, so do not send email",
+                    "uid": uid,
+                    "token": token}, status=status.HTTP_200_OK)
+            else:
+                send_mail(
+                    subject=mail_subject,
+                    message=f'Hello {user}, 请访问以下页面来设置一个新密码: {reset_link}',
+                    from_email=settings.EMAIL_HOST_USER,
+                    recipient_list=[user.email],
+                    html_message=html_message,
+                )
+                return Response({"detail": "Password reset link sent."}, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
