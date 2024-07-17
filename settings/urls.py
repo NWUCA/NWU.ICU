@@ -37,9 +37,15 @@ from common.file.view import (
 )
 from course_assessment.views import (
     LatestReviewView,
-    MyReviewView
+    MyReviewView,
 )
-from user.views import Login, Logout, RegisterView, PasswordResetView
+from user.views import (
+    Login,
+    Logout,
+    RegisterView,
+    PasswordResetView,
+    PasswordMailResetView,
+)
 
 api_patterns = [
     path('about/', AboutView.as_view(), name='schema'),
@@ -53,6 +59,7 @@ api_patterns = [
     path('user/logout/', Logout.as_view(), name='logout'),
     path('user/register/', RegisterView.as_view(), name='register'),
     path('user/reset/', PasswordResetView.as_view(), name='reset'),
+    path('user/mail-reset/<str:uid>/<str:token>/', PasswordMailResetView.as_view(), name='mail-reset'),
 
     # 验证码
     path('captcha/', CaptchaView.as_view(), name='captcha'),

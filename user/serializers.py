@@ -45,7 +45,8 @@ class RegisterSerializer(serializers.ModelSerializer):
 
         return data
 
-    def validate_password_complexity(self, password):
+    @staticmethod
+    def validate_password_complexity(password):
         if len(password) < 8:
             raise serializers.ValidationError("密码长度必须至少为8个字符。")
 
@@ -108,5 +109,8 @@ class PasswordResetMailRequestSerializer(serializers.Serializer):  # 点击邮�
         if not captcha_serializer.is_valid():
             raise serializers.ValidationError("Invalid captcha")
 
-        if data['password'] != data['password_confirm']:
+        if data['new_password'] != data['confirm_password']:
             raise serializers.ValidationError("Passwords do not match.")
+        else:
+            RegisterSerializer.validate_password_complexity(data['new_password'])
+        return data
