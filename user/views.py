@@ -69,7 +69,7 @@ class PasswordResetView(APIView):
             })
             send_mail(
                 subject=mail_subject,
-                message=f'Hello {user}, Please go to the following page and choose a new password: {reset_link}',
+                message=f'Hello {user}, 请访问以下页面来设置一个新密码: {reset_link}',
                 from_email=settings.EMAIL_HOST_USER,
                 recipient_list=[user.email],
                 html_message=html_message,
