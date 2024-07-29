@@ -1,9 +1,7 @@
 import logging
 
-from django.contrib import messages
-from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Avg, Count, Q
-from django.shortcuts import get_object_or_404, redirect, render
+from django.shortcuts import get_object_or_404, render
 from django.views import View
 from django.views.generic import ListView
 from rest_framework import status
@@ -11,8 +9,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from course_assessment.models import Course, Review, ReviewForm, ReviewHistory
-from course_assessment.review_serializer import ReviewSerializer
+from course_assessment.models import Course, Review
+from course_assessment.serializer import MyReviewSerializer
 
 logger = logging.getLogger(__name__)
 
@@ -86,54 +84,29 @@ class CourseView(View):
         return render(request, 'course_detail.html', context=context)
 
 
-class ReviewAddView(LoginRequiredMixin, View):
-    def get(self, request, course_id):
-        course = get_object_or_404(Course, id=course_id)
-        context = {'course': course}
-        try:
-            user_review = Review.objects.get(course_id=course_id, created_by=request.user)
-            form = ReviewForm(instance=user_review)
-            context['modify'] = True
-        except Review.DoesNotExist:
-            form = ReviewForm()
-            context['modify'] = False
-        context['form'] = form
-        # print(type(form['difficulty']))
-        # print(form['difficulty'])
-        return render(request, 'review_add.html', context=context)
+class ReviewAddView(APIView):
+    model = Review
+    permission_classes = [IsAuthenticated]
 
-    def post(self, request, course_id):
-        try:
-            old_review = Review.objects.get(course_id=course_id, created_by=request.user)
-            old_content = old_review.content
-            modify = True
-            f = ReviewForm(request.POST, instance=old_review)
-            f.instance.edited = True
-        except Review.DoesNotExist:
-            modify = False
-            f = ReviewForm(request.POST)
-        f.instance.created_by = request.user
-        f.instance.course_id = course_id
-        if not f.is_valid():
-            messages.error(request, '表单字段错误')
-            return redirect(f'/course/{course_id}/')
-
-        review = f.save()
-        if not modify:
-            messages.success(request, '添加成功')
-            logger.error(f"{request.user} 为 {review.course} 课程添加了一条评价, 内容为: {review.content}")
-        else:
-            ReviewHistory.objects.create(
-                review=review,
-                content=old_content,
-            )
-            messages.success(request, '修改成功')
-            logger.error(
-                f"{request.user} 修改了 {review.course} 课程的一条评价.\n"
-                f"现内容为: {review.content}\n"
-                f"原内容为: {old_content}"
-            )
-        return redirect(f'/course/{course_id}/')
+    def post(self, request):
+        defaults = {
+            "course": Course.objects.get(id=request.data['course']),
+            "content": request.data['content'],
+            "created_by": request.user,
+            "rating": request.data['rating'],
+            "anonymous": request.data['anonymous'],
+            "edited": False,
+            "difficulty": request.data['difficulty'],
+            "grade": request.data['grade'],
+            "homework": request.data['homework'],
+            "reward": request.data['reward'],
+            "source": request.data['source'],
+        }
+        obj, created = self.model.objects.update_or_create(
+            defaults=defaults
+        )
+        return Response({"message": "Created" if created else "Updated", "course": obj.course.name},
+                        status=status.HTTP_201_CREATED)
 
 
 class LatestReviewView(APIView):
@@ -145,7 +118,7 @@ class LatestReviewView(APIView):
         page_size = int(request.query_params.get('pageSize', 10))
         desc = request.query_params.get('desc', '1')
         review__all_set = (
-            Review.objects.all()
+            self.model.objects.all()
             .order_by(('-' if desc == '1' else '') + 'modify_time')
             .select_related('created_by', 'course', 'course__school')
             .prefetch_related('course__teachers')
@@ -187,7 +160,7 @@ class MyReviewView(APIView):
         my_review_list = []
 
         for review in review_set:
-            content_history = ReviewSerializer(review).data
+            content_history = MyReviewSerializer(review).data
             temp_dict = {
                 'id': review.id,
                 'anonymous': review.anonymous,

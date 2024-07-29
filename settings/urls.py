@@ -38,6 +38,7 @@ from common.file.view import (
 from course_assessment.views import (
     LatestReviewView,
     MyReviewView,
+    ReviewAddView,
 )
 from user.views import (
     Login,
@@ -48,11 +49,12 @@ from user.views import (
 )
 
 api_patterns = [
-    path('about/', AboutView.as_view(), name='schema'),
+    path('about/', AboutView.as_view(), name='about'),
 
     # 课程评价
-    path('review/my-review', MyReviewView.as_view()),
-    path('review/lastest', LatestReviewView.as_view()),
+    path('review/my-review/', MyReviewView.as_view()),
+    path('review/lastest/', LatestReviewView.as_view()),
+    path('review/add/', ReviewAddView.as_view()),
 
     # 用户
     path('user/login/', Login.as_view(), name='login'),
