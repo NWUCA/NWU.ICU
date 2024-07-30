@@ -57,7 +57,7 @@ api_patterns = [
     path('review/add/', ReviewAddView.as_view()),
 
     # 用户
-    path('user/logi/', Login.as_view(), name='login'),
+    path('user/login/', Login.as_view(), name='login'),
     path('user/logout/', Logout.as_view(), name='logout'),
     path('user/register/', RegisterView.as_view(), name='register'),
     path('user/reset/', PasswordResetView.as_view(), name='reset'),

@@ -9,7 +9,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from course_assessment.models import Course, Review
+from course_assessment.models import Course, Review, ReviewHistory
 from course_assessment.serializer import MyReviewSerializer
 
 logger = logging.getLogger(__name__)
@@ -85,7 +85,8 @@ class CourseView(View):
 
 
 class ReviewAddView(APIView):
-    model = Review
+    review_model = Review
+    review_history_model = ReviewHistory
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -100,13 +101,18 @@ class ReviewAddView(APIView):
             "grade": request.data['grade'],
             "homework": request.data['homework'],
             "reward": request.data['reward'],
-            "source": request.data['source'],
         }
-        obj, created = self.model.objects.update_or_create(
+        obj, created = self.review_model.objects.update_or_create(
             defaults=defaults
         )
-        return Response({"message": "Created" if created else "Updated", "course": obj.course.name},
-                        status=status.HTTP_201_CREATED)
+        if not created:
+            defaults['edited'] = True
+            self.review_model.objects.update_or_create(
+                defaults=defaults
+            )
+            self.review_history_model.objects.create(review=obj, content=request.data['content'], )
+            return Response({"message": "Created" if created else "Updated", "course": obj.course.name},
+                            status=status.HTTP_201_CREATED)
 
 
 class LatestReviewView(APIView):
