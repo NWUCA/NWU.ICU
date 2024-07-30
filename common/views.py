@@ -57,7 +57,7 @@ class TosView(APIView):
         try:
             tos_content = AboutSerializer(tos_content_database, many=True).data[0]
         except IndexError:
-            tos_content = "Get about content failed"
+            tos_content = "Get tos content failed"
         return Response({"detail": tos_content, },
                         status=status.HTTP_200_OK)
 
