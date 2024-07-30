@@ -22,8 +22,6 @@ INSTALLED_APPS = [
     'common',
     'user',
     # below are 3rd apps
-    'crispy_forms',
-    "crispy_bootstrap5",
     'captcha',
     'rest_framework',
     # 'silk',
