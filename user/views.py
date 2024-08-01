@@ -11,7 +11,7 @@ from django.template.loader import render_to_string
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from rest_framework import status
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -149,6 +149,22 @@ class Login(APIView):
             else:
                 return Response({"detail": "Authentication failed."}, status=status.HTTP_401_UNAUTHORIZED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ProfileView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        User.objects.get(pk=request.user.id)
+        user_info = {
+            "id": request.user.id,
+            "username": request.user.username,
+            "email": request.user.email,
+            "date_joined": request.user.date_joined,
+            "nickname": request.user.nickname,
+            "avatar": request.user.avatar_uuid,
+        }
+        return Response({'message': user_info}, status=status.HTTP_200_OK)
 
 
 class Logout(APIView):

@@ -49,7 +49,7 @@ from user.views import (
     UsernameDuplicationView,
     RegisterView,
     PasswordResetView,
-    PasswordMailResetView,
+    PasswordMailResetView, ProfileView,
 )
 
 api_patterns = [
@@ -65,6 +65,7 @@ api_patterns = [
 
     # 用户
     path('user/login/', Login.as_view(), name='login'),
+    path('user/profile/', ProfileView.as_view(), name='profile'),
     path('user/logout/', Logout.as_view(), name='logout'),
     path('user/register/', RegisterView.as_view(), name='register'),
     path('user/username/', UsernameDuplicationView.as_view(), name='username'),
