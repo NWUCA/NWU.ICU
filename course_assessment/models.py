@@ -105,7 +105,8 @@ class Review(models.Model):
     # 不能使用 create_time 和 modify_time 是否相等来判断是否已编辑
     # 因为在 save model 的时候两者的时间会有微小的差异
     edited = models.BooleanField(verbose_name="已编辑", default=False)
-    like = models.IntegerField(default=0, verbose_name='点赞')
+    like_count = models.IntegerField(default=0, verbose_name='点赞')
+    unlike_count = models.IntegerField(default=0, verbose_name='点踩')
     difficulty = models.PositiveSmallIntegerField(verbose_name='课程难度', choices=DIFFICULTY_CHOICES)
     grade = models.PositiveSmallIntegerField(verbose_name='给分高低', choices=GRADE_CHOICES)
     homework = models.PositiveSmallIntegerField(verbose_name='作业多少', choices=HOMEWORK_CHOICES)
@@ -123,7 +124,10 @@ class ReviewHistory(models.Model):
     create_time = models.DateTimeField(auto_now_add=True)
 
 
-class ReviewForm(forms.ModelForm):
-    class Meta:
-        model = Review
-        fields = ['content', 'rating', 'difficulty', 'grade', 'homework', 'reward']
+class ReviewReply(models.Model):
+    review = models.ForeignKey(Review, on_delete=models.CASCADE)
+    content = models.TextField()
+    create_time = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE)
+    like_count = models.IntegerField(default=0, verbose_name='点赞')
+    unlike_count = models.IntegerField(default=0, verbose_name='点踩')

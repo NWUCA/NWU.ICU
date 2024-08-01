@@ -7,8 +7,10 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from course_assessment.models import Course, Review, ReviewHistory, School, Teacher, Semeseter
-from course_assessment.serializer import MyReviewSerializer, AddReviewSerializer, DeleteReviewSerializer
+from course_assessment.models import Course, Review, ReviewHistory, School, Teacher, Semeseter, ReviewReply
+from course_assessment.permissions import CustomPermission
+from course_assessment.serializer import MyReviewSerializer, AddReviewSerializer, DeleteReviewSerializer, \
+    AddReviewReplySerializer, DeleteReviewReplySerializer
 
 logger = logging.getLogger(__name__)
 
@@ -264,3 +266,57 @@ class MyReviewView(APIView):
             "errors": None,
             "content": {"reviews": my_review_list}
         }, status=status.HTTP_200_OK)
+
+
+class ReviewReplyView(APIView):
+    permission_classes = [CustomPermission]
+
+    def get(self, request, review_id):
+        try:
+            review = Review.objects.get(id=review_id)
+        except Review.DoesNotExist:
+            return Response({'message': 'review not found'}, status=status.HTTP_404_NOT_FOUND)
+        reply_list = []
+        try:
+            review_replies = ReviewReply.objects.order_by('create_time').filter(review=review)
+            for review_reply in review_replies:
+                reply_list.append({"id": review_reply.id,
+                                   "create_time": review_reply.create_time,
+                                   "content": review_reply.content,
+                                   "created_by_id": review_reply.created_by.id,
+                                   "created_by_name": review_reply.created_by.nickname,
+                                   'like': review_reply.like_count,
+                                   'unlike': review_reply.unlike_count, })
+        except ReviewReply.DoesNotExist:
+            pass
+
+        return Response({'message': reply_list}, status=status.HTTP_200_OK)
+
+    def post(self, request, review_id):
+        try:
+            review = Review.objects.get(id=review_id)
+        except Review.DoesNotExist:
+            return Response({'message': 'review not found'}, status=status.HTTP_404_NOT_FOUND)
+        serializer = AddReviewReplySerializer(data=request.data)
+        if serializer.is_valid():
+            ReviewReply.objects.create(review=review, content=serializer.validated_data['content'],
+                                       created_by=request.user, )
+            return Response({'message': 'create reply successfully'}, status=status.HTTP_201_CREATED)
+        else:
+            return Response({'message': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, review_id):
+        try:
+            review = Review.objects.get(id=review_id)
+        except Review.DoesNotExist:
+            return Response({'message': 'review not found'}, status=status.HTTP_404_NOT_FOUND)
+        serializer = DeleteReviewReplySerializer(data=request.data)
+        if serializer.is_valid():
+            try:
+                ReviewReply.objects.get(id=serializer.validated_data['reply_id'], review=review,
+                                        created_by=request.user).delete()
+            except ReviewReply.DoesNotExist:
+                return Response({'message': 'reply not found'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'message': 'review deleted successfully'}, status=status.HTTP_200_OK)
+        else:
+            return Response({'message': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)

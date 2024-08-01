@@ -41,7 +41,7 @@ from course_assessment.views import (
     ReviewAddView,
     ReviewDeleteView,
     CourseView,
-    TeacherView,
+    TeacherView, ReviewReplyView,
 )
 from user.views import (
     Login,
@@ -62,6 +62,7 @@ api_patterns = [
     path('review/delete/', ReviewDeleteView.as_view()),
     path('review/course/<int:course_id>/', CourseView.as_view()),
     path('review/teacher/<int:teacher_id>/', TeacherView.as_view()),
+    path('review/reply/<int:review_id>/', ReviewReplyView.as_view()),
 
     # 用户
     path('user/login/', Login.as_view(), name='login'),

@@ -25,3 +25,11 @@ class AddReviewSerializer(serializers.ModelSerializer):
 
 class DeleteReviewSerializer(serializers.Serializer):
     review_id = serializers.CharField(write_only=True, required=True)
+
+
+class AddReviewReplySerializer(serializers.Serializer):
+    content = serializers.CharField(write_only=True, required=True)
+
+
+class DeleteReviewReplySerializer(serializers.Serializer):
+    reply_id = serializers.IntegerField(write_only=True, required=True)
