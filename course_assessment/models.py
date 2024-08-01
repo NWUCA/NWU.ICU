@@ -50,7 +50,7 @@ class Course(models.Model):
         ('required', '必修'),
         ('optional', '选修'),
     )  # 从教务系统导入的课表中只有通识, 必修, 选修三类
-    course_id = models.CharField(max_length=30, verbose_name='课程号')
+    course_code = models.CharField(max_length=30, verbose_name='课程号')
     name = models.CharField(max_length=30, verbose_name='课程名称', db_index=True)
     teachers = models.ManyToManyField(Teacher, db_index=True, related_name='books')
     classification = models.TextField(choices=classification_choices, verbose_name='分类')
