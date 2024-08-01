@@ -109,7 +109,6 @@ class Review(models.Model):
     homework = models.PositiveSmallIntegerField(verbose_name='作业多少', choices=HOMEWORK_CHOICES)
     reward = models.PositiveSmallIntegerField(verbose_name='收获多少', choices=REWARD_CHOICES)
     source = models.CharField(verbose_name='来源', default='user', max_length=20)
-    # TODO: 文件/图片上传
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=['course', 'created_by'], name='unique_review')]
