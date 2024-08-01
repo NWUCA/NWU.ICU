@@ -16,7 +16,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import User
-from .serializers import LoginSerializer, PasswordResetMailRequestSerializer
+from .serializers import LoginSerializer, PasswordResetMailRequestSerializer, UsernameDuplicationSerializer
 from .serializers import PasswordResetRequestSerializer
 from .serializers import RegisterSerializer
 
@@ -43,6 +43,21 @@ class RegisterView(APIView):
                 "message": "Registration failed.",
                 "errors": custom_errors
             }, status=status.HTTP_400_BAD_REQUEST)
+
+
+class UsernameDuplicationView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = UsernameDuplicationSerializer(data=request.data)
+        if serializer.is_valid():
+            try:
+                User.objects.get(username=serializer.data['username'])
+            except User.DoesNotExist:
+                return Response({'message': 'Username usable.'}, status=status.HTTP_200_OK)
+            return Response({'message': 'Username already exists.'}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            return Response({'message': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class PasswordResetView(APIView):

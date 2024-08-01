@@ -43,6 +43,7 @@ from course_assessment.views import (
 from user.views import (
     Login,
     Logout,
+    UsernameDuplicationView,
     RegisterView,
     PasswordResetView,
     PasswordMailResetView,
@@ -60,6 +61,7 @@ api_patterns = [
     path('user/login/', Login.as_view(), name='login'),
     path('user/logout/', Logout.as_view(), name='logout'),
     path('user/register/', RegisterView.as_view(), name='register'),
+    path('user/username/', UsernameDuplicationView.as_view(), name='username'),
     path('user/reset/', PasswordResetView.as_view(), name='reset'),
     path('user/mail-reset/<str:uid>/<str:token>/', PasswordMailResetView.as_view(), name='mail-reset'),
 

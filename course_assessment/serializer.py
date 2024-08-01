@@ -20,5 +20,8 @@ class MyReviewSerializer(serializers.ModelSerializer):
 class AddReviewSerializer(serializers.ModelSerializer):
     class Meta:
         model = Review
-        fields = ['id', 'course', 'content', 'rating', 'anonymous',
-                  'edited', 'difficulty', 'grade', 'homework', 'reward', 'source']
+        fields = ['course', 'content', 'rating', 'anonymous', 'difficulty', 'grade', 'homework', 'reward']
+
+
+class DeleteReviewSerializer(serializers.Serializer):
+    review_id = serializers.CharField(write_only=True, required=True)

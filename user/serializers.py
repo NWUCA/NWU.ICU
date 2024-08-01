@@ -71,6 +71,10 @@ class RegisterSerializer(serializers.ModelSerializer):
         return user
 
 
+class UsernameDuplicationSerializer(serializers.Serializer):
+    username = serializers.CharField(required=True)
+
+
 class LoginSerializer(serializers.Serializer):
     username = serializers.CharField(required=True)
     password = serializers.CharField(required=True, write_only=True)
