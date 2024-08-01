@@ -7,7 +7,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from course_assessment.models import Course, Review, ReviewHistory, School, Teacher
+from course_assessment.models import Course, Review, ReviewHistory, School, Teacher, Semeseter
 from course_assessment.serializer import MyReviewSerializer, AddReviewSerializer, DeleteReviewSerializer
 
 logger = logging.getLogger(__name__)
@@ -71,6 +71,7 @@ class CourseView(APIView):
                     'grade': review.grade,
                     'homework': review.homework,
                     'reward': review.reward,
+                    'semester': review.semester,
                 })
         teachers_data = []
         for teacher in course.teachers.all():
@@ -114,6 +115,7 @@ class ReviewAddView(APIView):
                     grade=serializer.data['grade'],
                     homework=serializer.data['homework'],
                     reward=serializer.data['reward'],
+                    semester=Semeseter.objects.get(id=serializer.data['semester']),
                 )
                 return Response({'message': 'create review successfully'}, status=status.HTTP_201_CREATED)
             old_content = old_review.content
@@ -214,7 +216,8 @@ class LatestReviewView(APIView):
                 'content': review.content,
                 "teachers": [{"teacher_name": teacher.name, "teacher_id": teacher.id} for teacher in
                              review.course.teachers.all()],
-                'edited': review.edited, }
+                'edited': review.edited,
+                'semester': review.semester.name, }
             review_list.append(temp_dict)
         return Response({
             "errors": None,
@@ -231,7 +234,7 @@ class MyReviewView(APIView):
         review_set = (
             self.model.objects.filter(created_by=self.request.user)
             .order_by(('-' if desc == '1' else '') + 'modify_time')
-            .select_related('created_by', 'course')
+            .select_related('created_by', 'course', 'semester')
             .prefetch_related('course__teachers')
         )
         my_review_list = []
@@ -247,6 +250,7 @@ class MyReviewView(APIView):
                             "content_history": [x['content'] for x in content_history['review_history']]},
                 "teachers": [{"teacher_name": teacher.name, "teacher_id": teacher.id} for teacher in
                              review.course.teachers.all()],
+                'semester': review.semester.name,
             }
             my_review_list.append(temp_dict)
         return Response({

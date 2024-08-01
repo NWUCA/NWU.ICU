@@ -20,7 +20,7 @@ class MyReviewSerializer(serializers.ModelSerializer):
 class AddReviewSerializer(serializers.ModelSerializer):
     class Meta:
         model = Review
-        fields = ['course', 'content', 'rating', 'anonymous', 'difficulty', 'grade', 'homework', 'reward']
+        fields = ['course', 'content', 'rating', 'anonymous', 'difficulty', 'grade', 'homework', 'reward', 'semester']
 
 
 class DeleteReviewSerializer(serializers.Serializer):
