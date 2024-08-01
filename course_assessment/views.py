@@ -44,7 +44,7 @@ class CourseList(ListView):
 class CourseView(APIView):
     course_model = Course
     review_model = Review
-    school_mode = School
+    school_model = School
     permission_classes = [AllowAny]
 
     def get(self, request, course_id):
@@ -71,25 +71,27 @@ class CourseView(APIView):
                     'grade': review.grade,
                     'homework': review.homework,
                     'reward': review.reward,
-                    'semester': review.semester,
+                    'semester': review.semester.name,
                 })
         teachers_data = []
         for teacher in course.teachers.all():
             teachers_data.append({
-                'name': teacher.name,
                 'id': teacher.id,
+                'name': teacher.name,
                 'school': teacher.school.name if teacher.school else None,
             })
         course_info = {
             'id': course_id,
+            'course_code': course.course_code,
             'name': course.name,
             'created_by': course.created_by.username,
             'teachers': teachers_data,
             'semester': [semester.name for semester in course.semester.all()],
             'school': course.school.name,
+            'avg_rating': reviews.aggregate(Avg('rating'))['rating__avg'],
             'reviews': reviews_data
         }
-        return Response(course_info)
+        return Response({'message': course_info})
 
 
 class ReviewAddView(APIView):
