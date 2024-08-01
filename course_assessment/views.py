@@ -1,16 +1,14 @@
 import logging
 
 from django.db.models import Avg, Count, Q
-from django.shortcuts import get_object_or_404, render
-from django.views import View
 from django.views.generic import ListView
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from course_assessment.models import Course, Review, ReviewHistory
-from course_assessment.serializer import MyReviewSerializer
+from course_assessment.models import Course, Review, ReviewHistory, School
+from course_assessment.serializer import MyReviewSerializer, AddReviewSerializer, DeleteReviewSerializer
 
 logger = logging.getLogger(__name__)
 
@@ -43,45 +41,54 @@ class CourseList(ListView):
         return context
 
 
-class CourseView(View):
+class CourseView(APIView):
+    course_model = Course
+    review_model = Review
+    school_mode = School
+    permission_classes = [AllowAny]
+
     def get(self, request, course_id):
-        course = get_object_or_404(Course, id=course_id)
-        reviews = (
-            Review.objects.filter(course_id=course_id)
-            .select_related('created_by')
-            .order_by('-create_time')
-        )
-        aggregation = reviews.aggregate(
-            Avg('rating'), Avg('grade'), Avg('homework'), Avg('reward'), Avg('difficulty')
-        )
-
-        is_reviewed = (
-            False
-            if not request.user.is_authenticated
-            else reviews.filter(created_by=request.user).exists()
-        )
-
-        context = {
-            'course': course,
-            'reviews': reviews,
-            'rating': aggregation['rating__avg'],
-            'grade': Review.GRADE_CHOICES[round(aggregation['grade__avg']) - 1][1]
-            if aggregation['grade__avg']
-            else '暂无',
-            'homework': Review.HOMEWORK_CHOICES[round(aggregation['homework__avg']) - 1][1]
-            if aggregation['homework__avg']
-            else '暂无',
-            'reward': Review.REWARD_CHOICES[round(aggregation['reward__avg']) - 1][1]
-            if aggregation['reward__avg']
-            else '暂无',
-            'difficulty': Review.DIFFICULTY_CHOICES[round(aggregation['difficulty__avg']) - 1][1]
-            if aggregation['difficulty__avg']
-            else '暂无',
-            'is_reviewed': is_reviewed,
-            # 'review_histories': ReviewHistory.objects.filter(review__id__in=reviews),
+        try:
+            course = (self.course_model.objects
+                      .select_related('school', 'created_by')
+                      .prefetch_related('teachers', 'semester')
+                      .get(id=course_id))
+        except Course.DoesNotExist:
+            return Response({'message': 'course not find'}, status=status.HTTP_404_NOT_FOUND)
+        reviews = (Review.objects.filter(course_id=course_id)
+                   .select_related('created_by')
+                   .order_by('-create_time'))
+        reviews_data = []
+        for review in reviews:
+            if not review.anonymous:
+                reviews_data.append({
+                    'content': review.content,
+                    'rating': review.rating,
+                    'modify_time': review.modify_time,
+                    'edited': review.edited,
+                    'like': review.like,
+                    'difficulty': review.difficulty,
+                    'grade': review.grade,
+                    'homework': review.homework,
+                    'reward': review.reward,
+                })
+        teachers_data = []
+        for teacher in course.teachers.all():
+            teachers_data.append({
+                'name': teacher.name,
+                'id': teacher.id,
+                'school': teacher.school.name if teacher.school else None,
+            })
+        course_info = {
+            'id': course_id,
+            'name': course.name,
+            'created_by': course.created_by.username,
+            'teachers': teachers_data,
+            'semester': [semester.name for semester in course.semester.all()],
+            'school': course.school.name,
+            'reviews': reviews_data
         }
-        # print(context['review_histories'])
-        return render(request, 'course_detail.html', context=context)
+        return Response(course_info)
 
 
 class ReviewAddView(APIView):
@@ -90,29 +97,60 @@ class ReviewAddView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        defaults = {
-            "course": Course.objects.get(id=request.data['course']),
-            "content": request.data['content'],
-            "created_by": request.user,
-            "rating": request.data['rating'],
-            "anonymous": request.data['anonymous'],
-            "edited": False,
-            "difficulty": request.data['difficulty'],
-            "grade": request.data['grade'],
-            "homework": request.data['homework'],
-            "reward": request.data['reward'],
-        }
-        obj, created = self.review_model.objects.update_or_create(
-            defaults=defaults
-        )
-        if not created:
-            defaults['edited'] = True
-            self.review_model.objects.update_or_create(
-                defaults=defaults
-            )
-            self.review_history_model.objects.create(review=obj, content=request.data['content'], )
-            return Response({"message": "Created" if created else "Updated", "course": obj.course.name},
-                            status=status.HTTP_201_CREATED)
+        serializer = AddReviewSerializer(data=request.data)
+        if serializer.is_valid():
+            course = Course.objects.get(id=serializer.data['course'])
+            try:
+                old_review = self.review_model.objects.get(course=course, created_by=request.user)
+            except Review.DoesNotExist:
+                self.review_model.objects.create(
+                    course=course,
+                    content=serializer.data['content'],
+                    created_by=request.user,
+                    rating=serializer.data['rating'],
+                    anonymous=serializer.data['anonymous'],
+                    edited=False,
+                    difficulty=serializer.data['difficulty'],
+                    grade=serializer.data['grade'],
+                    homework=serializer.data['homework'],
+                    reward=serializer.data['reward'],
+                )
+                return Response({'message': 'create review successfully'}, status=status.HTTP_201_CREATED)
+            old_content = old_review.content
+            fields_to_update = ['content', 'rating', 'anonymous', 'difficulty', 'grade', 'homework', 'reward']
+            for field in fields_to_update:
+                setattr(old_review, field, serializer.data[field])
+            old_review.save()
+            if old_content != serializer.data['content']:
+                self.review_history_model.objects.create(review=old_review, content=serializer.data['content'])
+            return Response({'message': 'update review successfully'}, status=status.HTTP_201_CREATED)
+        else:
+            return Response({"message": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ReviewDeleteView(APIView):
+    review_model = Review
+    review_history_model = ReviewHistory
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = DeleteReviewSerializer(data=request.data)
+        if serializer.is_valid():
+            try:
+                review_id = self.review_model.objects.get(id=serializer.validated_data['review_id'])
+            except Review.DoesNotExist:
+                return Response({"message": "Review not exist"}, status=status.HTTP_400_BAD_REQUEST)
+            if review_id.created_by == request.user:
+                review_item_model = self.review_model.objects.get(id=review_id.id)
+                review_item_model.delete()
+                review_history_items = self.review_history_model.objects.filter(review_id=review_id.id)
+                for review_history_item in review_history_items:
+                    review_history_item.delete()
+                return Response({"message": "delete successfully"}, status=status.HTTP_200_OK)
+            else:
+                return Response({"message": "wrong user"}, status=status.HTTP_401_UNAUTHORIZED)
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class LatestReviewView(APIView):
