@@ -58,6 +58,8 @@ class Course(models.Model):
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, null=True)
     created_time = models.DateTimeField(auto_now_add=True)
     semester = models.ManyToManyField(Semeseter, verbose_name="开课学期")
+    average_rating = models.FloatField(default=0.0, verbose_name='平均评分')
+    normalized_rating = models.FloatField(default=0.0, verbose_name='归一化平均评分')
 
     def __str__(self):
         return f"{self.id}-{self.name}-{self.get_teachers()}"

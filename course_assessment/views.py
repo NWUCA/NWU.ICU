@@ -88,7 +88,8 @@ class CourseView(APIView):
             'teachers': teachers_data,
             'semester': [semester.name for semester in course.semester.all()],
             'school': course.school.name,
-            'avg_rating': reviews.aggregate(Avg('rating'))['rating__avg'],
+            'rating_avg': course.average_rating,
+            'normalized_rating_avg': course.normalized_rating,
             'reviews': reviews_data
         }
         return Response({'message': course_info})
@@ -173,7 +174,8 @@ class TeacherView(APIView):
         teacher_course_list = []
         for course in courses:
             reviews = Review.objects.filter(course=course)
-            rating_avg = reviews.aggregate(Avg('rating'))['rating__avg']
+            rating_avg = course.average_rating
+            normalized_avg_rating = course.normalized_rating
             review_count = reviews.count()
             teacher_course_list.append({
                 'course_id': course.id,
@@ -181,6 +183,7 @@ class TeacherView(APIView):
                 'course_code': course.course_code,
                 'course_name': course.name,
                 'rating_avg': rating_avg,
+                'normalized_rating_avg': normalized_avg_rating,
                 'review_count': review_count,
             })
         teacher_course_info = {
