@@ -7,7 +7,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from course_assessment.models import Course, Review, ReviewHistory, School
+from course_assessment.models import Course, Review, ReviewHistory, School, Teacher
 from course_assessment.serializer import MyReviewSerializer, AddReviewSerializer, DeleteReviewSerializer
 
 logger = logging.getLogger(__name__)
@@ -151,6 +151,39 @@ class ReviewDeleteView(APIView):
                 return Response({"message": "wrong user"}, status=status.HTTP_401_UNAUTHORIZED)
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class TeacherView(APIView):
+    model = Teacher
+    permission_classes = [AllowAny]
+
+    def get(self, request, teacher_id):
+        teacher = Teacher.objects.get(id=teacher_id)
+        teacher_info = {
+            'id': teacher.id,
+            'name': teacher.name,
+            'school': teacher.school.name if teacher.school else None,
+        }
+
+        courses = Course.objects.filter(teachers__id=teacher_id)
+        teacher_course_list = []
+        for course in courses:
+            reviews = Review.objects.filter(course=course)
+            rating_avg = reviews.aggregate(Avg('rating'))['rating__avg']
+            review_count = reviews.count()
+            teacher_course_list.append({
+                'course_id': course.id,
+                'course_semester': ",".join([semester.name for semester in course.semester.all()]),
+                'course_code': course.course_code,
+                'course_name': course.name,
+                'rating_avg': rating_avg,
+                'review_count': review_count,
+            })
+        teacher_course_info = {
+            'teacher_info': teacher_info,
+            "course_list": teacher_course_list
+        }
+        return Response({'message': teacher_course_info}, status=status.HTTP_200_OK)
 
 
 class LatestReviewView(APIView):
