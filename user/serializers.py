@@ -64,7 +64,8 @@ class RegisterSerializer(serializers.ModelSerializer):
         user_model = self.Meta.model
         user = user_model.objects.create(
             username=validated_data['username'],
-            email=validated_data['email']
+            email=validated_data['email'],
+            nickname=validated_data['username'],
         )
         user.set_password(validated_data['password'])
         user.save()
@@ -99,6 +100,29 @@ class PasswordResetRequestSerializer(serializers.Serializer):  # 网页填写重
 
 
 class PasswordResetMailRequestSerializer(serializers.Serializer):  # 点击邮箱重置链接的表单
+    new_password = serializers.CharField(write_only=True)
+    confirm_password = serializers.CharField(write_only=True)
+    captcha_key = serializers.CharField(required=True)
+    captcha_value = serializers.CharField(required=True)
+
+    def validate(self, data):
+        captcha_serializer = CaptchaSerializer(data={
+            'captcha_key': data.get('captcha_key'),
+            'captcha_value': data.get('captcha_value'),
+        })
+
+        if not captcha_serializer.is_valid():
+            raise serializers.ValidationError("Invalid captcha")
+
+        if data['new_password'] != data['confirm_password']:
+            raise serializers.ValidationError("Passwords do not match.")
+        else:
+            RegisterSerializer.validate_password_complexity(data['new_password'])
+        return data
+
+
+class PasswordResetWhenLoginSerializer(serializers.Serializer):  # 点击邮箱重置链接的表单
+    old_password = serializers.CharField(write_only=True)
     new_password = serializers.CharField(write_only=True)
     confirm_password = serializers.CharField(write_only=True)
     captcha_key = serializers.CharField(required=True)
