@@ -270,6 +270,29 @@ class MyReviewView(APIView):
         }, status=status.HTTP_200_OK)
 
 
+class MyReviewReplyView(APIView):
+    permission_classes = [IsAuthenticated]
+    model = ReviewReply
+
+    def get(self, request):
+        desc = request.query_params.get('desc', '1')
+        review_reply_set = (
+            self.model.objects.filter(created_by=self.request.user)
+            .order_by(('-' if desc == '1' else '') + 'create_time')
+            .select_related('created_by', 'review')
+        )
+        my_review_reply_list = []
+        for review_reply in review_reply_set:
+            my_review_reply_list.append({
+                'id': review_reply.id,
+                'content': review_reply.content,
+                'datetime': review_reply.create_time,
+                'reply': {'id': review_reply.review.id, 'content': review_reply.review.content},
+                'like': {'like': review_reply.like_count, 'dislike': review_reply.dislike_count},
+            })
+        return Response({'message': my_review_reply_list}, status=status.HTTP_200_OK)
+
+
 class ReviewReplyView(APIView):
     permission_classes = [CustomPermission]
 
