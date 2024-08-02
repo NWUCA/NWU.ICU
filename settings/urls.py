@@ -98,7 +98,7 @@ urlpatterns = [
     path('settings/', Settings.as_view()),
     path('api/save-subscription/', save_push_subscription),
     path('api/send-test-notification', send_test_notification),
-    path('captcha/', include('captcha.urls')),
+    path('api/captcha/', include('captcha.urls')),
 
     path('api/', include((api_patterns, 'api'))),
 ]
