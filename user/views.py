@@ -108,9 +108,9 @@ class PasswordMailResetView(APIView):
         uid = urlsafe_base64_decode(uid).decode()
         user = User.objects.get(pk=uid)
         if default_token_generator.check_token(user, token):
-            return Response(status=status.HTTP_200_OK)
+            return Response({'message': 'ok'}, status=status.HTTP_200_OK)
         else:
-            return Response(status=status.HTTP_400_BAD_REQUEST)
+            return Response({'message': 'no'}, status=status.HTTP_400_BAD_REQUEST)
 
     def post(self, request, uid: str, token: str):
         serializer = PasswordResetMailRequestSerializer(data=request.data)
