@@ -51,7 +51,7 @@ from user.views import (
     UsernameDuplicationView,
     RegisterView,
     PasswordResetView,
-    PasswordMailResetView, ProfileView,
+    PasswordMailResetView, ProfileView, PasswordResetWhenLoginView,
 )
 
 api_patterns = [
@@ -75,6 +75,7 @@ api_patterns = [
     path('user/register/', RegisterView.as_view(), name='register'),
     path('user/username/', UsernameDuplicationView.as_view(), name='username'),
     path('user/reset/', PasswordResetView.as_view(), name='reset'),
+    path('user/reset-login/', PasswordResetWhenLoginView.as_view(), name='reset-login'),
     path('user/mail-reset/<str:uid>/<str:token>/', PasswordMailResetView.as_view(), name='mail-reset'),
 
     # 验证码

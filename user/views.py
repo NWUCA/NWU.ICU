@@ -16,7 +16,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import User
-from .serializers import LoginSerializer, PasswordResetMailRequestSerializer, UsernameDuplicationSerializer
+from .serializers import LoginSerializer, PasswordResetMailRequestSerializer, UsernameDuplicationSerializer, \
+    PasswordResetWhenLoginSerializer
 from .serializers import PasswordResetRequestSerializer
 from .serializers import RegisterSerializer
 
@@ -129,6 +130,23 @@ class PasswordMailResetView(APIView):
             except User.DoesNotExist:
                 return Response({"detail": "未找到用户"}, status=status.HTTP_404_NOT_FOUND)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class PasswordResetWhenLoginView(APIView):  # todo
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = PasswordResetWhenLoginSerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            user = request.user
+            new_password = serializer.validated_data['new_password']
+            user.password = make_password(new_password)
+            user.save()
+            response = Response({"detail": "已成功重置密码, 即将登出"}, status=status.HTTP_200_OK)
+            response.delete_cookie('sessionid')
+            return response
+        else:
+            return Response({"detail": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class Login(APIView):

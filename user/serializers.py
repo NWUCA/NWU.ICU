@@ -136,9 +136,13 @@ class PasswordResetWhenLoginSerializer(serializers.Serializer):  # 点击邮箱�
 
         if not captcha_serializer.is_valid():
             raise serializers.ValidationError("Invalid captcha")
-
+        user = self.context['request'].user
+        if not user.check_password(data.get('old_password')):
+            raise serializers.ValidationError("旧密码不正确")
         if data['new_password'] != data['confirm_password']:
-            raise serializers.ValidationError("Passwords do not match.")
+            raise serializers.ValidationError("两次输入的密码不一致")
+        if user.check_password(data['confirm_password']):
+            raise serializers.ValidationError("新老密码不可以一致")
         else:
             RegisterSerializer.validate_password_complexity(data['new_password'])
         return data
