@@ -254,6 +254,7 @@ class MyReviewView(APIView):
                 'anonymous': review.anonymous,
                 'datetime': review.modify_time,
                 'course': {"course_name": review.course.name, "course_id": review.course.id},
+                'like': {'like': review.like_count, 'dislike': review.dislike_count},
                 'content': {"current_content": review.content,
                             "content_history": [x['content'] for x in content_history['review_history']]},
                 "teachers": [{"teacher_name": teacher.name, "teacher_id": teacher.id} for teacher in
@@ -287,7 +288,7 @@ class ReviewReplyView(APIView):
                                    "created_by_id": review_reply.created_by.id,
                                    "created_by_name": review_reply.created_by.nickname,
                                    'like': review_reply.like_count,
-                                   'unlike': review_reply.unlike_count, })
+                                   'dislike': review_reply.dislike_count, })
         except ReviewReply.DoesNotExist:
             pass
 
