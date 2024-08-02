@@ -51,7 +51,7 @@ from user.views import (
     UsernameDuplicationView,
     RegisterView,
     PasswordResetView,
-    PasswordMailResetView, ProfileView, PasswordResetWhenLoginView,
+    PasswordMailResetView, ProfileView, PasswordResetWhenLoginView, BindNwuEmailView,
 )
 
 api_patterns = [
@@ -75,8 +75,12 @@ api_patterns = [
     path('user/register/', RegisterView.as_view(), name='register'),
     path('user/username/', UsernameDuplicationView.as_view(), name='username'),
     path('user/reset/', PasswordResetView.as_view(), name='reset'),
-    path('user/reset-login/', PasswordResetWhenLoginView.as_view(), name='reset-login'),
     path('user/mail-reset/<str:uid>/<str:token>/', PasswordMailResetView.as_view(), name='mail-reset'),
+    path('user/reset-login/', PasswordResetWhenLoginView.as_view(), name='reset-login'),  # 通过旧密码在登录时重置密码
+    path('user/bind-nwu-email/<str:email_b64>/<str:uid>/<str:token>/', BindNwuEmailView.as_view(),
+         name='bind-nwu-email-get'),
+    path('user/bind-nwu-email/', BindNwuEmailView.as_view(),
+         name='bind-nwu-email-post'),
 
     # 验证码
     path('captcha/', CaptchaView.as_view(), name='captcha'),

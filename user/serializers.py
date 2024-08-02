@@ -146,3 +146,14 @@ class PasswordResetWhenLoginSerializer(serializers.Serializer):  # 点击邮箱�
         else:
             RegisterSerializer.validate_password_complexity(data['new_password'])
         return data
+
+
+class BindNwuEmailSerializer(serializers.Serializer):
+    nwu_email = serializers.EmailField(required=True)
+
+    def validate(self, data):
+        email = data.get('nwu_email')
+        if email.endswith('nwu.edu.cn'):
+            return data
+        else:
+            raise serializers.ValidationError("不是西北大学邮箱")

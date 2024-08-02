@@ -134,7 +134,13 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 AUTH_USER_MODEL = 'user.User'
-
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'unique-snowflake',
+    }
+}
+CACHE_TTL = 300
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
