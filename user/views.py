@@ -31,7 +31,7 @@ class RegisterView(APIView):
         if serializer.is_valid():
             serializer.save()
             return Response({
-                "message": "Successfully registered.",
+                "message": "注册成功!",
                 "errors": None
             }, status=status.HTTP_201_CREATED)
         else:
@@ -40,7 +40,7 @@ class RegisterView(APIView):
                 custom_errors["fields"][field] = [str(error) for error in errors]
 
             return Response({
-                "message": "Registration failed.",
+                "message": "注册失败",
                 "errors": custom_errors
             }, status=status.HTTP_400_BAD_REQUEST)
 
@@ -54,8 +54,8 @@ class UsernameDuplicationView(APIView):
             try:
                 User.objects.get(username=serializer.data['username'])
             except User.DoesNotExist:
-                return Response({'message': 'Username usable.'}, status=status.HTTP_200_OK)
-            return Response({'message': 'Username already exists.'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({'message': '用户名可用'}, status=status.HTTP_200_OK)
+            return Response({'message': '用户名已经存在'}, status=status.HTTP_400_BAD_REQUEST)
         else:
             return Response({'message': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -71,7 +71,7 @@ class PasswordResetView(APIView):
             try:
                 user = User.objects.get(username=username, email=email)
             except User.DoesNotExist:
-                return Response({"errors": "User with this email does not exist.", "content": None},
+                return Response({"errors": "使用这个邮箱的用户不存在", "content": None},
                                 status=status.HTTP_400_BAD_REQUEST)
 
             token = default_token_generator.make_token(user)
@@ -96,7 +96,7 @@ class PasswordResetView(APIView):
                     recipient_list=[user.email],
                     html_message=html_message,
                 )
-                return Response({"detail": "Password reset link sent."}, status=status.HTTP_200_OK)
+                return Response({"detail": "密码重置链接已经发送."}, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -123,11 +123,11 @@ class PasswordMailResetView(APIView):
                     new_password = serializer.validated_data['new_password']
                     user.password = make_password(new_password)
                     user.save()
-                    return Response({"detail": "Password has been reset successfully."}, status=status.HTTP_200_OK)
+                    return Response({"detail": "已成功重置密码!"}, status=status.HTTP_200_OK)
                 else:
-                    return Response({"detail": "Invalid token."}, status=status.HTTP_401_UNAUTHORIZED)
+                    return Response({"detail": "错误的Token"}, status=status.HTTP_401_UNAUTHORIZED)
             except User.DoesNotExist:
-                return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+                return Response({"detail": "未找到用户"}, status=status.HTTP_404_NOT_FOUND)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -136,7 +136,7 @@ class Login(APIView):
 
     def post(self, request):
         if request.user.is_authenticated:
-            return Response({"detail": "You have already login"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": "你已经登录"}, status=status.HTTP_400_BAD_REQUEST)
         serializer = LoginSerializer(data=request.data)
         if serializer.is_valid():
             username = serializer.validated_data['username']
@@ -144,10 +144,10 @@ class Login(APIView):
             user = authenticate(username=username, password=password)
             if user is not None:
                 login(request, user)
-                response = Response({"detail": "Login successful"}, status=status.HTTP_200_OK)
+                response = Response({"detail": "成功登录!"}, status=status.HTTP_200_OK)
                 return response
             else:
-                return Response({"detail": "Authentication failed."}, status=status.HTTP_401_UNAUTHORIZED)
+                return Response({"detail": "认证失败, 用户名或密码错误"}, status=status.HTTP_401_UNAUTHORIZED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -172,10 +172,10 @@ class Logout(APIView):
         current_url = request.data.get('currentUrl', "/")
         if request.user.is_authenticated:
             logout(request)
-            response = Response({"detail": "Logout successful", "redirectUrl": current_url}, status=status.HTTP_200_OK)
+            response = Response({"detail": "成功登出", "redirectUrl": current_url}, status=status.HTTP_200_OK)
             response.delete_cookie('sessionid')
         else:
-            response = Response({"detail": "User is not logged in", "redirectUrl": current_url},
+            response = Response({"detail": "用户尚未登录", "redirectUrl": current_url},
                                 status=status.HTTP_400_BAD_REQUEST)
 
         return response
