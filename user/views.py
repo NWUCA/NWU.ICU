@@ -94,7 +94,7 @@ class PasswordResetView(APIView):
             else:
                 send_mail(
                     subject=mail_subject,
-                    message=f'Hello {user}, 请访问以下页面来设置一个新密码: {reset_link}',
+                    message=f'Hello {user.nickname}, 请访问以下页面来设置一个新密码: {reset_link}',
                     from_email=settings.EMAIL_HOST_USER,
                     recipient_list=[user.email],
                     html_message=html_message,
@@ -109,7 +109,10 @@ class PasswordMailResetView(APIView):
     def get(self, request, uid, token):
         uid = urlsafe_base64_decode(uid).decode()
         user = User.objects.get(pk=uid)
+        if cache.get(token):
+            return Response({'message': 'Token已经被使用'}, status=status.HTTP_200_OK)
         if default_token_generator.check_token(user, token):
+            cache.set(token, True, settings.CACHE_TTL)
             return Response({'message': 'ok'}, status=status.HTTP_200_OK)
         else:
             return Response({'message': 'no'}, status=status.HTTP_400_BAD_REQUEST)
@@ -134,7 +137,7 @@ class PasswordMailResetView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class PasswordResetWhenLoginView(APIView):  # todo
+class PasswordResetWhenLoginView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
