@@ -131,3 +131,11 @@ class ReviewReply(models.Model):
     created_by = models.ForeignKey(User, on_delete=models.CASCADE)
     like_count = models.IntegerField(default=0, verbose_name='点赞')
     unlike_count = models.IntegerField(default=0, verbose_name='点踩')
+
+
+class ReviewAndReplyLike(models.Model):
+    review_reply = models.ForeignKey(ReviewReply, on_delete=models.CASCADE)
+    review = models.ForeignKey(Review, on_delete=models.CASCADE)
+    create_time = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE)
+    like = models.SmallIntegerField(default=0, null=True)
