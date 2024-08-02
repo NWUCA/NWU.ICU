@@ -1,5 +1,6 @@
-from django import forms
 from django.db import models
+from django.db.models.signals import post_save, post_delete
+from django.dispatch import receiver
 
 from user.models import User
 
@@ -106,7 +107,7 @@ class Review(models.Model):
     # 因为在 save model 的时候两者的时间会有微小的差异
     edited = models.BooleanField(verbose_name="已编辑", default=False)
     like_count = models.IntegerField(default=0, verbose_name='点赞')
-    unlike_count = models.IntegerField(default=0, verbose_name='点踩')
+    dislike_count = models.IntegerField(default=0, verbose_name='点踩')
     difficulty = models.PositiveSmallIntegerField(verbose_name='课程难度', choices=DIFFICULTY_CHOICES)
     grade = models.PositiveSmallIntegerField(verbose_name='给分高低', choices=GRADE_CHOICES)
     homework = models.PositiveSmallIntegerField(verbose_name='作业多少', choices=HOMEWORK_CHOICES)
@@ -130,12 +131,32 @@ class ReviewReply(models.Model):
     create_time = models.DateTimeField(auto_now_add=True)
     created_by = models.ForeignKey(User, on_delete=models.CASCADE)
     like_count = models.IntegerField(default=0, verbose_name='点赞')
-    unlike_count = models.IntegerField(default=0, verbose_name='点踩')
+    dislike_count = models.IntegerField(default=0, verbose_name='点踩')
 
 
 class ReviewAndReplyLike(models.Model):
-    review_reply = models.ForeignKey(ReviewReply, on_delete=models.CASCADE)
+    review_reply = models.ForeignKey(ReviewReply, on_delete=models.CASCADE, null=True)
     review = models.ForeignKey(Review, on_delete=models.CASCADE)
     create_time = models.DateTimeField(auto_now_add=True)
     created_by = models.ForeignKey(User, on_delete=models.CASCADE)
     like = models.SmallIntegerField(default=0, null=True)
+
+
+def update_like_dislike_counts(instance):
+    if instance.review and not instance.review_reply:
+        review = instance.review
+        review.like_count = ReviewAndReplyLike.objects.filter(review=review, like=1).count()
+        review.dislike_count = ReviewAndReplyLike.objects.filter(review=review, like=-1).count()
+        review.save()
+
+    if instance.review_reply:
+        review_reply = instance.review_reply
+        review_reply.like_count = ReviewAndReplyLike.objects.filter(review_reply=review_reply, like=1).count()
+        review_reply.dislike_count = ReviewAndReplyLike.objects.filter(review_reply=review_reply, like=-1).count()
+        review_reply.save()
+
+
+@receiver(post_save, sender=ReviewAndReplyLike)
+@receiver(post_delete, sender=ReviewAndReplyLike)
+def review_and_reply_like_changed(sender, instance, **kwargs):
+    update_like_dislike_counts(instance)

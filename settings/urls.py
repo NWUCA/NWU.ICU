@@ -18,6 +18,12 @@ from django.contrib import admin
 from django.urls import include
 from django.urls import path
 
+from common.file.view import (
+    FileDownloadView,
+    FileUploadView,
+    FileDeleteView,
+    FileUpdateView,
+)
 from common.views import (
     Settings,
     index,
@@ -29,19 +35,15 @@ from common.views import (
     CaptchaView,
     TosView,
 )
-from common.file.view import (
-    FileDownloadView,
-    FileUploadView,
-    FileDeleteView,
-    FileUpdateView,
-)
 from course_assessment.views import (
     LatestReviewView,
     MyReviewView,
     ReviewAddView,
     ReviewDeleteView,
     CourseView,
-    TeacherView, ReviewReplyView,
+    TeacherView,
+    ReviewReplyView,
+    ReviewAndReplyLikeView,
 )
 from user.views import (
     Login,
@@ -63,6 +65,7 @@ api_patterns = [
     path('review/course/<int:course_id>/', CourseView.as_view()),
     path('review/teacher/<int:teacher_id>/', TeacherView.as_view()),
     path('review/reply/<int:review_id>/', ReviewReplyView.as_view()),
+    path('review/reply/like/', ReviewAndReplyLikeView.as_view()),
 
     # 用户
     path('user/login/', Login.as_view(), name='login'),

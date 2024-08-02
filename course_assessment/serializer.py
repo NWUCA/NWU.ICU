@@ -1,4 +1,5 @@
 from rest_framework import serializers
+
 from .models import Review, ReviewHistory
 
 
@@ -14,7 +15,8 @@ class MyReviewSerializer(serializers.ModelSerializer):
     class Meta:
         model = Review
         fields = ['id', 'course', 'content', 'rating', 'created_by', 'anonymous', 'create_time', 'modify_time',
-                  'edited', 'like', 'difficulty', 'grade', 'homework', 'reward', 'source', 'review_history']
+                  'edited', 'like_count', 'dislike_count', 'difficulty', 'grade', 'homework', 'reward', 'source',
+                  'review_history']
 
 
 class AddReviewSerializer(serializers.ModelSerializer):
@@ -33,3 +35,9 @@ class AddReviewReplySerializer(serializers.Serializer):
 
 class DeleteReviewReplySerializer(serializers.Serializer):
     reply_id = serializers.IntegerField(write_only=True, required=True)
+
+
+class ReviewAndReplyLikeSerializer(serializers.Serializer):
+    review_id = serializers.IntegerField(write_only=True, required=True)
+    reply_id = serializers.IntegerField(write_only=True, required=True)
+    like_or_dislike = serializers.IntegerField(write_only=True, required=True)

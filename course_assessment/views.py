@@ -321,3 +321,44 @@ class ReviewReplyView(APIView):
             return Response({'message': '成功删除课程评价回复'}, status=status.HTTP_200_OK)
         else:
             return Response({'message': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ReviewAndReplyLikeView(APIView):
+    permission_classes = [CustomPermission]
+
+    def like_dislike_count(self, review_object, review_reply_object):
+        if review_reply_object:
+            review_reply_object.refresh_from_db()
+            return {'like': review_reply_object.like_count, 'dislike': review_reply_object.dislike_count}
+        else:
+            review_object.refresh_from_db()
+            return {'like': review_object.like_count, 'dislike': review_object.dislike_count}
+
+    def post(self, request):
+        serializer = ReviewAndReplyLikeSerializer(data=request.data)
+        if serializer.is_valid():
+
+            review_object = Review.objects.get(id=serializer.validated_data['review_id'])
+
+            review_reply_object = None if serializer.validated_data['reply_id'] == 0 else ReviewReply.objects.get(
+                id=serializer.validated_data['reply_id'])
+
+            try:
+                review_and_reply_like = ReviewAndReplyLike.objects.get(review=review_object, created_by=request.user,
+                                                                       review_reply=review_reply_object)
+            except ReviewAndReplyLike.DoesNotExist:
+                ReviewAndReplyLike.objects.create(review=review_object, review_reply=review_reply_object,
+                                                  like=serializer.validated_data['like_or_dislike'],
+                                                  created_by=request.user)
+                return Response({'message': self.like_dislike_count(review_object, review_reply_object)},
+                                status=status.HTTP_200_OK)
+
+            if serializer.validated_data['like_or_dislike'] == 0 or serializer.validated_data[
+                'like_or_dislike'] == review_and_reply_like.like:
+                review_and_reply_like.delete()
+            else:
+                review_and_reply_like.like = serializer.validated_data['like_or_dislike']
+                review_and_reply_like.save()
+
+            return Response({'message': self.like_dislike_count(review_object, review_reply_object)},
+                            status=status.HTTP_200_OK)
