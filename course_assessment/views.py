@@ -221,9 +221,9 @@ class LatestReviewView(APIView):
                            "id": -1 if review.anonymous else review.created_by.id,
                            "avatar_url": "https://www.loliapi.com/acg/pp/"},
                 'datetime': review.modify_time,
-                'course': {"course_name": review.course.name, "course_id": review.course.id},
+                'course': {"name": review.course.name, "id": review.course.id},
                 'content': review.content,
-                "teachers": [{"teacher_name": teacher.name, "teacher_id": teacher.id} for teacher in
+                "teachers": [{"name": teacher.name, "id": teacher.id} for teacher in
                              review.course.teachers.all()],
                 'edited': review.edited,
                 'semester': review.semester.name, }
@@ -264,10 +264,7 @@ class MyReviewView(APIView):
             }
             my_review_list.append(temp_dict)
         return Response({
-            "status": 200,
-            "message": "获取我的课程评价成功",
-            "errors": None,
-            "content": {"reviews": my_review_list}
+            "message": {"reviews": my_review_list}
         }, status=status.HTTP_200_OK)
 
 
