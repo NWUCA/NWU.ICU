@@ -221,12 +221,12 @@ class LatestReviewView(APIView):
                            "id": -1 if review.anonymous else review.created_by.id,
                            "avatar_url": "https://www.loliapi.com/acg/pp/"},
                 'datetime': review.modify_time,
-                'course': {"name": review.course.name, "id": review.course.id},
+                'course': {"name": review.course.name, "id": review.course.id, 'semester': review.semester.name, },
                 'content': review.content,
                 "teachers": [{"name": teacher.name, "id": teacher.id} for teacher in
                              review.course.teachers.all()],
                 'edited': review.edited,
-                'semester': review.semester.name, }
+            }
             review_list.append(temp_dict)
         return Response({
             "errors": None,
