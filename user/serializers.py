@@ -34,7 +34,10 @@ class RegisterSerializer(serializers.ModelSerializer):
         user_model = self.Meta.model
         username = data.get('username')
         email = data.get('email')
-
+        if not (4 <= len(username) <= 29):
+            raise serializers.ValidationError("用户名长度必须在4到29个字符之间")
+        if not re.match(r'^\w+$', username):
+            raise serializers.ValidationError("用户名只能包含字母、数字和下划线")
         if user_model.objects.filter(username=username).exists():
             raise serializers.ValidationError({"username": "已存在一位使用该名字的用户。"})
         if user_model.objects.filter(email=email).exists():
