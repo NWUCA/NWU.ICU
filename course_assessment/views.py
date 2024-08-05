@@ -219,7 +219,7 @@ class LatestReviewView(APIView):
                 'id': review.id,
                 'author': {"name": "匿名用户" if review.anonymous else review.created_by.nickname,
                            "id": -1 if review.anonymous else review.created_by.id,
-                           "avatar_url": "https://www.loliapi.com/acg/pp/"},
+                           "avatar_uuid": "183840a7-4099-41ea-9afa-e4220e379651" if review.anonymous else review.created_by.avatar_uuid},
                 'datetime': review.modify_time,
                 'course': {"name": review.course.name, "id": review.course.id, 'semester': review.semester.name, },
                 'content': review.content,

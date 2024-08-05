@@ -165,12 +165,19 @@ class BindNwuEmailSerializer(serializers.Serializer):
 
 class UpdateProfileSerializer(serializers.Serializer):
     nickname = serializers.CharField(required=False)
-    avatar = serializers.CharField()
+    avatar_uuid = serializers.CharField(required=False)
+    bio = serializers.CharField(required=False)
 
     def validate(self, data):
         if 'avatar' in data:
             try:
-                upload_model = UploadedFile.objects.get(id=data['avatar'])
+                UploadedFile.objects.get(id=data['avatar_uuid'])
             except UploadedFile.DoesNotExist:
                 raise serializers.ValidationError("头像uuid错误")
+        if 'nickname' in data:
+            if not (2 <= len(data['nickname']) <= 30):
+                raise serializers.ValidationError("昵称长度必须在2到30之间")
+            if not re.match(r'^[\u4e00-\u9fa5a-zA-Z0-9!@#$%^&*()_+~\-={}]+$', data['nickname']):
+                raise serializers.ValidationError("昵称只能包含汉字、英文字母、数字和!@#$%^&*()_+~\-={}")
+            return data
         return data

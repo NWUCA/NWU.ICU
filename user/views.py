@@ -190,6 +190,7 @@ class ProfileView(APIView):
         user_info = {
             "id": request.user.id,
             "username": request.user.username,
+            "bio": request.user.bio,
             "email": request.user.email,
             "date_joined": request.user.date_joined,
             "nickname": request.user.nickname,
@@ -209,10 +210,14 @@ class ProfileView(APIView):
                 "id": user.id,
                 "username": user.username,
                 "nickname": user.nickname,
-                "avatar": user.avatar,
+                "avatar_uuid": user.avatar_uuid,
+                "bio": user.bio,
             }
             return Response({"message": user_info}, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        error_list = []
+        for error in serializer.errors['non_field_errors']:
+            error_list.append(error)
+        return Response({'error': ",".join(error_list)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class BindNwuEmailView(APIView):
