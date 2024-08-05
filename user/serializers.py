@@ -3,6 +3,7 @@ import re
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
+from common.file.models import UploadedFile
 from common.serializers import CaptchaSerializer
 
 
@@ -160,3 +161,16 @@ class BindNwuEmailSerializer(serializers.Serializer):
             return data
         else:
             raise serializers.ValidationError("不是西北大学邮箱")
+
+
+class UpdateProfileSerializer(serializers.Serializer):
+    nickname = serializers.CharField(required=False)
+    avatar = serializers.CharField()
+
+    def validate(self, data):
+        if 'avatar' in data:
+            try:
+                upload_model = UploadedFile.objects.get(id=data['avatar'])
+            except UploadedFile.DoesNotExist:
+                raise serializers.ValidationError("头像uuid错误")
+        return data

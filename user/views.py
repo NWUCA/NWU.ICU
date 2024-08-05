@@ -19,7 +19,7 @@ from rest_framework.views import APIView
 
 from .models import User
 from .serializers import LoginSerializer, PasswordResetMailRequestSerializer, UsernameDuplicationSerializer, \
-    PasswordResetWhenLoginSerializer, BindNwuEmailSerializer
+    PasswordResetWhenLoginSerializer, BindNwuEmailSerializer, UpdateProfileSerializer
 from .serializers import PasswordResetRequestSerializer
 from .serializers import RegisterSerializer
 
@@ -194,8 +194,25 @@ class ProfileView(APIView):
             "date_joined": request.user.date_joined,
             "nickname": request.user.nickname,
             "avatar": request.user.avatar_uuid,
+            "nwu_email": request.user.nwu_email,
         }
         return Response({'message': user_info}, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        user = User.objects.get(pk=request.user.id)
+        serializer = UpdateProfileSerializer(data=request.data)
+        if serializer.is_valid():
+            for key, value in serializer.validated_data.items():
+                setattr(user, key, value)
+            user.save()
+            user_info = {
+                "id": user.id,
+                "username": user.username,
+                "nickname": user.nickname,
+                "avatar": user.avatar,
+            }
+            return Response({"message": user_info}, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class BindNwuEmailView(APIView):
