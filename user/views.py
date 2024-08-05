@@ -159,7 +159,7 @@ class Login(APIView):
 
     def post(self, request):
         if request.user.is_authenticated:
-            return Response({"detail": "你已经登录"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"message": "你已经登录"}, status=status.HTTP_400_BAD_REQUEST)
         serializer = LoginSerializer(data=request.data)
         if serializer.is_valid():
             username = serializer.validated_data['username']
@@ -170,7 +170,7 @@ class Login(APIView):
                 response = Response({"detail": "成功登录!"}, status=status.HTTP_200_OK)
                 return response
             else:
-                return Response({"detail": "认证失败, 用户名或密码错误"}, status=status.HTTP_401_UNAUTHORIZED)
+                return Response({"message": "认证失败, 用户名或密码错误"}, status=status.HTTP_401_UNAUTHORIZED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
