@@ -167,7 +167,15 @@ class Login(APIView):
             user = authenticate(username=username, password=password)
             if user is not None:
                 login(request, user)
-                response = Response({"detail": "成功登录!"}, status=status.HTTP_200_OK)
+                user_info = {
+                    "id": user.id,
+                    "username": user.username,
+                    "email": user.email,
+                    "date_joined": user.date_joined,
+                    "nickname": user.nickname,
+                    "avatar": user.avatar_uuid,
+                }
+                response = Response({"message": user_info}, status=status.HTTP_200_OK)
                 return response
             else:
                 return Response({"message": "认证失败, 用户名或密码错误"}, status=status.HTTP_401_UNAUTHORIZED)
