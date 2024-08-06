@@ -29,14 +29,61 @@ logger = logging.getLogger(__name__)
 class RegisterView(APIView):
     permission_classes = [AllowAny]
 
+    @staticmethod
+    def send_active_email(user: User, request):
+        email = user.email
+        email_base64 = base64.b64encode(email.encode("utf-8")).decode("utf-8")
+        mail_subject = '[NWU.ICU] 激活邮箱'
+        token = default_token_generator.make_token(user)
+        uid = urlsafe_base64_encode(force_bytes(user.pk))
+        active_link = request.build_absolute_uri(
+            f'/user/register/{email_base64}/{uid}/{token}/')  # todo 前端写一个这个, 请求/api/user/register/{email_base64}/{uid}/{token}/
+        html_message = render_to_string('active_email.html', {
+            'user': user,
+            'active_link': active_link,
+        })
+        if settings.DEBUG:
+            return Response({
+                "message": "You are in debug mode, so do not send email",
+                "email": email,
+                'link': active_link}, status=status.HTTP_200_OK)
+        else:
+            send_mail(
+                subject=mail_subject,
+                message=f'Hello {user.nickname}, 请访问以下页面来完成账号激活: {active_link}',
+                from_email=settings.EMAIL_HOST_USER,
+                recipient_list=[email],
+                html_message=html_message,
+            )
+        return Response({"message": "已发送邮件"}, status=status.HTTP_200_OK)
+
+    def get(self, request, email_b64, uid, token):
+        try:
+            uid = urlsafe_base64_decode(uid).decode()
+            user = User.objects.get(pk=uid)
+            email = base64.b64decode(email_b64).decode("utf-8")
+
+            if cache.get(token):
+                return Response({'message': 'Token 已经被使用'}, status=status.HTTP_400_BAD_REQUEST)
+
+            if default_token_generator.check_token(user, token):
+                user.email = email
+                user.is_active = True
+                user.save()
+                cache.set(token, True, settings.CACHE_TTL)
+                return Response({'message': email}, status=status.HTTP_200_OK)
+            else:
+                return Response({'message': '无效的 token'}, status=status.HTTP_400_BAD_REQUEST)
+        except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+            return Response({'message': '无效的请求'}, status=status.HTTP_400_BAD_REQUEST)
+
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save()
-            return Response({
-                "message": "注册成功!",
-                "errors": None
-            }, status=status.HTTP_201_CREATED)
+            user = serializer.save()
+            user.is_active = False
+            user.save()
+            return self.send_active_email(user, request)
         else:
             custom_errors = {"fields": {}}
             for field, errors in serializer.errors.items():
@@ -174,11 +221,25 @@ class Login(APIView):
                     "date_joined": user.date_joined,
                     "nickname": user.nickname,
                     "avatar": user.avatar_uuid,
+                    "bio": user.bio,
                 }
-                response = Response({"message": user_info}, status=status.HTTP_200_OK)
-                return response
+                return Response({"message": user_info}, status=status.HTTP_200_OK)
             else:
+                try:
+                    user = User.objects.get(username=username)
+                except User.DoesNotExist:
+                    return Response({"message": "用户不存在"}, status=status.HTTP_401_UNAUTHORIZED)
+                if not user.is_active:
+                    if user.check_password(serializer.validated_data['password']):
+                        if serializer.validated_data['send_email']:
+                            RegisterView.send_active_email(user, request)
+                            return Response({'message': '用户未激活邮箱, 已重新发送激活邮件'},
+                                            status=status.HTTP_401_UNAUTHORIZED)
+                        else:
+                            return Response({'message': '用户未激活邮箱'},
+                                            status=status.HTTP_401_UNAUTHORIZED)
                 return Response({"message": "认证失败, 用户名或密码错误"}, status=status.HTTP_401_UNAUTHORIZED)
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -254,7 +315,7 @@ class BindNwuEmailView(APIView):
             bind_link = request.build_absolute_uri(f'/user/bind-nwu-email/{email_base64}/{uid}/{token}/')
             html_message = render_to_string('password_reset_email.html', {
                 'user': user,
-                'reset_link': bind_link,
+                'bind_link': bind_link,
             })
             if settings.DEBUG:
                 return Response({

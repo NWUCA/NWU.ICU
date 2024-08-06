@@ -83,6 +83,7 @@ class UsernameDuplicationSerializer(serializers.Serializer):
 class LoginSerializer(serializers.Serializer):
     username = serializers.CharField(required=True)
     password = serializers.CharField(required=True, write_only=True)
+    send_email = serializers.BooleanField(required=False, default=False)
 
 
 class PasswordResetRequestSerializer(serializers.Serializer):  # 网页填写重置密码的表单
