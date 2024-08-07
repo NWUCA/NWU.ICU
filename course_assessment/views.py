@@ -255,13 +255,14 @@ class MyReviewView(APIView):
                 'id': review.id,
                 'anonymous': review.anonymous,
                 'datetime': review.modify_time,
-                'course': {"course_name": review.course.name, "course_id": review.course.id},
+                'course': {"name": review.course.name, "id": review.course.id,
+                           'semester': review.semester.name, },
                 'like': {'like': review.like_count, 'dislike': review.dislike_count},
                 'content': {"current_content": review.content,
                             "content_history": [x['content'] for x in content_history['review_history']]},
-                "teachers": [{"teacher_name": teacher.name, "teacher_id": teacher.id} for teacher in
+                "teachers": [{"name": teacher.name, "id": teacher.id} for teacher in
                              review.course.teachers.all()],
-                'semester': review.semester.name,
+
             }
             my_review_list.append(temp_dict)
         return Response({
@@ -284,9 +285,11 @@ class MyReviewReplyView(APIView):
         for review_reply in review_reply_set:
             my_review_reply_list.append({
                 'id': review_reply.id,
-                'content': review_reply.content,
+                'content': review_reply.review.content,
                 'datetime': review_reply.create_time,
-                'reply': {'id': review_reply.review.id, 'content': review_reply.review.content},
+                'course': {"name": review_reply.review.course.name, "id": review_reply.review.course.id,
+                           'semester': review_reply.review.semester.name, },
+                'reply': {'id': review_reply.review.id, 'content': review_reply.content},
                 'like': {'like': review_reply.like_count, 'dislike': review_reply.dislike_count},
             })
         return Response({'message': my_review_reply_list}, status=status.HTTP_200_OK)
@@ -360,8 +363,10 @@ class ReviewAndReplyLikeView(APIView):
     def post(self, request):
         serializer = ReviewAndReplyLikeSerializer(data=request.data)
         if serializer.is_valid():
-
-            review_object = Review.objects.get(id=serializer.validated_data['review_id'])
+            try:
+                review_object = Review.objects.get(id=serializer.validated_data['review_id'])
+            except Review.DoesNotExist:
+                return Response({'message': 'review not exist'}, status=status.HTTP_404_NOT_FOUND)
 
             review_reply_object = None if serializer.validated_data['reply_id'] == 0 else ReviewReply.objects.get(
                 id=serializer.validated_data['reply_id'])
