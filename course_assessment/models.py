@@ -8,7 +8,7 @@ from user.models import User
 class Semeseter(models.Model):
     """开课学期"""
 
-    name = models.CharField(max_length=20)
+    name = models.CharField(max_length=20, null=True, blank=True)
 
     def __str__(self):
         return self.name
@@ -59,8 +59,8 @@ class Course(models.Model):
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, null=True)
     created_time = models.DateTimeField(auto_now_add=True)
     semester = models.ManyToManyField(Semeseter, verbose_name="开课学期")
-    average_rating = models.FloatField(default=0.0, verbose_name='平均评分')
-    normalized_rating = models.FloatField(default=0.0, verbose_name='归一化平均评分')
+    average_rating = models.FloatField(default=0.0, verbose_name='平均评分', null=True)
+    normalized_rating = models.FloatField(default=0.0, verbose_name='归一化平均评分', null=True)
 
     def __str__(self):
         return f"{self.id}-{self.name}-{self.get_teachers()}"
@@ -113,7 +113,7 @@ class Review(models.Model):
     homework = models.PositiveSmallIntegerField(verbose_name='作业多少', choices=HOMEWORK_CHOICES)
     reward = models.PositiveSmallIntegerField(verbose_name='收获多少', choices=REWARD_CHOICES)
     source = models.CharField(verbose_name='来源', default='user', max_length=20)
-    semester = models.ForeignKey(Semeseter, on_delete=models.CASCADE, verbose_name="开课学期")
+    semester = models.ForeignKey(Semeseter, default=1, on_delete=models.CASCADE, verbose_name="开课学期")
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=['course', 'created_by'], name='unique_review')]
