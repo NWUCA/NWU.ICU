@@ -41,3 +41,8 @@ class ReviewAndReplyLikeSerializer(serializers.Serializer):
     review_id = serializers.IntegerField(write_only=True, required=True)
     reply_id = serializers.IntegerField(write_only=True, required=True)
     like_or_dislike = serializers.IntegerField(write_only=True, required=True)
+
+
+class CourseTeacherSearchSerializer(serializers.Serializer):
+    teacher_name = serializers.CharField(required=False)
+    course_name = serializers.CharField(required=False)

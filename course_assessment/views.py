@@ -11,7 +11,7 @@ from course_assessment.models import Course, Review, ReviewHistory, School, Teac
     ReviewAndReplyLike
 from course_assessment.permissions import CustomPermission
 from course_assessment.serializer import MyReviewSerializer, AddReviewSerializer, DeleteReviewSerializer, \
-    AddReviewReplySerializer, DeleteReviewReplySerializer, ReviewAndReplyLikeSerializer
+    AddReviewReplySerializer, DeleteReviewReplySerializer, ReviewAndReplyLikeSerializer, CourseTeacherSearchSerializer
 
 logger = logging.getLogger(__name__)
 
@@ -390,3 +390,37 @@ class ReviewAndReplyLikeView(APIView):
 
             return Response({'message': self.like_dislike_count(review_object, review_reply_object)},
                             status=status.HTTP_200_OK)
+
+
+class courseTeacherSearchView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = CourseTeacherSearchSerializer(data=request.data)
+        if serializer.is_valid():
+            return_list = {}
+            if serializer.validated_data.get('course_name'):
+                course_names = serializer.validated_data['course_name']
+                courses = (Course.objects.filter(name__icontains=course_names)
+                           .select_related('school', ).prefetch_related('teachers'))
+                course_list = []
+                for course in courses:
+                    course_list.append({
+                        'id': course.id,
+                        'classification': course.get_classification_display(),
+                        'name': course.name,
+                        'course_code': course.course_code,
+                        'teachers': [{'id': teacher.id, 'name': teacher.name} for teacher in course.teachers.all()],
+                        'school': course.school.name,
+
+                        'average_rating': course.average_rating,
+                        'normalized_rating': course.normalized_rating,
+                    })
+                return_list['course'] = course_list
+        return Response({'message': return_list}, status=status.HTTP_400_BAD_REQUEST)
+        # if serializer.validated_data['teacher_name']:
+        #     teacher_name = serializer.validated_data['teacher_name']
+        #     queries = [Q(name__iexact=course_name) for course_name in course_names]
+        #     combined_query = reduce(operator.or_, queries)
+        #     courses = Course.objects.filter(combined_query)
+        #     course_list = list(courses)

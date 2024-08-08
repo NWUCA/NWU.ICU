@@ -275,10 +275,8 @@ class ProfileView(APIView):
                 "bio": user.bio,
             }
             return Response({"message": user_info}, status=status.HTTP_200_OK)
-        error_list = []
-        for error in serializer.errors['non_field_errors']:
-            error_list.append(error)
-        return Response({'error': ",".join(error_list)}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class BindNwuEmailView(APIView):
