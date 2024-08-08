@@ -46,3 +46,4 @@ class ReviewAndReplyLikeSerializer(serializers.Serializer):
 class CourseTeacherSearchSerializer(serializers.Serializer):
     teacher_name = serializers.CharField(required=False)
     course_name = serializers.CharField(required=False)
+    search_flag = serializers.CharField(required=True)

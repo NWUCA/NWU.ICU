@@ -399,9 +399,37 @@ class courseTeacherSearchView(APIView):
         serializer = CourseTeacherSearchSerializer(data=request.data)
         if serializer.is_valid():
             return_list = {}
-            if serializer.validated_data.get('course_name'):
-                course_names = serializer.validated_data['course_name']
-                courses = (Course.objects.filter(name__icontains=course_names)
+            if serializer.validated_data.get('search_flag') == 'course_and_teacher':
+                course_name, teacher_name = serializer.validated_data.get('course_name'), serializer.validated_data.get(
+                    'teacher_name')
+                if course_name and teacher_name:
+                    courses = Course.objects.filter(
+                        Q(name__icontains=course_name) & Q(teachers__name__icontains=teacher_name)
+                    ).select_related('school').prefetch_related('teachers')
+                    course_list = []
+                    for course in courses:
+                        print(course.name, course.teachers.all())
+                        course_list.append({
+                            'course': {
+                                'id': course.id,
+                                'classification': course.get_classification_display(),
+                                'name': course.name,
+                                'course_code': course.course_code,
+                                'teachers': [{'id': teacher.id, 'name': teacher.name, 'school': teacher.school.name} for
+                                             teacher in
+                                             course.teachers.all()],
+                                'school': course.school.name,
+
+                                'average_rating': course.average_rating,
+                                'normalized_rating': course.normalized_rating,
+                            },
+                        })
+                    return Response({'message': course_list}, status.HTTP_200_OK)
+                else:
+                    return Response({'message': 'field missed'}, status=status.HTTP_400_BAD_REQUEST)
+            if serializer.validated_data.get('search_flag') == 'course':
+                course_name = serializer.validated_data['course_name']
+                courses = (Course.objects.filter(name__icontains=course_name)
                            .select_related('school', ).prefetch_related('teachers'))
                 course_list = []
                 for course in courses:
@@ -410,17 +438,26 @@ class courseTeacherSearchView(APIView):
                         'classification': course.get_classification_display(),
                         'name': course.name,
                         'course_code': course.course_code,
-                        'teachers': [{'id': teacher.id, 'name': teacher.name} for teacher in course.teachers.all()],
+                        'teachers': [{'id': teacher.id, 'name': teacher.name, 'school': teacher.school.name} for teacher
+                                     in course.teachers.all()],
                         'school': course.school.name,
 
                         'average_rating': course.average_rating,
                         'normalized_rating': course.normalized_rating,
                     })
                 return_list['course'] = course_list
-        return Response({'message': return_list}, status=status.HTTP_400_BAD_REQUEST)
-        # if serializer.validated_data['teacher_name']:
-        #     teacher_name = serializer.validated_data['teacher_name']
-        #     queries = [Q(name__iexact=course_name) for course_name in course_names]
-        #     combined_query = reduce(operator.or_, queries)
-        #     courses = Course.objects.filter(combined_query)
-        #     course_list = list(courses)
+
+            if serializer.validated_data.get('search_flag') == 'teacher':
+                teacher_name = serializer.validated_data['teacher_name']
+                teachers = Teacher.objects.filter(name__icontains=teacher_name).select_related('school')
+                teacher_list = []
+                for teacher in teachers:
+                    teacher_list.append({
+                        'id': teacher.id,
+                        'name': teacher.name,
+                        'school': teacher.school.name,
+                    })
+                return_list['teacher'] = teacher_list
+            return Response({'message': return_list}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            return Response({'message': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
