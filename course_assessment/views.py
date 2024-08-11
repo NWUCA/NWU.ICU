@@ -87,8 +87,7 @@ class CourseView(APIView):
         course_info = {
             'id': course_id,
             'course_code': course.course_code,
-            'name': course.name,
-            'created_by': course.created_by.username,
+            'name': course.get_name,
             'teachers': teachers_data,
             'semester': [semester.name for semester in course.semester.all()],
             'school': course.school.name,
@@ -185,7 +184,7 @@ class TeacherView(APIView):
                 'course_id': course.id,
                 'course_semester': ",".join([semester.name for semester in course.semester.all()]),
                 'course_code': course.course_code,
-                'course_name': course.name,
+                'course_name': course.get_name,
                 'rating_avg': rating_avg,
                 'normalized_rating_avg': normalized_avg_rating,
                 'review_count': review_count,
@@ -221,7 +220,7 @@ class LatestReviewView(APIView):
                            "id": -1 if review.anonymous else review.created_by.id,
                            "avatar_uuid": "183840a7-4099-41ea-9afa-e4220e379651" if review.anonymous else review.created_by.avatar_uuid},
                 'datetime': review.modify_time,
-                'course': {"name": review.course.name, "id": review.course.id, 'semester': review.semester.name, },
+                'course': {"name": review.course.get_name, "id": review.course.id, 'semester': review.semester.name, },
                 'content': review.content,
                 "teachers": [{"name": teacher.name, "id": teacher.id} for teacher in
                              review.course.teachers.all()],
@@ -255,7 +254,7 @@ class MyReviewView(APIView):
                 'id': review.id,
                 'anonymous': review.anonymous,
                 'datetime': review.modify_time,
-                'course': {"name": review.course.name, "id": review.course.id,
+                'course': {"name": review.course.get_name, "id": review.course.id,
                            'semester': review.semester.name, },
                 'like': {'like': review.like_count, 'dislike': review.dislike_count},
                 'content': {"current_content": review.content,
@@ -287,7 +286,7 @@ class MyReviewReplyView(APIView):
                 'id': review_reply.id,
                 'content': review_reply.review.content,
                 'datetime': review_reply.create_time,
-                'course': {"name": review_reply.review.course.name, "id": review_reply.review.course.id,
+                'course': {"name": review_reply.review.course.get_name, "id": review_reply.review.course.id,
                            'semester': review_reply.review.semester.name, },
                 'reply': {'id': review_reply.review.id, 'content': review_reply.content},
                 'like': {'like': review_reply.like_count, 'dislike': review_reply.dislike_count},
@@ -408,12 +407,11 @@ class courseTeacherSearchView(APIView):
                     ).select_related('school').prefetch_related('teachers')
                     course_list = []
                     for course in courses:
-                        print(course.name, course.teachers.all())
                         course_list.append({
                             'course': {
                                 'id': course.id,
                                 'classification': course.get_classification_display(),
-                                'name': course.name,
+                                'name': course.get_name,
                                 'course_code': course.course_code,
                                 'teachers': [{'id': teacher.id, 'name': teacher.name, 'school': teacher.school.name} for
                                              teacher in
@@ -436,7 +434,7 @@ class courseTeacherSearchView(APIView):
                     course_list.append({
                         'id': course.id,
                         'classification': course.get_classification_display(),
-                        'name': course.name,
+                        'name': course.get_name,
                         'course_code': course.course_code,
                         'teachers': [{'id': teacher.id, 'name': teacher.name, 'school': teacher.school.name} for teacher
                                      in course.teachers.all()],

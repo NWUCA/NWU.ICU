@@ -65,6 +65,10 @@ class Course(models.Model):
     def __str__(self):
         return f"{self.id}-{self.name}-{self.get_teachers()}"
 
+    @property
+    def get_name(self):
+        return self.name.replace('）', ')').replace('（', '(')
+
     def get_teachers(self):
         return ",".join([t.name for t in self.teachers.all()])
 
