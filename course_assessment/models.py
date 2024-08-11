@@ -1,3 +1,5 @@
+import re
+
 from django.db import models
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
@@ -21,6 +23,10 @@ class School(models.Model):
 
     def __str__(self):
         return self.name
+
+    @property
+    def get_name(self):
+        return re.sub(r'^\d+', '', self.name)
 
 
 class Teacher(models.Model):

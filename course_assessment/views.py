@@ -93,7 +93,7 @@ class CourseView(APIView):
             teachers_data.append({
                 'id': teacher.id,
                 'name': teacher.name,
-                'school': teacher.school.name if teacher.school else None,
+                'school': teacher.school.get_name if teacher.school else None,
             })
         course_info = {
             'id': course_id,
@@ -102,7 +102,7 @@ class CourseView(APIView):
             'category': course.get_classification_display(),
             'teachers': teachers_data,
             'semester': [semester.name for semester in course.semester.all()],
-            'school': course.school.name,
+            'school': course.school.get_name,
             'rating_avg': f"{course.average_rating:.1f}",
             'normalized_rating_avg': f"{course.normalized_rating:.1f}",
             'reviews': reviews_data
@@ -182,7 +182,7 @@ class TeacherView(APIView):
         teacher_info = {
             'id': teacher.id,
             'name': teacher.name,
-            'school': teacher.school.name if teacher.school else None,
+            'school': teacher.school.get_name if teacher.school else None,
         }
 
         courses = Course.objects.filter(teachers__id=teacher_id)
@@ -425,10 +425,10 @@ class courseTeacherSearchView(APIView):
                                 'classification': course.get_classification_display(),
                                 'name': course.get_name,
                                 'course_code': course.course_code,
-                                'teachers': [{'id': teacher.id, 'name': teacher.name, 'school': teacher.school.name} for
+                                'teachers': [{'id': teacher.id, 'name': teacher.name, 'school': teacher.school.get_name} for
                                              teacher in
                                              course.teachers.all()],
-                                'school': course.school.name,
+                                'school': course.school.get_name,
 
                                 'average_rating': course.average_rating,
                                 'normalized_rating': course.normalized_rating,
@@ -448,9 +448,9 @@ class courseTeacherSearchView(APIView):
                         'classification': course.get_classification_display(),
                         'name': course.get_name,
                         'course_code': course.course_code,
-                        'teachers': [{'id': teacher.id, 'name': teacher.name, 'school': teacher.school.name} for teacher
+                        'teachers': [{'id': teacher.id, 'name': teacher.name, 'school': teacher.school.get_name} for teacher
                                      in course.teachers.all()],
-                        'school': course.school.name,
+                        'school': course.school.get_name,
 
                         'average_rating': course.average_rating,
                         'normalized_rating': course.normalized_rating,
@@ -465,7 +465,7 @@ class courseTeacherSearchView(APIView):
                     teacher_list.append({
                         'id': teacher.id,
                         'name': teacher.name,
-                        'school': teacher.school.name,
+                        'school': teacher.school.get_name,
                     })
                 return_list['teacher'] = teacher_list
             return Response({'message': return_list}, status=status.HTTP_400_BAD_REQUEST)
