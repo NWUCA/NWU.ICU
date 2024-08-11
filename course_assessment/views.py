@@ -80,8 +80,9 @@ class CourseView(APIView):
                     'reward': review.get_reward_display(),
                     'semester': review.semester.name,
                     'reply': [{'content': reviewReply.content,
-                               'create_time': reviewReply.create_time,
-                               'create_by': {'id': review.created_by.id, 'name': review.created_by.nickname},
+                               'created_time': reviewReply.create_time,
+                               'created_by': {'id': review.created_by.id, 'name': review.created_by.nickname,
+                                              'avatar': review.created_by.avatar_uuid},
                                'like': {'like': reviewReply.like_count,
                                         'dislike': reviewReply.dislike_count}}
                               for reviewReply in reviewReplies]
