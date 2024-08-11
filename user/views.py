@@ -262,7 +262,7 @@ class ProfileView(APIView):
 
     def post(self, request):
         user = User.objects.get(pk=request.user.id)
-        serializer = UpdateProfileSerializer(data=request.data)
+        serializer = UpdateProfileSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             for key, value in serializer.validated_data.items():
                 setattr(user, key, value)

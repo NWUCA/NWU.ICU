@@ -63,19 +63,28 @@ class CourseView(APIView):
                    .order_by('-create_time'))
         reviews_data = []
         for review in reviews:
+            reviewReplies = ReviewReply.objects.filter(review=review).select_related('created_by').order_by(
+                '-create_time')
             if not review.anonymous:
                 reviews_data.append({
+                    'id': review.id,
                     'content': review.content,
                     'rating': review.rating,
                     'modify_time': review.modify_time,
                     'edited': review.edited,
                     'like': {'like': review.like_count,
                              'dislike': review.dislike_count},
-                    'difficulty': review.difficulty,
-                    'grade': review.grade,
-                    'homework': review.homework,
-                    'reward': review.reward,
+                    'difficulty': review.get_difficulty_display(),
+                    'grade': review.get_grade_display(),
+                    'homework': review.get_homework_display(),
+                    'reward': review.get_reward_display(),
                     'semester': review.semester.name,
+                    'reply': [{'content': reviewReply.content,
+                               'create_time': reviewReply.create_time,
+                               'create_by': {'id': review.created_by.id, 'name': review.created_by.nickname},
+                               'like': {'like': reviewReply.like_count,
+                                        'dislike': reviewReply.dislike_count}}
+                              for reviewReply in reviewReplies]
                 })
         teachers_data = []
         for teacher in course.teachers.all():
@@ -86,13 +95,14 @@ class CourseView(APIView):
             })
         course_info = {
             'id': course_id,
-            'course_code': course.course_code,
+            'code': course.course_code,
             'name': course.get_name,
+            'category': course.get_classification_display(),
             'teachers': teachers_data,
             'semester': [semester.name for semester in course.semester.all()],
             'school': course.school.name,
-            'rating_avg': course.average_rating,
-            'normalized_rating_avg': course.normalized_rating,
+            'rating_avg': f"{course.average_rating:.1f}",
+            'normalized_rating_avg': f"{course.normalized_rating:.1f}",
             'reviews': reviews_data
         }
         return Response({'message': course_info})

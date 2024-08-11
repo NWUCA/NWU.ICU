@@ -176,24 +176,27 @@ class UpdateProfileSerializer(serializers.Serializer):
     username = serializers.CharField(required=False)
     nickname = serializers.CharField(required=False)
     avatar_uuid = serializers.CharField(required=False)
-    bio = serializers.CharField(required=False)
+    bio = serializers.CharField(required=False, allow_null=True)
 
     def validate(self, data):
         if 'username' in data:
-            username = data.get('username')
-            if not (8 <= len(username) <= 29):
-                raise serializers.ValidationError("用户名长度必须在8到29个字符之间")
-            if not re.match(r'^\w+$', username):
-                raise serializers.ValidationError("用户名只能包含字母、数字和下划线")
-            pattern_checks = [
-                (r'[a-zA-Z]', "用户名必须包含至少一个字母。"),
-            ]
+            user = self.context['request'].user
 
-            for pattern, error_message in pattern_checks:
-                if not re.search(pattern, username):
-                    raise serializers.ValidationError(error_message)
-            if User.objects.filter(username=username).exists():
-                raise serializers.ValidationError({"username": "已存在一位使用该名字的用户。"})
+            username = data.get('username')
+            if username != user.username:
+                if not (8 <= len(username) <= 29):
+                    raise serializers.ValidationError("用户名长度必须在8到29个字符之间")
+                if not re.match(r'^\w+$', username):
+                    raise serializers.ValidationError("用户名只能包含字母、数字和下划线")
+                pattern_checks = [
+                    (r'[a-zA-Z]', "用户名必须包含至少一个字母。"),
+                ]
+
+                for pattern, error_message in pattern_checks:
+                    if not re.search(pattern, username):
+                        raise serializers.ValidationError(error_message)
+                if User.objects.filter(username=username).exists():
+                    raise serializers.ValidationError({"username": "已存在一位使用该名字的用户。"})
         if 'avatar' in data:
             try:
                 UploadedFile.objects.get(id=data['avatar_uuid'])
