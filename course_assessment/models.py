@@ -67,6 +67,8 @@ class Course(models.Model):
     semester = models.ManyToManyField(Semeseter, verbose_name="开课学期")
     average_rating = models.FloatField(default=0.0, verbose_name='平均评分', null=True)
     normalized_rating = models.FloatField(default=0.0, verbose_name='归一化平均评分', null=True)
+    like_count = models.IntegerField(default=0, verbose_name='推荐')
+    dislike_count = models.IntegerField(default=0, verbose_name='不推荐')
 
     def __str__(self):
         return f"{self.id}-{self.name}-{self.get_teachers()}"
@@ -152,7 +154,14 @@ class ReviewAndReplyLike(models.Model):
     like = models.SmallIntegerField(default=0, null=True)
 
 
-def update_like_dislike_counts(instance):
+class CourseLike(models.Model):
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, null=True)
+    create_time = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE)
+    like = models.SmallIntegerField(default=0, null=True)
+
+
+def update_review_reply_like_dislike_counts(instance):
     if instance.review and not instance.review_reply:
         review = instance.review
         review.like_count = ReviewAndReplyLike.objects.filter(review=review, like=1).count()
@@ -166,7 +175,20 @@ def update_like_dislike_counts(instance):
         review_reply.save()
 
 
+def update_course_like_dislike_counts(instance):
+    course = instance.course
+    course.like_count = CourseLike.objects.filter(course=course, like=1).count()
+    course.dislike_count = CourseLike.objects.filter(course=course, like=-1).count()
+    course.save()
+
+
 @receiver(post_save, sender=ReviewAndReplyLike)
 @receiver(post_delete, sender=ReviewAndReplyLike)
 def review_and_reply_like_changed(sender, instance, **kwargs):
-    update_like_dislike_counts(instance)
+    update_review_reply_like_dislike_counts(instance)
+
+
+@receiver(post_save, sender=CourseLike)
+@receiver(post_delete, sender=CourseLike)
+def course_like_changed(sender, instance, **kwargs):
+    update_course_like_dislike_counts(instance)

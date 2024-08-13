@@ -67,6 +67,7 @@ api_patterns = [
     path('review/teacher/<int:teacher_id>/', TeacherView.as_view()),
     path('review/reply/<int:review_id>/', ReviewReplyView.as_view()),
     path('review/reply/like/', ReviewAndReplyLikeView.as_view()),
+    path('review/course/like/', ReviewAndReplyLikeView.as_view()),
     path('review/search/', courseTeacherSearchView.as_view()),
 
     # 用户

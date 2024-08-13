@@ -403,6 +403,13 @@ class ReviewAndReplyLikeView(APIView):
                             status=status.HTTP_200_OK)
 
 
+class CourseLikeView(APIView):
+    permission_classes = [CustomPermission]
+
+    def post(self, request):
+        # todo
+        pass
+
 class courseTeacherSearchView(APIView):
     permission_classes = [AllowAny]
 
@@ -425,7 +432,8 @@ class courseTeacherSearchView(APIView):
                                 'classification': course.get_classification_display(),
                                 'name': course.get_name,
                                 'course_code': course.course_code,
-                                'teachers': [{'id': teacher.id, 'name': teacher.name, 'school': teacher.school.get_name} for
+                                'teachers': [{'id': teacher.id, 'name': teacher.name, 'school': teacher.school.get_name}
+                                             for
                                              teacher in
                                              course.teachers.all()],
                                 'school': course.school.get_name,
@@ -448,7 +456,8 @@ class courseTeacherSearchView(APIView):
                         'classification': course.get_classification_display(),
                         'name': course.get_name,
                         'course_code': course.course_code,
-                        'teachers': [{'id': teacher.id, 'name': teacher.name, 'school': teacher.school.get_name} for teacher
+                        'teachers': [{'id': teacher.id, 'name': teacher.name, 'school': teacher.school.get_name} for
+                                     teacher
                                      in course.teachers.all()],
                         'school': course.school.get_name,
 
