@@ -1,9 +1,9 @@
 from django.conf import settings
 from django.db import models
-from django.db.models import Q
 from django.utils import timezone
 
 from user.models import User
+from .signals import soft_delete_signal
 
 
 class Announcement(models.Model):
@@ -98,6 +98,7 @@ class SoftDeleteModel(models.Model):
         self.is_deleted = True
         self.deleted_at = timezone.now()
         self.save()
+        soft_delete_signal.send(sender=self.__class__, instance=self)
 
     def restore(self):
         self.is_deleted = False

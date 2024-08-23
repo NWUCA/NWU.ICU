@@ -1,7 +1,6 @@
 import logging
 
-from django.db.models import Avg, Count, Q
-from django.views.generic import ListView
+from django.db.models import Q
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -94,7 +93,7 @@ class ReviewView(APIView):
     review_history_model = ReviewHistory
     permission_classes = [CustomPermission]
 
-    def get(self, request):
+    def get(self, request):  # 最近课程评价
         current_page = int(request.query_params.get('currentPage', 1))
         page_size = int(request.query_params.get('pageSize', 10))
         desc = request.query_params.get('desc', '1')
@@ -134,7 +133,9 @@ class ReviewView(APIView):
             semester = Semeseter.objects.get(id=serializer.data['semester'])
 
             try:
-                review = self.review_model.objects.get(course=course, created_by=request.user)
+                review = self.review_model.all_objects.get(course=course, created_by=request.user)
+                if review.is_deleted:
+                    review.restore()
                 fields_to_update = ['content', 'rating', 'anonymous', 'difficulty', 'grade', 'homework', 'reward']
                 for field in fields_to_update:
                     setattr(review, field, serializer.data[field])
@@ -180,10 +181,10 @@ class ReviewView(APIView):
                 return Response({"message": "课程评价不存在"}, status=status.HTTP_400_BAD_REQUEST)
             if review_id.created_by == request.user:
                 review_item_model = self.review_model.objects.get(id=review_id.id)
-                review_item_model.deleted = True
+                review_item_model.soft_delete()
                 review_history_items = self.review_history_model.objects.filter(review_id=review_id.id)
                 for review_history_item in review_history_items:
-                    review_history_item.deleted = True
+                    review_history_item.soft_delete()
                 return Response({"message": "删除课程评价成功"}, status=status.HTTP_200_OK)
             else:
                 return Response({"message": "用户错误"}, status=status.HTTP_401_UNAUTHORIZED)

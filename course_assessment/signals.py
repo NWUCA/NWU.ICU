@@ -1,7 +1,9 @@
 from django.db.models import Avg, Sum, Count
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
-from .models import Review, Course
+
+from common.signals import soft_delete_signal
+from .models import Review, Course, ReviewAndReplyLike, CourseLike
 
 
 @receiver([post_save, post_delete], sender=Review)
@@ -34,4 +36,48 @@ def update_course_normalized_avg_rating(sender, instance, **kwargs):
 
     course.average_rating = average_rating
     course.normalized_rating = normalized_rating
+    course.save()
+
+
+def update_review_reply_like_dislike_counts(instance):
+    if instance.review and not instance.review_reply:
+        review = instance.review
+        review.like_count = ReviewAndReplyLike.objects.filter(review=review, like=1).count()
+        review.dislike_count = ReviewAndReplyLike.objects.filter(review=review, like=-1).count()
+        review.save()
+
+    if instance.review_reply:
+        review_reply = instance.review_reply
+        review_reply.like_count = ReviewAndReplyLike.objects.filter(review_reply=review_reply, like=1).count()
+        review_reply.dislike_count = ReviewAndReplyLike.objects.filter(review_reply=review_reply, like=-1).count()
+        review_reply.save()
+
+
+def update_course_like_dislike_counts(instance):
+    course = instance.course
+    course.like_count = CourseLike.objects.filter(course=course, like=1).count()
+    course.dislike_count = CourseLike.objects.filter(course=course, like=-1).count()
+    course.save()
+
+
+@receiver(post_save, sender=ReviewAndReplyLike)
+@receiver(post_delete, sender=ReviewAndReplyLike)
+def review_and_reply_like_changed(sender, instance, **kwargs):
+    update_review_reply_like_dislike_counts(instance)
+
+
+@receiver(post_save, sender=CourseLike)
+@receiver(post_delete, sender=CourseLike)
+def course_like_changed(sender, instance, **kwargs):
+    update_course_like_dislike_counts(instance)
+
+
+@receiver(post_save, sender=Review)
+@receiver(soft_delete_signal, sender=Review)
+def review_created(sender, instance, **kwargs):
+    course = instance.course
+    reviews_of_courses = Review.objects.filter(course=course)
+    semesters = {review.semester for review in reviews_of_courses}
+    course.semester.set(semesters)
+    course.last_review_time = instance.modify_time
     course.save()

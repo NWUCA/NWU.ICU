@@ -169,46 +169,5 @@ class CourseFollow(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True)
 
 
-def update_review_reply_like_dislike_counts(instance):
-    if instance.review and not instance.review_reply:
-        review = instance.review
-        review.like_count = ReviewAndReplyLike.objects.filter(review=review, like=1).count()
-        review.dislike_count = ReviewAndReplyLike.objects.filter(review=review, like=-1).count()
-        review.save()
-
-    if instance.review_reply:
-        review_reply = instance.review_reply
-        review_reply.like_count = ReviewAndReplyLike.objects.filter(review_reply=review_reply, like=1).count()
-        review_reply.dislike_count = ReviewAndReplyLike.objects.filter(review_reply=review_reply, like=-1).count()
-        review_reply.save()
 
 
-def update_course_like_dislike_counts(instance):
-    course = instance.course
-    course.like_count = CourseLike.objects.filter(course=course, like=1).count()
-    course.dislike_count = CourseLike.objects.filter(course=course, like=-1).count()
-    course.save()
-
-
-@receiver(post_save, sender=ReviewAndReplyLike)
-@receiver(post_delete, sender=ReviewAndReplyLike)
-def review_and_reply_like_changed(sender, instance, **kwargs):
-    update_review_reply_like_dislike_counts(instance)
-
-
-@receiver(post_save, sender=CourseLike)
-@receiver(post_delete, sender=CourseLike)
-def course_like_changed(sender, instance, **kwargs):
-    update_course_like_dislike_counts(instance)
-
-
-@receiver(post_save, sender=Review)
-@receiver(post_delete, sender=Review)
-def review_changed(sender, instance, **kwargs):
-    course = instance.course
-    review = instance
-    semesters = course.semester
-    if review.semester not in semesters:
-        course.semester.add(review.semester)
-    course.last_review_time = timezone.now()
-    course.save()
