@@ -37,7 +37,7 @@ class RegisterView(APIView):
         token = default_token_generator.make_token(user)
         uid = urlsafe_base64_encode(force_bytes(user.pk))
         active_link = request.build_absolute_uri(
-            f'/user/register/{email_base64}/{uid}/{token}/')  # todo 前端写一个这个, 请求/api/user/register/{email_base64}/{uid}/{token}/
+            f'/user/register/{email_base64}/{uid}/{token}/')
         html_message = render_to_string('active_email.html', {
             'user': user,
             'active_link': active_link,

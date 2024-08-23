@@ -47,3 +47,10 @@ class CourseTeacherSearchSerializer(serializers.Serializer):
     teacher_name = serializers.CharField(required=False)
     course_name = serializers.CharField(required=False)
     search_flag = serializers.CharField(required=True)
+
+
+class AddCourseSerializer(serializers.Serializer):
+    course_name = serializers.CharField(required=True)
+    teacher_name = serializers.CharField(required=True)
+    school_name = serializers.CharField(required=True)
+    course_page = serializers.CharField(required=False)

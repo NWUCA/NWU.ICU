@@ -36,7 +36,7 @@ from course_assessment.views import (
     CourseView,
     TeacherView,
     ReviewReplyView,
-    ReviewAndReplyLikeView, MyReviewReplyView, courseTeacherSearchView,
+    ReviewAndReplyLikeView, MyReviewReplyView, courseTeacherSearchView, CourseList,
 )
 from user.views import (
     Login,
@@ -51,15 +51,17 @@ api_patterns = [
     path('about/', AboutView.as_view(), name='about'),
 
     # 课程评价
-    path('review/my-review/', MyReviewView.as_view()),
-    path('review/my-review-reply/', MyReviewReplyView.as_view()),
-    path('review/review/', ReviewView.as_view()),
-    path('review/course/<int:course_id>/', CourseView.as_view()),
-    path('review/teacher/<int:teacher_id>/', TeacherView.as_view()),
-    path('review/reply/<int:review_id>/', ReviewReplyView.as_view()),
-    path('review/reply/like/', ReviewAndReplyLikeView.as_view()),
-    path('review/course/like/', ReviewAndReplyLikeView.as_view()),
-    path('review/search/', courseTeacherSearchView.as_view()),
+    path('assessment/my/review/', MyReviewView.as_view()),
+    path('assessment/my/reply/', MyReviewReplyView.as_view()),
+    path('assessment/review/', ReviewView.as_view()),
+    path('assessment/course/<int:page_size>/<int:current_page>/', CourseList.as_view()),
+    path('assessment/course/<int:course_id>/', CourseView.as_view()),
+    path('assessment/teacher/<int:teacher_id>/', TeacherView.as_view()),
+    path('assessment/teacher/', TeacherView.as_view()),
+    path('assessment/reply/<int:review_id>/', ReviewReplyView.as_view()),
+    path('assessment/reply/like/', ReviewAndReplyLikeView.as_view()),
+    path('assessment/course/like/', ReviewAndReplyLikeView.as_view()),
+    path('assessment/search/', courseTeacherSearchView.as_view()),
 
     # 用户
     path('user/login/', Login.as_view(), name='login'),

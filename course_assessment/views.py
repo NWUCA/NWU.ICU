@@ -1,5 +1,7 @@
 import logging
 
+from django.core.cache import cache
+from django.core.paginator import Paginator
 from django.db.models import Q
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -10,7 +12,8 @@ from course_assessment.models import Course, Review, ReviewHistory, School, Teac
     ReviewAndReplyLike
 from course_assessment.permissions import CustomPermission
 from course_assessment.serializer import MyReviewSerializer, AddReviewSerializer, DeleteReviewSerializer, \
-    AddReviewReplySerializer, DeleteReviewReplySerializer, ReviewAndReplyLikeSerializer, CourseTeacherSearchSerializer
+    AddReviewReplySerializer, DeleteReviewReplySerializer, ReviewAndReplyLikeSerializer, CourseTeacherSearchSerializer, \
+    AddCourseSerializer
 
 logger = logging.getLogger(__name__)
 
@@ -18,8 +21,29 @@ logger = logging.getLogger(__name__)
 class CourseList(APIView):
     permission_classes = [CustomPermission]
 
-    def get(self, request, desc=True, page_size=10, index=1):
-        courses = Course.objects.order_by('-last_review_time')
+    def get(self, request, desc=True, page_size=20, current_page=1):
+        time_order = ('' if desc else '-') + 'last_review_time'
+        total_key = 'total_courses_count'
+        total = cache.get(total_key)
+        if total is None:
+            total = Course.objects.count()
+            cache.set(total_key, total, 1800)  # 30minutes
+        courses = Course.objects.only('name', 'teachers', 'semester').order_by(time_order, 'like_count')
+        paginator = Paginator(courses, page_size)
+        course_page = paginator.get_page(current_page)
+        courses_list = [{'name': course.get_name,
+                         'teacher': course.get_teachers(),
+                         'semester':course.get_semester(),
+                         } for course in course_page.object_list]
+
+        return Response({
+            'total': total,
+            'courses': courses_list,
+            'has_next': course_page.has_next(),
+            'has_previous': course_page.has_previous(),
+            'current_page': course_page.number,
+            'num_pages': paginator.num_pages,
+        })
 
 
 class CourseView(APIView):
@@ -87,6 +111,10 @@ class CourseView(APIView):
         }
         return Response({'message': course_info})
 
+    def post(self,request):
+        serializer=AddCourseSerializer(data=request.data)
+        if serializer.is_valid():
+            teacher_name=serializer.validated_data['teacher']
 
 class ReviewView(APIView):
     review_model = Review
@@ -118,7 +146,7 @@ class ReviewView(APIView):
                 "teachers": [{"name": teacher.name, "id": teacher.id} for teacher in
                              review.course.teachers.all()],
                 'edited': review.edited,
-                'is_student': review.created_by.nwu_email is not None and not review.anonymous,
+                'is_student': review.created_by.nwu_email,
             }
             review_list.append(temp_dict)
         return Response({

@@ -1,9 +1,8 @@
 import re
 
+from django.contrib.postgres.indexes import GinIndex
+from django.contrib.postgres.search import SearchVectorField
 from django.db import models
-from django.db.models.signals import post_save, post_delete
-from django.dispatch import receiver
-from django.utils import timezone
 
 from common.models import SoftDeleteModel
 from user.models import User
@@ -82,6 +81,9 @@ class Course(models.Model):
 
     def get_teachers(self):
         return ",".join([t.name for t in self.teachers.all()])
+
+    def get_semester(self):
+        return " ".join([t.name for t in self.semester.all()])
 
     class Meta:
         ordering = ['school']
@@ -167,7 +169,3 @@ class CourseLike(models.Model):
 class CourseFollow(models.Model):
     course = models.ForeignKey(Course, on_delete=models.CASCADE, null=True)
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True)
-
-
-
-
