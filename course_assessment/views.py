@@ -13,7 +13,7 @@ from course_assessment.models import Course, Review, ReviewHistory, School, Teac
 from course_assessment.permissions import CustomPermission
 from course_assessment.serializer import MyReviewSerializer, AddReviewSerializer, DeleteReviewSerializer, \
     AddReviewReplySerializer, DeleteReviewReplySerializer, ReviewAndReplyLikeSerializer, CourseTeacherSearchSerializer, \
-    AddCourseSerializer
+    AddCourseSerializer, TeacherSerializer
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +33,7 @@ class CourseList(APIView):
         course_page = paginator.get_page(current_page)
         courses_list = [{'name': course.get_name,
                          'teacher': course.get_teachers(),
-                         'semester':course.get_semester(),
+                         'semester': course.get_semester(),
                          } for course in course_page.object_list]
 
         return Response({
@@ -111,10 +111,11 @@ class CourseView(APIView):
         }
         return Response({'message': course_info})
 
-    def post(self,request):
-        serializer=AddCourseSerializer(data=request.data)
+    def post(self, request):
+        serializer = AddCourseSerializer(data=request.data)
         if serializer.is_valid():
-            teacher_name=serializer.validated_data['teacher']
+            teacher_name = serializer.validated_data['teacher']
+
 
 class ReviewView(APIView):
     review_model = Review
@@ -253,6 +254,15 @@ class TeacherView(APIView):
             "course_list": teacher_course_list
         }
         return Response({'message': teacher_course_info}, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        serializer = TeacherSerializer(data=request.data)
+        if serializer.is_valid():
+            teachers = Teacher.objects.search(serializer.validated_data['name'], page_size=1, current_page=1)
+            teacher_list = [{'id': teacher.id, 'name': teacher.name, 'school': teacher.school.get_name} for teacher in
+                            teachers['results']]
+            return Response(teacher_list, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class MyReviewView(APIView):

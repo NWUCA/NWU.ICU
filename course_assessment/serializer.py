@@ -54,3 +54,9 @@ class AddCourseSerializer(serializers.Serializer):
     teacher_name = serializers.CharField(required=True)
     school_name = serializers.CharField(required=True)
     course_page = serializers.CharField(required=False)
+
+
+class TeacherSerializer(serializers.Serializer):
+    name = serializers.CharField(required=True)
+    page_size = serializers.IntegerField(required=False, default=10)
+    current_page = serializers.IntegerField(required=False, default=1)

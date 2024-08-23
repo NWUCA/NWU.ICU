@@ -1,10 +1,15 @@
 import re
 
 from django.contrib.postgres.indexes import GinIndex
+from django.contrib.postgres.search import SearchVector
 from django.contrib.postgres.search import SearchVectorField
 from django.db import models
+from django.db.models.signals import pre_save, post_save
+from django.dispatch import receiver
+from pypinyin import lazy_pinyin
 
 from common.models import SoftDeleteModel
+from course_assessment.managers import TeacherManager
 from user.models import User
 
 
@@ -31,21 +36,40 @@ class School(models.Model):
 
 
 class Teacher(models.Model):
-    """
-    教务系统中课表只能够获取到教师姓名, 故对于重名的老师, 我们只能认为他们是同一个人
-    """
-
     name = models.CharField(max_length=20, verbose_name='姓名')
-    # 因为是根据课程确定的教师院系, 可能不准确
-    school = models.ForeignKey(School, on_delete=models.CASCADE, verbose_name='院系', null=True)
+    pinyin = models.CharField(max_length=100, verbose_name='拼音', blank=True)
+    search_vector = SearchVectorField(null=True)
+    school = models.ForeignKey('School', on_delete=models.CASCADE, verbose_name='院系', null=True)
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, null=True)
     created_time = models.DateTimeField(auto_now_add=True)
+    objects = TeacherManager()
 
     def __str__(self):
         return f'{self.name}'
 
     class Meta:
         ordering = ['school']
+        indexes = [
+            GinIndex(fields=['search_vector']),
+            models.Index(fields=['name']),
+            models.Index(fields=['pinyin']),
+        ]
+
+
+@receiver(pre_save, sender=Teacher)
+def update_teacher_pinyin_and_vector(sender, instance, **kwargs):
+    # 更新拼音
+    instance.pinyin = ''.join(lazy_pinyin(instance.name))
+
+    # 注意：search_vector 将在保存后更新，因为它需要实例的 ID
+
+
+@receiver(post_save, sender=Teacher)
+def update_search_vector(sender, instance, **kwargs):
+    # 更新搜索向量
+    Teacher.objects.filter(pk=instance.pk).update(
+        search_vector=SearchVector('name', weight='A') + SearchVector('pinyin', weight='B')
+    )
 
 
 class Course(models.Model):
