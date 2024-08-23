@@ -16,32 +16,11 @@ from course_assessment.serializer import MyReviewSerializer, AddReviewSerializer
 logger = logging.getLogger(__name__)
 
 
-class CourseList(ListView):
-    template_name = 'course_list.html'
-    model = Course
-    paginate_by = 15
+class CourseList(APIView):
+    permission_classes = [CustomPermission]
 
-    def get_queryset(self):
-        search_string = self.request.GET.get('s', "")
-        course_set = (
-            self.model.objects.all()
-            .annotate(rating=Avg('review__rating'), num=Count('review'))
-            .order_by('-num')
-            .prefetch_related('teachers', 'review_set')
-        )
-        if search_string:
-            items = search_string.split(' ')
-            for item in items:
-                course_set = course_set.filter(
-                    Q(name__contains=item) | Q(teachers__name__contains=item)
-                )
-        return course_set
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['search_string'] = self.request.GET.get('s', "")
-        context['review_count'] = Review.objects.count()
-        return context
+    def get(self, request, desc=True, page_size=10, index=1):
+        courses = Course.objects.order_by('-last_review_time')
 
 
 class CourseView(APIView):
@@ -110,19 +89,64 @@ class CourseView(APIView):
         return Response({'message': course_info})
 
 
-class ReviewAddView(APIView):
+class ReviewView(APIView):
     review_model = Review
     review_history_model = ReviewHistory
-    permission_classes = [IsAuthenticated]
+    permission_classes = [CustomPermission]
+
+    def get(self, request):
+        current_page = int(request.query_params.get('currentPage', 1))
+        page_size = int(request.query_params.get('pageSize', 10))
+        desc = request.query_params.get('desc', '1')
+        review__all_set = (
+            Review.objects.all()
+            .order_by(('-' if desc == '1' else '') + 'modify_time')
+            .select_related('created_by', 'course', 'course__school')
+            .prefetch_related('course__teachers')
+        )
+        total = review__all_set.count()
+        review_set = review__all_set[(current_page - 1) * page_size:(current_page - 1) * page_size + page_size]
+        review_list = []
+        for review in review_set:
+            temp_dict = {
+                'id': review.id,
+                'author': {"name": "匿名用户" if review.anonymous else review.created_by.nickname,
+                           "id": -1 if review.anonymous else review.created_by.id,
+                           "avatar_uuid": "183840a7-4099-41ea-9afa-e4220e379651" if review.anonymous else review.created_by.avatar_uuid},
+                'datetime': review.modify_time,
+                'course': {"name": review.course.get_name, "id": review.course.id, 'semester': review.semester.name, },
+                'content': review.content,
+                "teachers": [{"name": teacher.name, "id": teacher.id} for teacher in
+                             review.course.teachers.all()],
+                'edited': review.edited,
+                'is_student': review.created_by.nwu_email is not None and not review.anonymous,
+            }
+            review_list.append(temp_dict)
+        return Response({
+            "errors": None,
+            "content": {"reviews": review_list, "total": total}
+        }, status=status.HTTP_200_OK)
 
     def post(self, request):
         serializer = AddReviewSerializer(data=request.data)
         if serializer.is_valid():
             course = Course.objects.get(id=serializer.data['course'])
+            semester = Semeseter.objects.get(id=serializer.data['semester'])
+
             try:
-                old_review = self.review_model.objects.get(course=course, created_by=request.user)
+                review = self.review_model.objects.get(course=course, created_by=request.user)
+                fields_to_update = ['content', 'rating', 'anonymous', 'difficulty', 'grade', 'homework', 'reward']
+                for field in fields_to_update:
+                    setattr(review, field, serializer.data[field])
+                review.semester = semester
+                review.save()
+
+                if review.content != serializer.data['content']:
+                    self.review_history_model.objects.create(review=review, content=serializer.data['content'])
+                message = '更新课程评价成功'
             except Review.DoesNotExist:
-                self.review_model.objects.create(
+                # 创建新评论
+                review = self.review_model.objects.create(
                     course=course,
                     content=serializer.data['content'],
                     created_by=request.user,
@@ -133,27 +157,21 @@ class ReviewAddView(APIView):
                     grade=serializer.data['grade'],
                     homework=serializer.data['homework'],
                     reward=serializer.data['reward'],
-                    semester=Semeseter.objects.get(id=serializer.data['semester']),
+                    semester=semester,
                 )
-                return Response({'message': '成功创建课程评价'}, status=status.HTTP_201_CREATED)
-            old_content = old_review.content
-            fields_to_update = ['content', 'rating', 'anonymous', 'difficulty', 'grade', 'homework', 'reward']
-            for field in fields_to_update:
-                setattr(old_review, field, serializer.data[field])
-            old_review.save()
-            if old_content != serializer.data['content']:
-                self.review_history_model.objects.create(review=old_review, content=serializer.data['content'])
-            return Response({'message': '更新课程评价成功'}, status=status.HTTP_201_CREATED)
+                message = '成功创建课程评价'
+
+            if semester not in course.semester.all():
+                course.semester.add(semester)
+
+            return Response({
+                'message': message,
+                'review_id': review.id
+            }, status=status.HTTP_201_CREATED)
         else:
             return Response({"message": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
-
-class ReviewDeleteView(APIView):
-    review_model = Review
-    review_history_model = ReviewHistory
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
+    def delete(self, request):
         serializer = DeleteReviewSerializer(data=request.data)
         if serializer.is_valid():
             try:
@@ -162,10 +180,10 @@ class ReviewDeleteView(APIView):
                 return Response({"message": "课程评价不存在"}, status=status.HTTP_400_BAD_REQUEST)
             if review_id.created_by == request.user:
                 review_item_model = self.review_model.objects.get(id=review_id.id)
-                review_item_model.delete()
+                review_item_model.deleted = True
                 review_history_items = self.review_history_model.objects.filter(review_id=review_id.id)
                 for review_history_item in review_history_items:
-                    review_history_item.delete()
+                    review_history_item.deleted = True
                 return Response({"message": "删除课程评价成功"}, status=status.HTTP_200_OK)
             else:
                 return Response({"message": "用户错误"}, status=status.HTTP_401_UNAUTHORIZED)
@@ -206,44 +224,6 @@ class TeacherView(APIView):
             "course_list": teacher_course_list
         }
         return Response({'message': teacher_course_info}, status=status.HTTP_200_OK)
-
-
-class LatestReviewView(APIView):
-    permission_classes = [AllowAny]
-    model = Review
-
-    def get(self, request):
-        current_page = int(request.query_params.get('currentPage', 1))
-        page_size = int(request.query_params.get('pageSize', 10))
-        desc = request.query_params.get('desc', '1')
-        review__all_set = (
-            self.model.objects.all()
-            .order_by(('-' if desc == '1' else '') + 'modify_time')
-            .select_related('created_by', 'course', 'course__school')
-            .prefetch_related('course__teachers')
-        )
-        total = review__all_set.count()
-        review_set = review__all_set[(current_page - 1) * page_size:(current_page - 1) * page_size + page_size]
-        review_list = []
-        for review in review_set:
-            temp_dict = {
-                'id': review.id,
-                'author': {"name": "匿名用户" if review.anonymous else review.created_by.nickname,
-                           "id": -1 if review.anonymous else review.created_by.id,
-                           "avatar_uuid": "183840a7-4099-41ea-9afa-e4220e379651" if review.anonymous else review.created_by.avatar_uuid},
-                'datetime': review.modify_time,
-                'course': {"name": review.course.get_name, "id": review.course.id, 'semester': review.semester.name, },
-                'content': review.content,
-                "teachers": [{"name": teacher.name, "id": teacher.id} for teacher in
-                             review.course.teachers.all()],
-                'edited': review.edited,
-                'is_student': review.created_by.nwu_email is not None and not review.anonymous,
-            }
-            review_list.append(temp_dict)
-        return Response({
-            "errors": None,
-            "content": {"reviews": review_list, "total": total}
-        }, status=status.HTTP_200_OK)
 
 
 class MyReviewView(APIView):
@@ -409,6 +389,7 @@ class CourseLikeView(APIView):
     def post(self, request):
         # todo
         pass
+
 
 class courseTeacherSearchView(APIView):
     permission_classes = [AllowAny]

@@ -25,21 +25,14 @@ from common.file.view import (
     FileUpdateView,
 )
 from common.views import (
-    Settings,
     index,
-    manifest,
-    save_push_subscription,
-    send_test_notification,
-    service_worker,
     AboutView,
     CaptchaView,
-    TosView,
+    TosView, MessageBoxView,
 )
 from course_assessment.views import (
-    LatestReviewView,
     MyReviewView,
-    ReviewAddView,
-    ReviewDeleteView,
+    ReviewView,
     CourseView,
     TeacherView,
     ReviewReplyView,
@@ -60,9 +53,7 @@ api_patterns = [
     # 课程评价
     path('review/my-review/', MyReviewView.as_view()),
     path('review/my-review-reply/', MyReviewReplyView.as_view()),
-    path('review/latest/', LatestReviewView.as_view()),
-    path('review/add/', ReviewAddView.as_view()),
-    path('review/delete/', ReviewDeleteView.as_view()),
+    path('review/review/', ReviewView.as_view()),
     path('review/course/<int:course_id>/', CourseView.as_view()),
     path('review/teacher/<int:teacher_id>/', TeacherView.as_view()),
     path('review/reply/<int:review_id>/', ReviewReplyView.as_view()),
@@ -86,6 +77,9 @@ api_patterns = [
     path('user/bind-nwu-email/', BindNwuEmailView.as_view(),
          name='bind-nwu-email-post'),
 
+    # 站内信
+    path('message/',MessageBoxView.as_view(),name='messageBox'),
+    path('message/<int:sender_id>',MessageBoxView.as_view(),name='messageSender'),
     # 验证码
     path('captcha/', CaptchaView.as_view(), name='captcha'),
 
@@ -101,12 +95,7 @@ api_patterns = [
 urlpatterns = [
     path('admin/', admin.site.urls),
     # path('silk/', include('silk.urls', namespace='silk')),
-    path('manifest.json', manifest),
-    path('serviceworker.js', service_worker),
     path('', index, name='homepage'),
-    path('settings/', Settings.as_view()),
-    path('api/save-subscription/', save_push_subscription),
-    path('api/send-test-notification', send_test_notification),
     path('api/captcha/', include('captcha.urls')),
 
     path('api/', include((api_patterns, 'api'))),

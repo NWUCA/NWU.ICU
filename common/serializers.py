@@ -42,3 +42,8 @@ class AboutSerializer(serializers.Serializer):
     class Meta:
         model = About
         fields = ['content', 'create_time', 'update_time']
+
+
+class MessageSerializer(serializers.Serializer):
+    receiver = serializers.IntegerField()
+    content = serializers.CharField(allow_blank=True)
