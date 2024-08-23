@@ -3,7 +3,9 @@ import re
 from django.db import models
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
+from django.utils import timezone
 
+from common.models import SoftDeleteModel
 from user.models import User
 
 
@@ -69,6 +71,7 @@ class Course(models.Model):
     normalized_rating = models.FloatField(default=0.0, verbose_name='归一化平均评分', null=True)
     like_count = models.IntegerField(default=0, verbose_name='推荐')
     dislike_count = models.IntegerField(default=0, verbose_name='不推荐')
+    last_review_time = models.DateTimeField(null=True)
 
     def __str__(self):
         return f"{self.id}-{self.name}-{self.get_teachers()}"
@@ -84,7 +87,7 @@ class Course(models.Model):
         ordering = ['school']
 
 
-class Review(models.Model):
+class Review(SoftDeleteModel):
     DIFFICULTY_CHOICES = [
         (1, '简单'),
         (2, '中等'),
@@ -131,13 +134,13 @@ class Review(models.Model):
         constraints = [models.UniqueConstraint(fields=['course', 'created_by'], name='unique_review')]
 
 
-class ReviewHistory(models.Model):
+class ReviewHistory(SoftDeleteModel):
     review = models.ForeignKey(Review, on_delete=models.CASCADE)
     content = models.TextField(verbose_name='内容')
     create_time = models.DateTimeField(auto_now_add=True)
 
 
-class ReviewReply(models.Model):
+class ReviewReply(SoftDeleteModel):
     review = models.ForeignKey(Review, on_delete=models.CASCADE)
     content = models.TextField()
     create_time = models.DateTimeField(auto_now_add=True)
@@ -159,6 +162,11 @@ class CourseLike(models.Model):
     create_time = models.DateTimeField(auto_now_add=True)
     created_by = models.ForeignKey(User, on_delete=models.CASCADE)
     like = models.SmallIntegerField(default=0, null=True)
+
+
+class CourseFollow(models.Model):
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, null=True)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True)
 
 
 def update_review_reply_like_dislike_counts(instance):
@@ -192,3 +200,15 @@ def review_and_reply_like_changed(sender, instance, **kwargs):
 @receiver(post_delete, sender=CourseLike)
 def course_like_changed(sender, instance, **kwargs):
     update_course_like_dislike_counts(instance)
+
+
+@receiver(post_save, sender=Review)
+@receiver(post_delete, sender=Review)
+def review_changed(sender, instance, **kwargs):
+    course = instance.course
+    review = instance
+    semesters = course.semester
+    if review.semester not in semesters:
+        course.semester.add(review.semester)
+    course.last_review_time = timezone.now()
+    course.save()
