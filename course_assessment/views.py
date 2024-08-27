@@ -2,18 +2,21 @@ import logging
 
 from django.core.cache import cache
 from django.core.paginator import Paginator
+from django.db import transaction
 from django.db.models import Q
+from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from course_assessment.models import Course, Review, ReviewHistory, School, Teacher, Semeseter, ReviewReply, \
-    ReviewAndReplyLike
+    ReviewAndReplyLike, CourseLike
 from course_assessment.permissions import CustomPermission
 from course_assessment.serializer import MyReviewSerializer, AddReviewSerializer, DeleteReviewSerializer, \
     AddReviewReplySerializer, DeleteReviewReplySerializer, ReviewAndReplyLikeSerializer, CourseTeacherSearchSerializer, \
-    AddCourseSerializer, TeacherSerializer
+    AddCourseSerializer, TeacherSerializer, CourseLikeSerializer
 
 logger = logging.getLogger(__name__)
 
@@ -105,6 +108,7 @@ class CourseView(APIView):
             'teachers': teachers_data,
             'semester': [semester.name for semester in course.semester.all()],
             'school': course.school.get_name,
+            'like': {'like': course.like_count, 'dislike': course.dislike_count},
             'rating_avg': f"{course.average_rating:.1f}",
             'normalized_rating_avg': f"{course.normalized_rating:.1f}",
             'reviews': reviews_data
@@ -113,8 +117,20 @@ class CourseView(APIView):
 
     def post(self, request):
         serializer = AddCourseSerializer(data=request.data)
+        # todo 判断老师是新增还是原来的, 并且新建的课程要保证和之前的不重复 按照老师 学院 课程来
         if serializer.is_valid():
-            teacher_name = serializer.validated_data['teacher']
+            if serializer.validated_data['teacher_exist']:
+                course = Course.objects.get(name=serializer.validated_data['name'],
+                                            teacher_id=serializer.validated_data['teacher_id'])
+
+
+class SchoolView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        schools = School.objects.all()
+        return Response({'schools': [{'id': school.id, 'name': school.get_name} for school in schools]},
+                        status=status.HTTP_200_OK)
 
 
 class ReviewView(APIView):
@@ -425,12 +441,29 @@ class ReviewAndReplyLikeView(APIView):
 class CourseLikeView(APIView):
     permission_classes = [CustomPermission]
 
+    @transaction.atomic
     def post(self, request):
-        # todo
-        pass
+        serializer = CourseLikeSerializer(data=request.data)
+        if serializer.is_valid():
+            course = get_object_or_404(Course, id=serializer.validated_data['course_id'])
+            course_like, created = CourseLike.objects.get_or_create(
+                course=course,
+                created_by=request.user,
+                defaults={'timestamp': timezone.now()}  # 只在创建新记录时使用
+            )
+            if not created:
+                course_like.timestamp = timezone.now()
+                course_like.like = serializer.validated_data['like']
+                course_like.save()
+            course.refresh_from_db()
+            return Response({'name': course.get_name, 'id': course.id,
+                             'like': {'like': course.like_count, 'dislike': course.dislike_count}},
+                            status=status.HTTP_200_OK)
+        else:
+            return Response({'message': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
 
-class courseTeacherSearchView(APIView):
+class CourseTeacherSearchView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):

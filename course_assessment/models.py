@@ -1,12 +1,8 @@
 import re
 
 from django.contrib.postgres.indexes import GinIndex
-from django.contrib.postgres.search import SearchVector
 from django.contrib.postgres.search import SearchVectorField
 from django.db import models
-from django.db.models.signals import pre_save, post_save
-from django.dispatch import receiver
-from pypinyin import lazy_pinyin
 
 from common.models import SoftDeleteModel
 from course_assessment.managers import TeacherManager
@@ -54,22 +50,6 @@ class Teacher(models.Model):
             models.Index(fields=['name']),
             models.Index(fields=['pinyin']),
         ]
-
-
-@receiver(pre_save, sender=Teacher)
-def update_teacher_pinyin_and_vector(sender, instance, **kwargs):
-    # 更新拼音
-    instance.pinyin = ''.join(lazy_pinyin(instance.name))
-
-    # 注意：search_vector 将在保存后更新，因为它需要实例的 ID
-
-
-@receiver(post_save, sender=Teacher)
-def update_search_vector(sender, instance, **kwargs):
-    # 更新搜索向量
-    Teacher.objects.filter(pk=instance.pk).update(
-        search_vector=SearchVector('name', weight='A') + SearchVector('pinyin', weight='B')
-    )
 
 
 class Course(models.Model):
@@ -187,7 +167,10 @@ class CourseLike(models.Model):
     course = models.ForeignKey(Course, on_delete=models.CASCADE, null=True)
     create_time = models.DateTimeField(auto_now_add=True)
     created_by = models.ForeignKey(User, on_delete=models.CASCADE)
-    like = models.SmallIntegerField(default=0, null=True)
+    like = models.SmallIntegerField(null=True)
+
+    class Meta:
+        unique_together = ['course', 'created_by']
 
 
 class CourseFollow(models.Model):

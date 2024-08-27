@@ -51,12 +51,38 @@ class CourseTeacherSearchSerializer(serializers.Serializer):
 
 class AddCourseSerializer(serializers.Serializer):
     course_name = serializers.CharField(required=True)
-    teacher_name = serializers.CharField(required=True)
+    teacher_exist = serializers.BooleanField(required=True, default=True)
+
+    teacher_id = serializers.IntegerField(required=False)
+    teacher_name = serializers.CharField(required=False)
+    teacher_school = serializers.IntegerField(required=False)
+
     school_name = serializers.CharField(required=True)
     course_page = serializers.CharField(required=False)
+
+    def validate(self, data):
+        teacher_exist = data.get('teacher_exist')
+
+        if teacher_exist:
+            if not data.get('teacher_id'):
+                raise serializers.ValidationError({"teacher_id": "Teacher ID is required when teacher_exist is True."})
+        else:
+            if not data.get('teacher_name'):
+                raise serializers.ValidationError(
+                    {"teacher_name": "Teacher name is required when teacher_exist is False."})
+            if not data.get('teacher_school'):
+                raise serializers.ValidationError(
+                    {"teacher_school": "Teacher school is required when teacher_exist is False."})
+
+        return data
 
 
 class TeacherSerializer(serializers.Serializer):
     name = serializers.CharField(required=True)
     page_size = serializers.IntegerField(required=False, default=10)
     current_page = serializers.IntegerField(required=False, default=1)
+
+
+class CourseLikeSerializer(serializers.Serializer):
+    course_id = serializers.IntegerField(required=True)
+    like = serializers.IntegerField(required=True)

@@ -1,9 +1,11 @@
+from django.contrib.postgres.search import SearchVector
 from django.db.models import Avg, Sum, Count
-from django.db.models.signals import post_save, post_delete
+from django.db.models.signals import post_save, post_delete, pre_save
 from django.dispatch import receiver
+from pypinyin import lazy_pinyin
 
 from common.signals import soft_delete_signal
-from .models import Review, Course, ReviewAndReplyLike, CourseLike
+from .models import Review, Course, ReviewAndReplyLike, CourseLike, Teacher
 
 
 @receiver([post_save, post_delete], sender=Review)
@@ -81,3 +83,15 @@ def review_created(sender, instance, **kwargs):
     course.semester.set(semesters)
     course.last_review_time = instance.modify_time
     course.save()
+
+
+@receiver(pre_save, sender=Teacher)
+def update_teacher_pinyin_and_vector(sender, instance, **kwargs):
+    instance.pinyin = ''.join(lazy_pinyin(instance.name))
+
+
+@receiver(post_save, sender=Teacher)
+def update_search_vector(sender, instance, **kwargs):
+    Teacher.objects.filter(pk=instance.pk).update(
+        search_vector=SearchVector('name', weight='A') + SearchVector('pinyin', weight='B')
+    )
