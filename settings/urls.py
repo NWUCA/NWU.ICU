@@ -69,7 +69,7 @@ api_patterns = [
     path('user/profile/', ProfileView.as_view(), name='profile'),
     path('user/logout/', Logout.as_view(), name='logout'),
     path('user/register/', RegisterView.as_view(), name='register'),
-    path('user/register/<str:email_b64>/<str:uid>/<str:token>/', RegisterView.as_view(),
+    path('user/register/<str:token>/', RegisterView.as_view(),
          name='register-get'),
     path('user/username/', UsernameDuplicationView.as_view(), name='username'),
     path('user/reset/', PasswordResetView.as_view(), name='reset'),

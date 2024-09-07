@@ -85,6 +85,8 @@ class CourseView(APIView):
                     'homework': review.get_homework_display(),
                     'reward': review.get_reward_display(),
                     'semester': review.semester.name,
+                    'author':{'id': review.created_by.id, 'name': review.created_by.nickname,
+                                              'avatar': review.created_by.avatar_uuid},
                     'reply': [{'content': reviewReply.content,
                                'created_time': reviewReply.create_time,
                                'created_by': {'id': review.created_by.id, 'name': review.created_by.nickname,

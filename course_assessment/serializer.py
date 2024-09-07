@@ -51,7 +51,7 @@ class CourseTeacherSearchSerializer(serializers.Serializer):
 
 class AddCourseSerializer(serializers.Serializer):
     course_name = serializers.CharField(required=True)
-    teacher_exist = serializers.BooleanField(required=True, default=True)
+    teacher_exist = serializers.BooleanField(required=True)
 
     teacher_id = serializers.IntegerField(required=False)
     teacher_name = serializers.CharField(required=False)
