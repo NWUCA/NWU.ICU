@@ -22,22 +22,6 @@ INTERNAL_IPS = [
     "127.0.0.1",
 ]
 
-# remove telegram related stuff
-LOGGING['loggers'] = {
-        "django": {
-            "handlers": ["console"],
-            "level": "INFO",
-            'propagate': False,
-        },
-        'report.management.commands.trigger_report': {
-            'handlers': ['console'],
-            'propagate': False,
-        },
-}
-LOGGING['root'] = {
-        'handlers': ['console'],
-        'level': 'INFO',
-}
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = "smtp.your.email.server"
 EMAIL_PORT = 465
