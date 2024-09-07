@@ -2,7 +2,9 @@ import re
 
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
+from soupsieve.util import lower
 
+import settings.settings
 from common.file.models import UploadedFile
 from common.serializers import CaptchaSerializer
 from user.models import User
@@ -49,6 +51,9 @@ class RegisterSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(error_message)
         if user_model.objects.filter(username=username).exists():
             raise serializers.ValidationError({"username": "已存在一位使用该名字的用户。"})
+        if lower(email).endswith(settings.settings.UNIVERSITY_MAIL_SUFFIX):
+            raise serializers.ValidationError(
+                {"email": f"注册时不可使用{settings.settings.UNIVERSITY_CHINESE_NAME}邮箱"})
         if user_model.objects.filter(email=email).exists():
             raise serializers.ValidationError({"email": "此邮箱已被注册。"})
 
