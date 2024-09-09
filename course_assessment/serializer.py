@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Review, ReviewHistory
+from .models import Review, ReviewHistory, ReviewReply
 
 
 class ReviewHistorySerializer(serializers.ModelSerializer):
@@ -31,6 +31,16 @@ class DeleteReviewSerializer(serializers.Serializer):
 
 class AddReviewReplySerializer(serializers.Serializer):
     content = serializers.CharField(write_only=True, required=True)
+    parent_id = serializers.IntegerField(write_only=True, required=True)
+
+    def validate(self, data):
+        parent_id = data.get('parent_id')
+        if parent_id!=0:
+            try:
+                ReviewReply.objects.get(id=parent_id)
+            except ReviewReply.DoesNotExist:
+                raise serializers.ValidationError({'reply': 'reply parent does not exist'})
+        return data
 
 
 class DeleteReviewReplySerializer(serializers.Serializer):

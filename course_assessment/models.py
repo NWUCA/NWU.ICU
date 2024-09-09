@@ -153,6 +153,7 @@ class ReviewReply(SoftDeleteModel):
     created_by = models.ForeignKey(User, on_delete=models.CASCADE)
     like_count = models.IntegerField(default=0, verbose_name='点赞')
     dislike_count = models.IntegerField(default=0, verbose_name='点踩')
+    parent = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, related_name='children')
 
 
 class ReviewAndReplyLike(models.Model):

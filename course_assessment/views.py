@@ -85,8 +85,8 @@ class CourseView(APIView):
                     'homework': review.get_homework_display(),
                     'reward': review.get_reward_display(),
                     'semester': review.semester.name,
-                    'author':{'id': review.created_by.id, 'name': review.created_by.nickname,
-                                              'avatar': review.created_by.avatar_uuid},
+                    'author': {'id': review.created_by.id, 'name': review.created_by.nickname,
+                               'avatar': review.created_by.avatar_uuid},
                     'reply': [{'content': reviewReply.content,
                                'created_time': reviewReply.create_time,
                                'created_by': {'id': review.created_by.id, 'name': review.created_by.nickname,
@@ -345,6 +345,24 @@ class MyReviewReplyView(APIView):
 
 class ReviewReplyView(APIView):
     permission_classes = [CustomPermission]
+    in_list_id = []
+
+    def get_reply_info(self, reply):
+        children = reply.children.all()
+        self.in_list_id.append(reply.id)
+        children_info = [self.get_reply_info(child) for child in children]
+        self.in_list_id.extend(child.id for child in children)
+
+        return {
+            "id": reply.id,
+            "create_time": reply.create_time,
+            "content": reply.content,
+            "created_by_id": reply.created_by.id,
+            "created_by_name": reply.created_by.nickname,
+            'like': reply.like_count,
+            'dislike': reply.dislike_count,
+            'children': children_info
+        }
 
     def get(self, request, review_id):
         try:
@@ -353,15 +371,17 @@ class ReviewReplyView(APIView):
             return Response({'message': '未找到课程评价'}, status=status.HTTP_404_NOT_FOUND)
         reply_list = []
         try:
-            review_replies = ReviewReply.objects.order_by('create_time').filter(review=review)
+            review_replies = ReviewReply.objects.order_by('id').filter(review=review)
+
             for review_reply in review_replies:
-                reply_list.append({"id": review_reply.id,
-                                   "create_time": review_reply.create_time,
-                                   "content": review_reply.content,
-                                   "created_by_id": review_reply.created_by.id,
-                                   "created_by_name": review_reply.created_by.nickname,
-                                   'like': review_reply.like_count,
-                                   'dislike': review_reply.dislike_count, })
+                if review_reply.id in self.in_list_id:
+                    continue
+                reply_list.append(self.get_reply_info(review_reply))
+                # reply_children = review_reply.children.all()
+                # for child in reply_children:
+                #     temp_dict['children'].append(child)
+                # if reply_children > 0:
+                #     reply_list.append({})
         except ReviewReply.DoesNotExist:
             pass
 
@@ -374,8 +394,14 @@ class ReviewReplyView(APIView):
             return Response({'message': '未找到课程评价'}, status=status.HTTP_404_NOT_FOUND)
         serializer = AddReviewReplySerializer(data=request.data)
         if serializer.is_valid():
-            ReviewReply.objects.create(review=review, content=serializer.validated_data['content'],
-                                       created_by=request.user, )
+            parent_id = serializer.validated_data['parent_id']
+            parent = None if parent_id == 0 else ReviewReply.objects.get(id=parent_id)
+            ReviewReply.objects.create(
+                review=review,
+                parent=parent,
+                content=serializer.validated_data['content'],
+                created_by=request.user
+            )
             return Response({'message': '成功创建课程评价回复'}, status=status.HTTP_201_CREATED)
         else:
             return Response({'message': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
