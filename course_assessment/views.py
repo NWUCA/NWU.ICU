@@ -11,6 +11,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from common.utils import return_response
 from course_assessment.models import Course, Review, ReviewHistory, School, Teacher, Semeseter, ReviewReply, \
     ReviewAndReplyLike, CourseLike
 from course_assessment.permissions import CustomPermission
@@ -345,23 +346,16 @@ class MyReviewReplyView(APIView):
 
 class ReviewReplyView(APIView):
     permission_classes = [CustomPermission]
-    in_list_id = []
 
     def get_reply_info(self, reply):
-        children = reply.children.all()
-        self.in_list_id.append(reply.id)
-        children_info = [self.get_reply_info(child) for child in children]
-        self.in_list_id.extend(child.id for child in children)
-
+        a = reply.parent
         return {
             "id": reply.id,
             "create_time": reply.create_time,
             "content": reply.content,
-            "created_by_id": reply.created_by.id,
-            "created_by_name": reply.created_by.nickname,
-            'like': reply.like_count,
-            'dislike': reply.dislike_count,
-            'children': children_info
+            'author': {"id": reply.created_by.id, 'nickname': reply.created_by.nickname},
+            'like': {'like': reply.like_count, 'dislike': reply.dislike_count},
+            'parent_id': 0 if reply.parent is None else reply.parent.id,
         }
 
     def get(self, request, review_id):
@@ -372,20 +366,11 @@ class ReviewReplyView(APIView):
         reply_list = []
         try:
             review_replies = ReviewReply.objects.order_by('id').filter(review=review)
-
             for review_reply in review_replies:
-                if review_reply.id in self.in_list_id:
-                    continue
                 reply_list.append(self.get_reply_info(review_reply))
-                # reply_children = review_reply.children.all()
-                # for child in reply_children:
-                #     temp_dict['children'].append(child)
-                # if reply_children > 0:
-                #     reply_list.append({})
         except ReviewReply.DoesNotExist:
             pass
-
-        return Response({'message': reply_list}, status=status.HTTP_200_OK)
+        return return_response(message='课程评价获取成功', contents=reply_list)
 
     def post(self, request, review_id):
         try:
