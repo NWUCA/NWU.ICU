@@ -1,6 +1,4 @@
-import base64
 import logging
-from asyncio import timeout
 
 from django.conf import settings
 from django.contrib.auth import authenticate, login
@@ -11,14 +9,11 @@ from django.contrib.auth.tokens import default_token_generator
 from django.core.cache import cache
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
-from django.utils.encoding import force_bytes
-from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.status import HTTP_200_OK, HTTP_400_BAD_REQUEST
 from rest_framework.views import APIView
 
-from common.file.models import UploadedFile
 from common.utils import return_response
 from .models import User
 from .serializers import LoginSerializer, PasswordResetMailRequestSerializer, UsernameDuplicationSerializer, \
@@ -47,7 +42,7 @@ class RegisterView(APIView):
         if settings.DEBUG:
             logger.info(f"debug mode not send activation email to {user.id}:{user.email}")
             return return_response(
-                message="You are in debug mode, so do not send email",
+                message="已发送邮件",
                 contents={"email": email, 'token': token, 'link': active_link})
         else:
             logger.info(f'send activation email to {user.id}:{user.email}')

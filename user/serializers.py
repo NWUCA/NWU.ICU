@@ -28,18 +28,14 @@ def username_checker(username):
 
 
 def password_complexity_checker(password):
-    if len(password) < 8:
-        raise serializers.ValidationError({"password": "密码长度必须至少为8个字符"})
+    if len(password) < 8 or len(password) > 30:
+        raise serializers.ValidationError({"password": "密码长度必须在8-30之间"})
 
-    pattern_checks = [
-        (r'[A-Z]', "密码必须包含至少一个大写字母"),
-        (r'[a-z]', "密码必须包含至少一个小写字母"),
-        (r'[0-9]', "密码必须包含至少一个数字")
-    ]
+    pattern_checks = [r'[A-Z]', r'[a-z]', r'[0-9]']
 
-    for pattern, error_message in pattern_checks:
+    for pattern in pattern_checks:
         if not re.search(pattern, password):
-            raise serializers.ValidationError({"password": error_message})
+            raise serializers.ValidationError({"password": "密码必须同时包含大写字母, 小写字母, 数字"})
 
 
 class RegisterSerializer(serializers.ModelSerializer):

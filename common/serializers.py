@@ -2,7 +2,7 @@ from captcha.models import CaptchaStore
 from django.conf import settings
 from rest_framework import serializers
 
-from .models import Bulletin, About, Chat
+from .models import About, Chat
 
 
 class CaptchaSerializer(serializers.Serializer):
@@ -23,9 +23,6 @@ class CaptchaSerializer(serializers.Serializer):
             raise serializers.ValidationError({"captcha": "验证码已失效"})
         captcha.delete()
         return data
-
-
-
 
 
 class AboutSerializer(serializers.Serializer):
