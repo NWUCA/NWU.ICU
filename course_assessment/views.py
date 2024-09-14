@@ -1,14 +1,13 @@
 import logging
 
 from django.core.cache import cache
-from django.core.paginator import Paginator
+from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage
 from django.db import transaction
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
-from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from common.utils import return_response
@@ -79,7 +78,7 @@ class CourseView(APIView):
                       .prefetch_related('teachers', 'semester')
                       .get(id=course_id))
         except Course.DoesNotExist:
-            return Response({'message': '未找到课程'}, status=status.HTTP_404_NOT_FOUND)
+            return return_response(errors={'course': '未找到课程'}, status_code=status.HTTP_404_NOT_FOUND)
         reviews = (Review.objects.filter(course_id=course_id)
                    .select_related('created_by')
                    .order_by('-create_time'))
@@ -132,7 +131,7 @@ class CourseView(APIView):
             'normalized_rating_avg': f"{course.normalized_rating:.1f}",
             'reviews': reviews_data
         }
-        return Response({'message': course_info})
+        return return_response(contents=course_info)
 
     def post(self, request):
         serializer = AddCourseSerializer(data=request.data)
@@ -148,8 +147,8 @@ class SchoolView(APIView):
 
     def get(self, request):
         schools = School.objects.all()
-        return Response({'schools': [{'id': school.id, 'name': school.get_name} for school in schools]},
-                        status=status.HTTP_200_OK)
+        return return_response(
+            contents={'schools': [{'id': school.id, 'name': school.get_name} for school in schools]}, )
 
 
 class ReviewView(APIView):
@@ -167,10 +166,15 @@ class ReviewView(APIView):
             .select_related('created_by', 'course', 'course__school')
             .prefetch_related('course__teachers')
         )
-        total = review__all_set.count()
-        review_set = review__all_set[(current_page - 1) * page_size:(current_page - 1) * page_size + page_size]
+        paginator = Paginator(review__all_set, page_size)
+        try:
+            review_page = paginator.page(current_page)
+        except PageNotAnInteger:
+            review_page = paginator.page(1)
+        except EmptyPage:
+            review_page = paginator.page(paginator.num_pages)
         review_list = []
-        for review in review_set:
+        for review in review_page:
             temp_dict = {
                 'id': review.id,
                 'author': {"name": "匿名用户" if review.anonymous else review.created_by.nickname,
@@ -185,10 +189,9 @@ class ReviewView(APIView):
                 'is_student': review.created_by.nwu_email,
             }
             review_list.append(temp_dict)
-        return Response({
-            "errors": None,
-            "content": {"reviews": review_list, "total": total}
-        }, status=status.HTTP_200_OK)
+        return return_response(
+            contents={"reviews": review_list, "total": review_page.count, 'has_next': review_page.has_next(),
+                      'has_previous': review_page.has_previous(), 'current_page': review_page.number, })
 
     def post(self, request):
         serializer = AddReviewSerializer(data=request.data)
@@ -229,12 +232,11 @@ class ReviewView(APIView):
             if semester not in course.semester.all():
                 course.semester.add(semester)
 
-            return Response({
-                'message': message,
-                'review_id': review.id
-            }, status=status.HTTP_201_CREATED)
+            return return_response(
+                message=message,
+                contents={'review_id': review.id})
         else:
-            return Response({"message": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+            return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request):
         serializer = DeleteReviewSerializer(data=request.data)
@@ -242,18 +244,18 @@ class ReviewView(APIView):
             try:
                 review_id = self.review_model.objects.get(id=serializer.validated_data['review_id'])
             except Review.DoesNotExist:
-                return Response({"message": "课程评价不存在"}, status=status.HTTP_400_BAD_REQUEST)
+                return return_response(errors={"course": "课程评价不存在"}, status_code=status.HTTP_400_BAD_REQUEST)
             if review_id.created_by == request.user:
                 review_item_model = self.review_model.objects.get(id=review_id.id)
                 review_item_model.soft_delete()
                 review_history_items = self.review_history_model.objects.filter(review_id=review_id.id)
                 for review_history_item in review_history_items:
                     review_history_item.soft_delete()
-                return Response({"message": "删除课程评价成功"}, status=status.HTTP_200_OK)
+                return return_response(message="删除课程评价成功")
             else:
-                return Response({"message": "用户错误"}, status=status.HTTP_401_UNAUTHORIZED)
+                return return_response(errors={"user": "用户错误"}, status_code=status.HTTP_401_UNAUTHORIZED)
         else:
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
 
 
 class TeacherView(APIView):
@@ -288,7 +290,7 @@ class TeacherView(APIView):
             'teacher_info': teacher_info,
             "course_list": teacher_course_list
         }
-        return Response({'message': teacher_course_info}, status=status.HTTP_200_OK)
+        return return_response(contents=teacher_course_info)
 
     def post(self, request):
         serializer = TeacherSerializer(data=request.data)
@@ -296,8 +298,8 @@ class TeacherView(APIView):
             teachers = Teacher.objects.search(serializer.validated_data['name'], page_size=1, current_page=1)
             teacher_list = [{'id': teacher.id, 'name': teacher.name, 'school': teacher.school.get_name} for teacher in
                             teachers['results']]
-            return Response(teacher_list, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return return_response(contents=teacher_list)
+        return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
 
 
 class MyReviewView(APIView):
@@ -330,9 +332,7 @@ class MyReviewView(APIView):
 
             }
             my_review_list.append(temp_dict)
-        return Response({
-            "message": {"reviews": my_review_list}
-        }, status=status.HTTP_200_OK)
+        return return_response(contents=my_review_list)
 
 
 class MyReviewReplyView(APIView):
@@ -357,7 +357,7 @@ class MyReviewReplyView(APIView):
                 'reply': {'id': review_reply.review.id, 'content': review_reply.content},
                 'like': {'like': review_reply.like_count, 'dislike': review_reply.dislike_count},
             })
-        return Response({'message': my_review_reply_list}, status=status.HTTP_200_OK)
+        return return_response(contents=my_review_reply_list)
 
 
 class ReviewReplyView(APIView):
@@ -378,7 +378,7 @@ class ReviewReplyView(APIView):
         try:
             review = Review.objects.get(id=review_id)
         except Review.DoesNotExist:
-            return Response({'message': '未找到课程评价'}, status=status.HTTP_404_NOT_FOUND)
+            return return_response(errors={'course': '未找到课程评价'}, status_code=status.HTTP_404_NOT_FOUND)
         reply_list = []
         try:
             review_replies = ReviewReply.objects.order_by('id').filter(review=review)
@@ -392,7 +392,7 @@ class ReviewReplyView(APIView):
         try:
             review = Review.objects.get(id=review_id)
         except Review.DoesNotExist:
-            return Response({'message': '未找到课程评价'}, status=status.HTTP_404_NOT_FOUND)
+            return return_response(errors={'course': '未找到课程评价'}, status_code=status.HTTP_404_NOT_FOUND)
         serializer = AddReviewReplySerializer(data=request.data)
         if serializer.is_valid():
             parent_id = serializer.validated_data['parent_id']
@@ -403,25 +403,25 @@ class ReviewReplyView(APIView):
                 content=serializer.validated_data['content'],
                 created_by=request.user
             )
-            return Response({'message': '成功创建课程评价回复'}, status=status.HTTP_201_CREATED)
+            return return_response(message='成功创建课程评价回复', status_code=status.HTTP_201_CREATED)
         else:
-            return Response({'message': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+            return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, review_id):
         try:
             review = Review.objects.get(id=review_id)
         except Review.DoesNotExist:
-            return Response({'message': '课程评价不存在'}, status=status.HTTP_404_NOT_FOUND)
+            return return_response(errors={'review': '课程评价不存在'}, status_code=status.HTTP_404_NOT_FOUND)
         serializer = DeleteReviewReplySerializer(data=request.data)
         if serializer.is_valid():
             try:
                 ReviewReply.objects.get(id=serializer.validated_data['reply_id'], review=review,
                                         created_by=request.user).delete()
             except ReviewReply.DoesNotExist:
-                return Response({'message': '课程评价回复不存在'}, status=status.HTTP_404_NOT_FOUND)
-            return Response({'message': '成功删除课程评价回复'}, status=status.HTTP_200_OK)
+                return return_response(errors={'review': '课程评价回复不存在'}, status_code=status.HTTP_404_NOT_FOUND)
+            return return_response(message='成功删除课程评价回复')
         else:
-            return Response({'message': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+            return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
 
 
 class ReviewAndReplyLikeView(APIView):
@@ -441,7 +441,7 @@ class ReviewAndReplyLikeView(APIView):
             try:
                 review_object = Review.objects.get(id=serializer.validated_data['review_id'])
             except Review.DoesNotExist:
-                return Response({'message': 'review not exist'}, status=status.HTTP_404_NOT_FOUND)
+                return return_response(errors={'review': 'review not exist'}, status_code=status.HTTP_404_NOT_FOUND)
 
             review_reply_object = None if serializer.validated_data['reply_id'] == 0 else ReviewReply.objects.get(
                 id=serializer.validated_data['reply_id'])
@@ -453,8 +453,7 @@ class ReviewAndReplyLikeView(APIView):
                 ReviewAndReplyLike.objects.create(review=review_object, review_reply=review_reply_object,
                                                   like=serializer.validated_data['like_or_dislike'],
                                                   created_by=request.user)
-                return Response({'message': self.like_dislike_count(review_object, review_reply_object)},
-                                status=status.HTTP_200_OK)
+                return return_response(contents={'like': self.like_dislike_count(review_object, review_reply_object)})
 
             if serializer.validated_data['like_or_dislike'] == 0 or serializer.validated_data[
                 'like_or_dislike'] == review_and_reply_like.like:
@@ -463,8 +462,7 @@ class ReviewAndReplyLikeView(APIView):
                 review_and_reply_like.like = serializer.validated_data['like_or_dislike']
                 review_and_reply_like.save()
 
-            return Response({'message': self.like_dislike_count(review_object, review_reply_object)},
-                            status=status.HTTP_200_OK)
+            return return_response(contents={'like': self.like_dislike_count(review_object, review_reply_object)}, )
 
 
 class CourseLikeView(APIView):
@@ -485,11 +483,10 @@ class CourseLikeView(APIView):
                 course_like.like = serializer.validated_data['like']
                 course_like.save()
             course.refresh_from_db()
-            return Response({'name': course.get_name, 'id': course.id,
-                             'like': {'like': course.like_count, 'dislike': course.dislike_count}},
-                            status=status.HTTP_200_OK)
+            return return_response(contents={'name': course.get_name, 'id': course.id,
+                                             'like': {'like': course.like_count, 'dislike': course.dislike_count}})
         else:
-            return Response({'message': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+            return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
 
 
 class CourseTeacherSearchView(APIView):
@@ -524,9 +521,9 @@ class CourseTeacherSearchView(APIView):
                                 'normalized_rating': course.normalized_rating,
                             },
                         })
-                    return Response({'message': course_list}, status.HTTP_200_OK)
+                    return return_response(contents=course_list)
                 else:
-                    return Response({'message': 'field missed'}, status=status.HTTP_400_BAD_REQUEST)
+                    return return_response(errors={'field': 'field missed'}, status_code=status.HTTP_400_BAD_REQUEST)
             if serializer.validated_data.get('search_flag') == 'course':
                 course_name = serializer.validated_data['course_name']
                 courses = (Course.objects.filter(name__icontains=course_name)
@@ -559,6 +556,6 @@ class CourseTeacherSearchView(APIView):
                         'school': teacher.school.get_name,
                     })
                 return_list['teacher'] = teacher_list
-            return Response({'message': return_list}, status=status.HTTP_400_BAD_REQUEST)
+            return return_response(contents=return_list, status_code=status.HTTP_400_BAD_REQUEST)
         else:
-            return Response({'message': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+            return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)

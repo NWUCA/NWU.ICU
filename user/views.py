@@ -14,7 +14,6 @@ from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
-from rest_framework.response import Response
 from rest_framework.status import HTTP_200_OK, HTTP_400_BAD_REQUEST
 from rest_framework.views import APIView
 
@@ -92,8 +91,6 @@ class RegisterView(APIView):
             for field, errors in serializer.errors.items():
                 custom_errors["fields"][field] = [str(error) for error in errors]
             return return_response(message="注册失败", errors=custom_errors, status_code=HTTP_400_BAD_REQUEST)
-            # return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        # todo 看fields为什么不出现
 
 
 class UsernameDuplicationView(APIView):
@@ -181,7 +178,7 @@ class PasswordMailResetView(APIView):  # 点击邮件重置密码链接后
                     return return_response(message="错误的Token", status_code=status.HTTP_401_UNAUTHORIZED)
             except User.DoesNotExist:
                 return return_response(message="未找到用户", status_code=status.HTTP_404_NOT_FOUND)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
 
 
 class PasswordResetWhenLoginView(APIView):
@@ -235,7 +232,7 @@ class Login(APIView):
 
                 return return_response(message='认证失败, 用户名或密码错误', status_code=status.HTTP_401_UNAUTHORIZED)
 
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
 
 
 class ProfileView(APIView):

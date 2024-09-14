@@ -8,6 +8,7 @@ from rest_framework.views import APIView
 
 from .models import UploadedFile
 from .serializers import UploadedFileSerializer
+from ..utils import return_response
 
 
 class FileDeleteView(generics.DestroyAPIView):
@@ -20,12 +21,12 @@ class FileDeleteView(generics.DestroyAPIView):
         try:
             instance = self.get_object()
             if instance.created_by != request.user and not request.user.is_staff:
-                return Response({"error": "You do not have permission to delete this file."},
-                                status=status.HTTP_403_FORBIDDEN)
+                return return_response(errors={"auth": "You do not have permission to delete this file."},
+                                       status_code=status.HTTP_403_FORBIDDEN)
             self.perform_destroy(instance)
-            return Response({"message": "delete success"}, status=status.HTTP_204_NO_CONTENT)
+            return return_response(message="delete success", status_code=status.HTTP_204_NO_CONTENT)
         except Http404:
-            return Response({"error": "File not found."}, status=status.HTTP_404_NOT_FOUND)
+            return return_response(errors={"file": "File not found."}, status_code=status.HTTP_404_NOT_FOUND)
 
 
 class FileUploadView(generics.CreateAPIView):
@@ -37,8 +38,8 @@ class FileUploadView(generics.CreateAPIView):
     def create(self, request, *args, **kwargs):
         file_obj = request.FILES['file']
         if file_obj.size > settings.FILE_UPLOAD_SIZE_LIMIT:
-            return Response({"error": "File too large. Size should not exceed 25 MB."},
-                            status=status.HTTP_400_BAD_REQUEST)
+            return return_response(errors={"file": "File too large. Size should not exceed 25 MB."},
+                                   status_code=status.HTTP_400_BAD_REQUEST)
 
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -60,22 +61,22 @@ class FileUpdateView(generics.UpdateAPIView):
             partial = kwargs.pop('partial', False)
             instance = self.get_object()
             if instance.created_by != request.user and not request.user.is_staff:
-                return Response({"error": "You do not have permission to update this file."},
-                                status=status.HTTP_403_FORBIDDEN)
+                return return_response(errors={"auth": "You do not have permission to update this file."},
+                                       status_code=status.HTTP_403_FORBIDDEN)
 
             if 'file' in request.FILES:
                 file_obj = request.FILES['file']
                 if file_obj.size > settings.FILE_UPLOAD_SIZE_LIMIT:
-                    return Response({"error": "File too large. Size should not exceed 25 MB."},
-                                    status=status.HTTP_400_BAD_REQUEST)
+                    return return_response(errors={"file": "File too large. Size should not exceed 25 MB."},
+                                           status_code=status.HTTP_400_BAD_REQUEST)
 
             serializer = self.get_serializer(instance, data=request.data, partial=partial)
             serializer.is_valid(raise_exception=True)
             serializer.save()
 
-            return Response(serializer.data)
+            return return_response(contents=serializer.data)
         except Http404:
-            return Response({"error": "File not found."}, status=status.HTTP_404_NOT_FOUND)
+            return return_response(errors={"file": "File not found."}, status_code=status.HTTP_404_NOT_FOUND)
 
 
 class FileDownloadView(APIView):
@@ -85,7 +86,7 @@ class FileDownloadView(APIView):
         try:
             file_instance = UploadedFile.objects.get(pk=file_uuid)
         except UploadedFile.DoesNotExist:
-            return Response({"error": "File not found."}, status=status.HTTP_404_NOT_FOUND)
+            return return_response(errors={"file": "File not found."}, status_code=status.HTTP_404_NOT_FOUND)
         response = FileResponse(file_instance.file)
         response['Content-Disposition'] = f'attachment; filename="{file_instance.file.name}"'
         return response
