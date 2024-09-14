@@ -74,6 +74,7 @@ class Course(models.Model):
     normalized_rating = models.FloatField(default=0.0, verbose_name='归一化平均评分', null=True)
     like_count = models.IntegerField(default=0, verbose_name='推荐')
     dislike_count = models.IntegerField(default=0, verbose_name='不推荐')
+    review_count = models.IntegerField(default=0, verbose_name='评价数量')
     last_review_time = models.DateTimeField(null=True)
 
     def __str__(self):

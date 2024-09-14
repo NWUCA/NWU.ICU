@@ -9,6 +9,8 @@ def return_response(message: str = None, errors=None, contents=None, status_code
         errors = {}
     if message is None:
         message = ""
+    if errors is not None:
+        errors = errors.get('fields', errors)
     return Response({"message": message,
                      "errors": errors,
                      "contents": contents}, status=status_code)

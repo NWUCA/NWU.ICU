@@ -59,23 +59,26 @@ class RegisterView(APIView):
             )
         return return_response(message="已发送邮件")
 
-    def get(self, request, token):
-        try:
-            user_register_info = cache.get(token)
-            uid = user_register_info['id']
-            email = user_register_info['email']
-            user = User.objects.get(pk=uid)
+    def get(self, request):
+        token = request.query_params.get('token')
+        if token:
+            try:
+                user_register_info = cache.get(token)
+                uid = user_register_info['id']
+                email = user_register_info['email']
+                user = User.objects.get(pk=uid)
 
-            if default_token_generator.check_token(user, token):
-                user.email = email
-                user.is_active = True
-                user.save()
-                cache.delete(token)
-                return return_response(message=email)
-            else:
-                return return_response(message="无效的token", status_code=HTTP_400_BAD_REQUEST)
-        except (TypeError, ValueError, OverflowError, User.DoesNotExist):
-            return return_response(message="无效的请求", status_code=HTTP_400_BAD_REQUEST)
+                if default_token_generator.check_token(user, token):
+                    user.email = email
+                    user.is_active = True
+                    user.save()
+                    cache.delete(token)
+                    return return_response(message=email)
+                else:
+                    return return_response(message="无效的token", status_code=HTTP_400_BAD_REQUEST)
+            except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+                pass
+        return return_response(message="token参数错误", status_code=HTTP_400_BAD_REQUEST)
 
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
@@ -89,6 +92,8 @@ class RegisterView(APIView):
             for field, errors in serializer.errors.items():
                 custom_errors["fields"][field] = [str(error) for error in errors]
             return return_response(message="注册失败", errors=custom_errors, status_code=HTTP_400_BAD_REQUEST)
+            # return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        # todo 看fields为什么不出现
 
 
 class UsernameDuplicationView(APIView):
@@ -97,16 +102,9 @@ class UsernameDuplicationView(APIView):
     def post(self, request):
         serializer = UsernameDuplicationSerializer(data=request.data)
         if serializer.is_valid():
-            try:
-                User.objects.get(username=serializer.data['username'])
-            except User.DoesNotExist:
-                logger.info(f"用户名{serializer.data['username']}可用")
-                return return_response(message='用户名可用', status_code=HTTP_200_OK)
-            logger.warning(f"用户名{serializer.data['username']}不可用")
-            return return_response(message='用户名已经存在', status_code=HTTP_400_BAD_REQUEST)
+            return return_response(message='用户名可用', status_code=HTTP_200_OK)
         else:
-            logger.error('检查用户名重复错误' + str(serializer.errors))
-            return Response({'message': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+            return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
 
 
 class PasswordResetView(APIView):

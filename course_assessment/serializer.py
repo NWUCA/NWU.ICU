@@ -24,6 +24,11 @@ class AddReviewSerializer(serializers.ModelSerializer):
         model = Review
         fields = ['course', 'content', 'rating', 'anonymous', 'difficulty', 'grade', 'homework', 'reward', 'semester']
 
+    def validate(self, data):
+        if data.get('rating') > 5 or data.get('rating') < 0:
+            raise serializers.ValidationError({'rating': "评分必须是0-5之间的整数"})
+        return data
+
 
 class DeleteReviewSerializer(serializers.Serializer):
     review_id = serializers.CharField(write_only=True, required=True)
@@ -35,7 +40,7 @@ class AddReviewReplySerializer(serializers.Serializer):
 
     def validate(self, data):
         parent_id = data.get('parent_id')
-        if parent_id!=0:
+        if parent_id != 0:
             try:
                 ReviewReply.objects.get(id=parent_id)
             except ReviewReply.DoesNotExist:

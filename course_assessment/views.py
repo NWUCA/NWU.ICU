@@ -25,22 +25,38 @@ logger = logging.getLogger(__name__)
 class CourseList(APIView):
     permission_classes = [CustomPermission]
 
-    def get(self, request, desc=True, page_size=20, current_page=1):
-        time_order = ('' if desc else '-') + 'last_review_time'
+    def get(self, request):
+        page_size = 10
+        page = request.query_params.get('page', 1)
+        course_type = request.query_params.get('course_type', 'all')
+        if course_type not in {choice[0] for choice in Course.classification_choices}:
+            course_type = 'all'
+        order_by = request.query_params.get('order_by', 'rating')
+        order_by_dict = {
+            'rating': 'average_rating',
+            'popular': 'review_count'
+        }
+        order_by = order_by_dict.get(order_by, 'average_rating')
+
         total_key = 'total_courses_count'
         total = cache.get(total_key)
         if total is None:
             total = Course.objects.count()
-            cache.set(total_key, total, 1800)  # 30minutes
-        courses = Course.objects.only('name', 'teachers', 'semester').order_by(time_order, 'like_count')
+            cache.set(total_key, total, 30 * 60)
+
+        courses = Course.objects.only('name', 'classification', 'teachers', 'semester').order_by(order_by,
+                                                                                                 'like_count')
         paginator = Paginator(courses, page_size)
-        course_page = paginator.get_page(current_page)
+        course_page = paginator.get_page(page)
         courses_list = [{'name': course.get_name,
                          'teacher': course.get_teachers(),
                          'semester': course.get_semester(),
+                         'review_count': course.review_count,
+                         'average_rating': course.average_rating,
+                         'normalized_rating': course.normalized_rating,
                          } for course in course_page.object_list]
 
-        return Response({
+        return return_response(contents={
             'total': total,
             'courses': courses_list,
             'has_next': course_page.has_next(),

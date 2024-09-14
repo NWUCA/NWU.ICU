@@ -10,6 +10,37 @@ from common.serializers import CaptchaSerializer
 from user.models import User
 
 
+def username_checker(username):
+    if not (8 <= len(username) <= 29):
+        raise serializers.ValidationError({'username': "用户名长度必须在8到29个字符之间"})
+    if not re.match(r'^\w+$', username):
+        raise serializers.ValidationError({"username": "用户名只能包含字母、数字和下划线"})
+    pattern_checks = [
+        (r'[a-z]', "用户名必须包含至少一个字母"),
+    ]
+
+    for pattern, error_message in pattern_checks:
+        if not re.search(pattern, username):
+            raise serializers.ValidationError({"username": error_message})
+    if User.objects.filter(username=username).exists():
+        raise serializers.ValidationError({"username": "已存在一位使用该名字的用户"})
+
+
+def password_complexity_checker(password):
+    if len(password) < 8:
+        raise serializers.ValidationError({"password": "密码长度必须至少为8个字符"})
+
+    pattern_checks = [
+        (r'[A-Z]', "密码必须包含至少一个大写字母"),
+        (r'[a-z]', "密码必须包含至少一个小写字母"),
+        (r'[0-9]', "密码必须包含至少一个数字")
+    ]
+
+    for pattern, error_message in pattern_checks:
+        if not re.search(pattern, password):
+            raise serializers.ValidationError({"password": error_message})
+
+
 class RegisterSerializer(serializers.ModelSerializer):
     username = serializers.CharField(
         required=True
@@ -38,44 +69,17 @@ class RegisterSerializer(serializers.ModelSerializer):
         user_model = self.Meta.model
         username = data.get('username')
         email = data.get('email')
-        if not (8 <= len(username) <= 29):
-            raise serializers.ValidationError("用户名长度必须在8到29个字符之间")
-        if not re.match(r'^\w+$', username):
-            raise serializers.ValidationError("用户名只能包含字母、数字和下划线")
-        pattern_checks = [
-            (r'[a-z]', "用户名必须包含至少一个字母。"),
-        ]
-
-        for pattern, error_message in pattern_checks:
-            if not re.search(pattern, username):
-                raise serializers.ValidationError(error_message)
-        if user_model.objects.filter(username=username).exists():
-            raise serializers.ValidationError({"username": "已存在一位使用该名字的用户。"})
+        username_checker(username)
         if lower(email).endswith(settings.settings.UNIVERSITY_MAIL_SUFFIX):
             raise serializers.ValidationError(
                 {"email": f"注册时不可使用{settings.settings.UNIVERSITY_CHINESE_NAME}邮箱"})
         if user_model.objects.filter(email=email).exists():
-            raise serializers.ValidationError({"email": "此邮箱已被注册。"})
+            raise serializers.ValidationError({"email": "此邮箱已被注册"})
 
         password = data.get('password')
-        self.validate_password_complexity(password)
+        password_complexity_checker(password)
 
         return data
-
-    @staticmethod
-    def validate_password_complexity(password):
-        if len(password) < 8:
-            raise serializers.ValidationError("密码长度必须至少为8个字符。")
-
-        pattern_checks = [
-            (r'[A-Z]', "密码必须包含至少一个大写字母。"),
-            (r'[a-z]', "密码必须包含至少一个小写字母。"),
-            (r'[0-9]', "密码必须包含至少一个数字。")
-        ]
-
-        for pattern, error_message in pattern_checks:
-            if not re.search(pattern, password):
-                raise serializers.ValidationError(error_message)
 
     def create(self, validated_data):
         user_model = self.Meta.model
@@ -91,6 +95,12 @@ class RegisterSerializer(serializers.ModelSerializer):
 
 class UsernameDuplicationSerializer(serializers.Serializer):
     username = serializers.CharField(required=True)
+
+    def validate(self, data):
+        # username_checker(data.get('username'))
+        if data.get("username") == 'asd':
+            raise serializers.ValidationError({"username": ""})
+        return data
 
 
 class LoginSerializer(serializers.Serializer):
@@ -135,7 +145,7 @@ class PasswordResetMailRequestSerializer(serializers.Serializer):  # 点击邮�
         if data['new_password'] != data['confirm_password']:
             raise serializers.ValidationError("Passwords do not match.")
         else:
-            RegisterSerializer.validate_password_complexity(data['new_password'])
+            password_complexity_checker(data['new_password'])
         return data
 
 
@@ -162,7 +172,7 @@ class PasswordResetWhenLoginSerializer(serializers.Serializer):  # 点击邮箱�
         if user.check_password(data['confirm_password']):
             raise serializers.ValidationError("新老密码不可以一致")
         else:
-            RegisterSerializer.validate_password_complexity(data['new_password'])
+            password_complexity_checker(data['new_password'])
         return data
 
 
@@ -194,14 +204,14 @@ class UpdateProfileSerializer(serializers.Serializer):
                 if not re.match(r'^\w+$', username):
                     raise serializers.ValidationError("用户名只能包含字母、数字和下划线")
                 pattern_checks = [
-                    (r'[a-zA-Z]', "用户名必须包含至少一个字母。"),
+                    (r'[a-zA-Z]', "用户名必须包含至少一个字母"),
                 ]
 
                 for pattern, error_message in pattern_checks:
                     if not re.search(pattern, username):
                         raise serializers.ValidationError(error_message)
                 if User.objects.filter(username=username).exists():
-                    raise serializers.ValidationError({"username": "已存在一位使用该名字的用户。"})
+                    raise serializers.ValidationError({"username": "已存在一位使用该名字的用户"})
         if 'avatar' in data:
             try:
                 UploadedFile.objects.get(id=data['avatar_uuid'])

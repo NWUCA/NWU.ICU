@@ -81,6 +81,7 @@ def review_created(sender, instance, **kwargs):
     reviews_of_courses = Review.objects.filter(course=course)
     semesters = {review.semester for review in reviews_of_courses}
     course.semester.set(semesters)
+    course.review_count = Review.objects.filter(course=course).count()
     course.last_review_time = instance.modify_time
     course.save()
 
