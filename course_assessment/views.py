@@ -1,4 +1,5 @@
 import logging
+from venv import create
 
 from django.core.cache import cache
 from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage
@@ -47,7 +48,8 @@ class CourseList(APIView):
                                                                                                  'like_count')
         paginator = Paginator(courses, page_size)
         course_page = paginator.get_page(page)
-        courses_list = [{'name': course.get_name,
+        courses_list = [{'id': course.id,
+                         'name': course.get_name,
                          'teacher': course.get_teachers(),
                          'semester': course.get_semester(),
                          'review_count': course.review_count,
@@ -186,11 +188,11 @@ class ReviewView(APIView):
                 "teachers": [{"name": teacher.name, "id": teacher.id} for teacher in
                              review.course.teachers.all()],
                 'edited': review.edited,
-                'is_student': review.created_by.nwu_email,
+                'is_student': review.created_by.college_email,
             }
             review_list.append(temp_dict)
         return return_response(
-            contents={"reviews": review_list, "total": review_page.count, 'has_next': review_page.has_next(),
+            contents={"reviews": review_list, "total": paginator.count, 'has_next': review_page.has_next(),
                       'has_previous': review_page.has_previous(), 'current_page': review_page.number, })
 
     def post(self, request):
@@ -198,7 +200,7 @@ class ReviewView(APIView):
         if serializer.is_valid():
             course = Course.objects.get(id=serializer.data['course'])
             semester = Semeseter.objects.get(id=serializer.data['semester'])
-
+            updated = False
             try:
                 review = self.review_model.all_objects.get(course=course, created_by=request.user)
                 if review.is_deleted:
@@ -212,6 +214,7 @@ class ReviewView(APIView):
                 if review.content != serializer.data['content']:
                     self.review_history_model.objects.create(review=review, content=serializer.data['content'])
                 message = '更新课程评价成功'
+                updated = True
             except Review.DoesNotExist:
                 # 创建新评论
                 review = self.review_model.objects.create(
@@ -234,7 +237,7 @@ class ReviewView(APIView):
 
             return return_response(
                 message=message,
-                contents={'review_id': review.id})
+                contents={'review': review.id, 'updated': updated})
         else:
             return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
 
@@ -263,7 +266,10 @@ class TeacherView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, teacher_id):
-        teacher = Teacher.objects.get(id=teacher_id)
+        try:
+            teacher = Teacher.objects.get(id=teacher_id)
+        except Teacher.DoesNotExist:
+            return return_response(errors={'teacher': "教师不存在"}, status_code=status.HTTP_404_NOT_FOUND)
         teacher_info = {
             'id': teacher.id,
             'name': teacher.name,
@@ -278,10 +284,12 @@ class TeacherView(APIView):
             normalized_avg_rating = course.normalized_rating
             review_count = reviews.count()
             teacher_course_list.append({
-                'course_id': course.id,
-                'course_semester': ",".join([semester.name for semester in course.semester.all()]),
-                'course_code': course.course_code,
-                'course_name': course.get_name,
+                'course': {
+                    'id': course.id,
+                    'semester': ",".join([semester.name for semester in course.semester.all()]),
+                    'code': course.course_code,
+                    'name': course.get_name,
+                },
                 'rating_avg': rating_avg,
                 'normalized_rating_avg': normalized_avg_rating,
                 'review_count': review_count,
@@ -364,7 +372,6 @@ class ReviewReplyView(APIView):
     permission_classes = [CustomPermission]
 
     def get_reply_info(self, reply):
-        a = reply.parent
         return {
             "id": reply.id,
             "create_time": reply.create_time,
@@ -388,32 +395,34 @@ class ReviewReplyView(APIView):
             pass
         return return_response(message='课程评价获取成功', contents=reply_list)
 
-    def post(self, request, review_id):
-        try:
-            review = Review.objects.get(id=review_id)
-        except Review.DoesNotExist:
-            return return_response(errors={'course': '未找到课程评价'}, status_code=status.HTTP_404_NOT_FOUND)
+    def post(self, request):
         serializer = AddReviewReplySerializer(data=request.data)
         if serializer.is_valid():
+            try:
+                review = Review.objects.get(id=serializer.validated_data['review_id'])
+            except Review.DoesNotExist:
+                return return_response(errors={'course': '未找到课程评价'}, status_code=status.HTTP_404_NOT_FOUND)
             parent_id = serializer.validated_data['parent_id']
             parent = None if parent_id == 0 else ReviewReply.objects.get(id=parent_id)
-            ReviewReply.objects.create(
+            reply = ReviewReply.objects.create(
                 review=review,
                 parent=parent,
                 content=serializer.validated_data['content'],
                 created_by=request.user
             )
-            return return_response(message='成功创建课程评价回复', status_code=status.HTTP_201_CREATED)
+            return return_response(message='成功创建课程评价回复', contents={'reply_id': reply.id},
+                                   status_code=status.HTTP_201_CREATED)
         else:
             return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
 
-    def delete(self, request, review_id):
-        try:
-            review = Review.objects.get(id=review_id)
-        except Review.DoesNotExist:
-            return return_response(errors={'review': '课程评价不存在'}, status_code=status.HTTP_404_NOT_FOUND)
+    def delete(self, request):
+
         serializer = DeleteReviewReplySerializer(data=request.data)
         if serializer.is_valid():
+            try:
+                review = Review.objects.get(id=serializer.validated_data['review_id'])
+            except Review.DoesNotExist:
+                return return_response(errors={'review': '课程评价不存在'}, status_code=status.HTTP_404_NOT_FOUND)
             try:
                 ReviewReply.objects.get(id=serializer.validated_data['reply_id'], review=review,
                                         created_by=request.user).delete()
@@ -442,9 +451,11 @@ class ReviewAndReplyLikeView(APIView):
                 review_object = Review.objects.get(id=serializer.validated_data['review_id'])
             except Review.DoesNotExist:
                 return return_response(errors={'review': 'review not exist'}, status_code=status.HTTP_404_NOT_FOUND)
-
-            review_reply_object = None if serializer.validated_data['reply_id'] == 0 else ReviewReply.objects.get(
-                id=serializer.validated_data['reply_id'])
+            try:
+                review_reply_object = None if serializer.validated_data['reply_id'] == 0 else ReviewReply.objects.get(
+                    id=serializer.validated_data['reply_id'])
+            except ReviewReply.DoesNotExist:
+                return return_response(errors={'review': '点赞对象不存在'}, status_code=status.HTTP_404_NOT_FOUND)
 
             try:
                 review_and_reply_like = ReviewAndReplyLike.objects.get(review=review_object, created_by=request.user,
@@ -472,16 +483,17 @@ class CourseLikeView(APIView):
     def post(self, request):
         serializer = CourseLikeSerializer(data=request.data)
         if serializer.is_valid():
-            course = get_object_or_404(Course, id=serializer.validated_data['course_id'])
+            try:
+                course = Course.objects.get(id=serializer.validated_data['course_id'])
+            except Course.DoesNotExist:
+                return return_response(errors={'course': '课程不存在'}, status_code=status.HTTP_404_NOT_FOUND)
             course_like, created = CourseLike.objects.get_or_create(
                 course=course,
                 created_by=request.user,
-                defaults={'timestamp': timezone.now()}  # 只在创建新记录时使用
+                like=serializer.validated_data['like']
             )
             if not created:
-                course_like.timestamp = timezone.now()
-                course_like.like = serializer.validated_data['like']
-                course_like.save()
+                course_like.delete()
             course.refresh_from_db()
             return return_response(contents={'name': course.get_name, 'id': course.id,
                                              'like': {'like': course.like_count, 'dislike': course.dislike_count}})

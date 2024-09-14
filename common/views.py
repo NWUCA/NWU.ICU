@@ -10,7 +10,6 @@ from rest_framework.views import APIView
 from user.models import User
 from .models import Bulletin, About, Chat, ChatMessage
 from .serializers import AboutSerializer, CaptchaSerializer, ChatMessageSerializer
-from .serializers import BulletinSerializer
 from .utils import return_response
 
 
@@ -32,8 +31,18 @@ class CaptchaView(APIView):
 class BulletinListView(APIView):
     def get(self, request):
         bulletins = Bulletin.objects.filter(enabled=True).order_by('-update_time')
-        serializer = BulletinSerializer(bulletins, many=True)
-        return return_response(contents=serializer.data)
+
+        bulletin_list = []
+        for bulletin in bulletins:
+            bulletin_list.append({
+                "title": bulletin.title,
+                "content": bulletin.content,
+                "publisher": {"nickname": bulletin.publisher.nickname, 'id': bulletin.publisher.id,
+                              'avatar': bulletin.publisher.avatar_uuid},
+                "create_time": bulletin.create_time,
+                "update_time": bulletin.update_time,
+            })
+        return return_response(contents={"bulletin_list": bulletin_list})
 
 
 def index(request):
@@ -44,24 +53,22 @@ class TosView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        tos_content_database = About.objects.order_by('-update_time').filter(type="tos")
         try:
-            tos_content = AboutSerializer(tos_content_database, many=True).data[0]
-        except IndexError:
-            tos_content = "Get tos content failed"
-        return return_response(contents={"tos": tos_content})
+            tos_content_database = About.objects.order_by('-update_time').get(type="tos")
+        except About.DoesNotExist:
+            return return_response(contents={"tos": ""})
+        return return_response(contents={"tos": tos_content_database.content})
 
 
 class AboutView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        about_content_database = About.objects.order_by('-update_time')
         try:
-            about_content = AboutSerializer(about_content_database, many=True).data[0]
-        except IndexError:
-            about_content = "Get about content failed"
-        return return_response(contents={"tos": about_content})
+            tos_content_database = About.objects.order_by('-update_time').get(type="about")
+        except About.DoesNotExist:
+            return return_response(contents={"about": ""})
+        return return_response(contents={"about": tos_content_database.content})
 
 
 class MessageBoxView(APIView):

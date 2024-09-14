@@ -1,5 +1,6 @@
 import base64
 import logging
+from asyncio import timeout
 
 from django.conf import settings
 from django.contrib.auth import authenticate, login
@@ -17,10 +18,11 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.status import HTTP_200_OK, HTTP_400_BAD_REQUEST
 from rest_framework.views import APIView
 
+from common.file.models import UploadedFile
 from common.utils import return_response
 from .models import User
 from .serializers import LoginSerializer, PasswordResetMailRequestSerializer, UsernameDuplicationSerializer, \
-    PasswordResetWhenLoginSerializer, BindNwuEmailSerializer, UpdateProfileSerializer
+    PasswordResetWhenLoginSerializer, BindCollegeEmailSerializer, UpdateProfileSerializer
 from .serializers import PasswordResetRequestSerializer
 from .serializers import RegisterSerializer
 
@@ -33,7 +35,7 @@ class RegisterView(APIView):
     @staticmethod
     def send_active_email(user: User, request):
         email = user.email
-        mail_subject = '[NWU.ICU] 激活邮箱'
+        mail_subject = f'[{settings.WEBSITE_NAME}] 激活邮箱'
         token = default_token_generator.make_token(user)
         cache.set(token, {'email': email, 'id': user.id}, timeout=None)
         active_link = request.build_absolute_uri(
@@ -116,22 +118,21 @@ class PasswordResetView(APIView):
                 user = User.objects.get(username=username, email=email)
             except User.DoesNotExist:
                 logger.warning(f'使用{email}邮箱的用户不存在')
-                return return_response(message="使用这个邮箱的用户不存在",
+                return return_response(message="用户名和邮箱不匹配",
                                        status_code=status.HTTP_400_BAD_REQUEST)
 
             token = default_token_generator.make_token(user)
-            uid = urlsafe_base64_encode(force_bytes(user.pk))
-            reset_link = request.build_absolute_uri(f'/user/reset-password/{uid}/{token}/')
-
-            mail_subject = '[NWU.ICU] Reset Password / 重置密码'
+            cache.set(token, {'email': email, 'id': user.id}, timeout=60 * 60 * 24)
+            reset_link = request.build_absolute_uri(
+                f'/user/activate?token={token}')
+            mail_subject = f'[{settings.WEBSITE_NAME}] Reset Password / 重置密码'
             html_message = render_to_string('password_reset_email.html', {
                 'user': user,
                 'reset_link': reset_link,
             })
             if settings.DEBUG:
                 logger.info(f"debug mode not send activation email to {user.id}:{user.email}")
-                return return_response(message='You are in debug mode, so do not send email', contents={"uid": uid,
-                                                                                                        "token": token})
+                return return_response(message='You are in debug mode, so do not send email', contents={"token": token})
             else:
                 logger.info(f"send reset password email to {user.id}:{user.email}")
                 send_mail(
@@ -149,30 +150,31 @@ class PasswordResetView(APIView):
 class PasswordMailResetView(APIView):  # 点击邮件重置密码链接后
     permission_classes = [AllowAny]
 
-    def get(self, request, uid, token):
-        uid = urlsafe_base64_decode(uid).decode()
-        user = User.objects.get(pk=uid)
-        if cache.get(token):
-            logger.info('邮件中重置密码的token已被使用')
-            return return_response(message='Token已经被使用', status_code=HTTP_200_OK)
+    def get(self, request, token):
+        user_info_dict = cache.get(token)
+        if user_info_dict is None:
+            return return_response(message='no', status_code=HTTP_400_BAD_REQUEST)
+        user = User.objects.get(id=user_info_dict.get('id'))
         if default_token_generator.check_token(user, token):
-            cache.set(token, True, settings.CACHE_TTL)
             return return_response(message='ok', status_code=HTTP_200_OK)
         else:
             return return_response(message='no', status_code=HTTP_400_BAD_REQUEST)
 
-    def post(self, request, uid: str, token: str):
+    def post(self, request, token: str):
         serializer = PasswordResetMailRequestSerializer(data=request.data)
         if serializer.is_valid():
             try:
-                uid = urlsafe_base64_decode(uid).decode()
-                user = User.objects.get(pk=uid)
+                user_info_dict = cache.get(token)
+                if user_info_dict is None:
+                    return return_response(message="错误的Token", status_code=status.HTTP_401_UNAUTHORIZED)
+                user = User.objects.get(id=user_info_dict.get('id'))
                 token_check = default_token_generator.check_token(user, token)
                 if token_check:
                     # 更新用户密码
                     new_password = serializer.validated_data['new_password']
                     user.password = make_password(new_password)
                     user.save()
+                    cache.delete(token)
                     return return_response(message="已成功重置密码!")
                 else:
                     return return_response(message="错误的Token", status_code=status.HTTP_401_UNAUTHORIZED)
@@ -248,7 +250,7 @@ class ProfileView(APIView):
             "date_joined": request.user.date_joined,
             "nickname": request.user.nickname,
             "avatar": request.user.avatar_uuid,
-            "nwu_email": request.user.nwu_email,
+            "college_email": request.user.college_email,
         }
         logger.error(f"{request.user.id}:{request.user.username}:{request.user.nickname} get profile")
         logger.info(f"{request.user.id}:{request.user.username}:{request.user.nickname} get profile")
@@ -265,7 +267,7 @@ class ProfileView(APIView):
                 "id": user.id,
                 "username": user.username,
                 "nickname": user.nickname,
-                "avatar_uuid": user.avatar_uuid,
+                "avatar": user.avatar_uuid,
                 "bio": user.bio,
             }
             return return_response(contents=user_info)
@@ -273,45 +275,39 @@ class ProfileView(APIView):
             return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
 
 
-class BindNwuEmailView(APIView):
+class BindCollegeEmailView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def get(self, request, email_b64, uid, token):
+    def get(self, request, token):
         try:
-            uid = urlsafe_base64_decode(uid).decode()
-            user = User.objects.get(pk=uid)
-            email = base64.b64decode(email_b64).decode("utf-8")
-
-            if cache.get(token):
-                return return_response(message='Token 已经被使用', status_code=HTTP_400_BAD_REQUEST)
-
+            user_info_dict = cache.get(token)
+            user = User.objects.get(id=user_info_dict.get('id'))
             if default_token_generator.check_token(user, token):
-                user.nwu_email = email
+                user.college_email = user_info_dict.get('email')
                 user.save()
-                cache.set(token, True, settings.CACHE_TTL)
-                return return_response(message=email)
+                cache.delete(token)
+                return return_response(contents=user_info_dict)
             else:
                 return return_response(message='无效的 token', status_code=HTTP_400_BAD_REQUEST)
-        except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+        except (TypeError, ValueError, OverflowError, AttributeError, User.DoesNotExist):
             return return_response(message='无效的请求', status_code=HTTP_400_BAD_REQUEST)
 
     def post(self, request):
-        serializer = BindNwuEmailSerializer(data=request.data)
+        serializer = BindCollegeEmailSerializer(data=request.data)
         if serializer.is_valid():
             user = request.user
-            email = serializer.validated_data['nwu_email']
-            email_base64 = base64.b64encode(email.encode("utf-8")).decode("utf-8")
-            mail_subject = '[NWU.ICU] 绑定西北大学邮箱'
+            email = serializer.validated_data['college_email']
+            mail_subject = f'[{settings.WEBSITE_NAME}] 绑定{settings.UNIVERSITY_CHINESE_NAME}邮箱'
             token = default_token_generator.make_token(user)
-            uid = urlsafe_base64_encode(force_bytes(user.pk))
-            bind_link = request.build_absolute_uri(f'/user/bind-nwu-email/{email_base64}/{uid}/{token}/')
+            cache.set(token, {"id": user.id, 'email': email}, timeout=24 * 60 * 60)
+            bind_link = request.build_absolute_uri(f'/user/bind-college-email/{token}/')
             html_message = render_to_string('password_reset_email.html', {
-                'user': user,
+                'nickname': user.nickname,
                 'bind_link': bind_link,
             })
             if settings.DEBUG:
                 return return_response(message="You are in debug mode, so do not send email",
-                                       contents={"email": email, 'link': bind_link})
+                                       contents={"email": email, 'token': token, 'link': bind_link})
             else:
                 send_mail(
                     subject=mail_subject,

@@ -1,6 +1,7 @@
 import re
 
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from rest_framework import serializers
 from soupsieve.util import lower
 
@@ -13,7 +14,7 @@ from user.models import User
 def username_checker(username):
     if not (8 <= len(username) <= 29):
         raise serializers.ValidationError({'username': "用户名长度必须在8到29个字符之间"})
-    if not re.match(r'^\w+$', username):
+    if not re.match(r'^[a-zA-Z0-9_]+$', username):
         raise serializers.ValidationError({"username": "用户名只能包含字母、数字和下划线"})
     pattern_checks = [
         (r'[a-z]', "用户名必须包含至少一个字母"),
@@ -97,9 +98,7 @@ class UsernameDuplicationSerializer(serializers.Serializer):
     username = serializers.CharField(required=True)
 
     def validate(self, data):
-        # username_checker(data.get('username'))
-        if data.get("username") == 'asd':
-            raise serializers.ValidationError({"username": ""})
+        username_checker(data.get('username'))
         return data
 
 
@@ -166,61 +165,48 @@ class PasswordResetWhenLoginSerializer(serializers.Serializer):  # 点击邮箱�
             raise serializers.ValidationError("Invalid captcha")
         user = self.context['request'].user
         if not user.check_password(data.get('old_password')):
-            raise serializers.ValidationError("旧密码不正确")
+            raise serializers.ValidationError({'password': "旧密码不正确"})
         if data['new_password'] != data['confirm_password']:
-            raise serializers.ValidationError("两次输入的密码不一致")
+            raise serializers.ValidationError({'password': "两次输入的密码不一致"})
         if user.check_password(data['confirm_password']):
-            raise serializers.ValidationError("新老密码不可以一致")
+            raise serializers.ValidationError({'password': "新老密码不可以一致"})
         else:
             password_complexity_checker(data['new_password'])
         return data
 
 
-class BindNwuEmailSerializer(serializers.Serializer):
-    nwu_email = serializers.EmailField(required=True)
+class BindCollegeEmailSerializer(serializers.Serializer):
+    college_email = serializers.EmailField(required=True)
 
     def validate(self, data):
-        email = data.get('nwu_email')
-        if email.endswith('nwu.edu.cn'):
+        email = data.get('college_email')
+        if email.endswith(settings.settings.UNIVERSITY_MAIL_SUFFIX):
             return data
         else:
-            raise serializers.ValidationError("不是西北大学邮箱")
+            raise serializers.ValidationError({'mail': f"非{settings.settings.UNIVERSITY_CHINESE_NAME}邮箱"})
 
 
 class UpdateProfileSerializer(serializers.Serializer):
     username = serializers.CharField(required=False)
     nickname = serializers.CharField(required=False)
-    avatar_uuid = serializers.CharField(required=False)
-    bio = serializers.CharField(required=False, allow_null=True)
+    avatar = serializers.CharField(required=False)
+    bio = serializers.CharField(required=False, allow_null=True, max_length=255)
 
     def validate(self, data):
         if 'username' in data:
             user = self.context['request'].user
-
             username = data.get('username')
             if username != user.username:
-                if not (8 <= len(username) <= 29):
-                    raise serializers.ValidationError("用户名长度必须在8到29个字符之间")
-                if not re.match(r'^\w+$', username):
-                    raise serializers.ValidationError("用户名只能包含字母、数字和下划线")
-                pattern_checks = [
-                    (r'[a-zA-Z]', "用户名必须包含至少一个字母"),
-                ]
-
-                for pattern, error_message in pattern_checks:
-                    if not re.search(pattern, username):
-                        raise serializers.ValidationError(error_message)
-                if User.objects.filter(username=username).exists():
-                    raise serializers.ValidationError({"username": "已存在一位使用该名字的用户"})
+                username_checker(username)
         if 'avatar' in data:
             try:
-                UploadedFile.objects.get(id=data['avatar_uuid'])
-            except UploadedFile.DoesNotExist:
-                raise serializers.ValidationError("头像uuid错误")
+                UploadedFile.objects.get(id=data['avatar'])
+            except (UploadedFile.DoesNotExist, ValidationError):
+                raise serializers.ValidationError({"avatar": "头像uuid错误"})
         if 'nickname' in data:
             if not (2 <= len(data['nickname']) <= 30):
-                raise serializers.ValidationError("昵称长度必须在2到30之间")
+                raise serializers.ValidationError({"nickname": "昵称长度必须在2到30之间"})
             if not re.match(r'^[\u4e00-\u9fa5a-zA-Z0-9!@#$%^&*()_+~\-={}]+$', data['nickname']):
-                raise serializers.ValidationError("昵称只能包含汉字、英文字母、数字和!@#$%^&*()_+~\-={}")
+                raise serializers.ValidationError({"nickname": "昵称只能包含汉字、英文字母、数字和!@#$%^&*()_+~\-={}"})
             return data
         return data

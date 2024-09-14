@@ -7,7 +7,7 @@ from django.db import models
 class User(AbstractUser):
     name = models.CharField(max_length=255, null=True)
     nickname = models.CharField(max_length=30)
-    nwu_email = models.EmailField(max_length=255, null=True)
+    college_email = models.EmailField(max_length=255, null=True)
     avatar_uuid = models.UUIDField(default=uuid.uuid4, editable=False)
     bio = models.CharField(max_length=255, null=True)
     following = models.ManyToManyField('self', related_name='followers', symmetrical=False)

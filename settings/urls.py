@@ -28,7 +28,7 @@ from common.views import (
     index,
     AboutView,
     CaptchaView,
-    TosView, MessageBoxView,
+    TosView, MessageBoxView, BulletinListView,
 )
 from course_assessment.views import (
     MyReviewView,
@@ -44,11 +44,10 @@ from user.views import (
     UsernameDuplicationView,
     RegisterView,
     PasswordResetView,
-    PasswordMailResetView, ProfileView, PasswordResetWhenLoginView, BindNwuEmailView,
+    PasswordMailResetView, ProfileView, PasswordResetWhenLoginView, BindCollegeEmailView,
 )
 
 api_patterns = [
-    path('about/', AboutView.as_view(), name='about'),
 
     # 课程评价
     path('assessment/my/review/', MyReviewView.as_view()),
@@ -60,6 +59,7 @@ api_patterns = [
     path('assessment/teacher/<int:teacher_id>/', TeacherView.as_view()),
     path('assessment/teacher/', TeacherView.as_view()),
     path('assessment/reply/<int:review_id>/', ReviewReplyView.as_view()),
+    path('assessment/reply/', ReviewReplyView.as_view()),
     path('assessment/reply/like/', ReviewAndReplyLikeView.as_view()),
     path('assessment/course/like/', ReviewAndReplyLikeView.as_view()),
     path('assessment/search/', CourseTeacherSearchView.as_view()),
@@ -71,28 +71,30 @@ api_patterns = [
     path('user/register/', RegisterView.as_view(), name='register'),
     path('user/username/', UsernameDuplicationView.as_view(), name='username'),
     path('user/reset/', PasswordResetView.as_view(), name='reset'),
-    path('user/mail-reset/<str:uid>/<str:token>/', PasswordMailResetView.as_view(), name='mail-reset'),
+    path('user/mail-reset/<str:token>/', PasswordMailResetView.as_view(), name='mail-reset'),
     path('user/reset-login/', PasswordResetWhenLoginView.as_view(), name='reset-login'),  # 通过旧密码在登录时重置密码
-    path('user/bind-nwu-email/<str:email_b64>/<str:uid>/<str:token>/', BindNwuEmailView.as_view(),
-         name='bind-nwu-email-get'),
-    path('user/bind-nwu-email/', BindNwuEmailView.as_view(),
-         name='bind-nwu-email-post'),
+    path('user/bind-college-email/<str:token>/', BindCollegeEmailView.as_view(),
+         name='bind-college-email-get'),
+    path('user/bind-college-email/', BindCollegeEmailView.as_view(),
+         name='bind-college-email-post'),
 
     # 站内信
-    path('message/',MessageBoxView.as_view(),name='messageBox'),
-    path('message/<str:classify>/<int:chatter_id>',MessageBoxView.as_view(),name='messageSender'),
+    path('message/', MessageBoxView.as_view(), name='messageBox'),
+    path('message/<str:classify>/<int:chatter_id>', MessageBoxView.as_view(), name='messageSender'),
     path('message/<str:classify>/', MessageBoxView.as_view(), name='messageSender'),
     # 验证码
     path('captcha/', CaptchaView.as_view(), name='captcha'),
 
     # tos
     path('tos/', TosView.as_view(), name='captcha'),
+    path('about/', AboutView.as_view(), name='about'),
+    path('bulletins/', BulletinListView.as_view(), name='bulletins'),
 
     # 文件操作
     path('upload/', FileUploadView.as_view(), name='file-upload'),
     path('download/<uuid:file_uuid>/', FileDownloadView.as_view(), name='file-download'),
     path('delete/<uuid:id>/', FileDeleteView.as_view(), name='file-delete'),
-    path('update/<uuid:id>/', FileUpdateView.as_view(), name='file-update'),
+    # path('update/<uuid:id>/', FileUpdateView.as_view(), name='file-update'),
 ]
 urlpatterns = [
     path('admin/', admin.site.urls),

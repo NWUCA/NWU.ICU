@@ -27,6 +27,12 @@ class AddReviewSerializer(serializers.ModelSerializer):
     def validate(self, data):
         if data.get('rating') > 5 or data.get('rating') < 0:
             raise serializers.ValidationError({'rating': "评分必须是0-5之间的整数"})
+        if data.get('difficulty') > 3 or data.get('difficulty') < 0:
+            raise serializers.ValidationError({'difficulty': "评分必须是0-3之间的整数"})
+        if data.get('grade') > 3 or data.get('grade') < 0:
+            raise serializers.ValidationError({'grade': "评分必须是0-3之间的整数"})
+        if data.get('homework') > 3 or data.get('homework') < 0:
+            raise serializers.ValidationError({'homework': "评分必须是0-3之间的整数"})
         return data
 
 
@@ -35,8 +41,9 @@ class DeleteReviewSerializer(serializers.Serializer):
 
 
 class AddReviewReplySerializer(serializers.Serializer):
-    content = serializers.CharField(write_only=True, required=True)
-    parent_id = serializers.IntegerField(write_only=True, required=True)
+    content = serializers.CharField(required=True)
+    parent_id = serializers.IntegerField(required=True)
+    review_id = serializers.IntegerField(required=True)
 
     def validate(self, data):
         parent_id = data.get('parent_id')
@@ -44,18 +51,24 @@ class AddReviewReplySerializer(serializers.Serializer):
             try:
                 ReviewReply.objects.get(id=parent_id)
             except ReviewReply.DoesNotExist:
-                raise serializers.ValidationError({'reply': 'reply parent does not exist'})
+                raise serializers.ValidationError({'reply': '回复对象不存在'})
         return data
 
 
 class DeleteReviewReplySerializer(serializers.Serializer):
-    reply_id = serializers.IntegerField(write_only=True, required=True)
+    review_id = serializers.IntegerField(required=True)
+    reply_id = serializers.IntegerField(required=True)
 
 
 class ReviewAndReplyLikeSerializer(serializers.Serializer):
     review_id = serializers.IntegerField(write_only=True, required=True)
     reply_id = serializers.IntegerField(write_only=True, required=True)
     like_or_dislike = serializers.IntegerField(write_only=True, required=True)
+
+    def validate(self, data):
+        if data.get('like_or_dislike') not in [-1, 1]:
+            raise serializers.ValidationError({"like_or_dislike": "操作错误"})
+        return data
 
 
 class CourseTeacherSearchSerializer(serializers.Serializer):
@@ -101,3 +114,7 @@ class TeacherSerializer(serializers.Serializer):
 class CourseLikeSerializer(serializers.Serializer):
     course_id = serializers.IntegerField(required=True)
     like = serializers.IntegerField(required=True)
+    def validate(self, data):
+        if data.get('like') not in [-1, 1]:
+            raise serializers.ValidationError({"like": "操作错误"})
+        return data
