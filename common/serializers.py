@@ -2,7 +2,7 @@ from captcha.models import CaptchaStore
 from django.conf import settings
 from rest_framework import serializers
 
-from .models import Bulletin, About
+from .models import Bulletin, About, Chat
 
 
 class CaptchaSerializer(serializers.Serializer):
@@ -44,6 +44,15 @@ class AboutSerializer(serializers.Serializer):
         fields = ['content', 'create_time', 'update_time']
 
 
-class MessageSerializer(serializers.Serializer):
+class ChatMessageSerializer(serializers.Serializer):
     receiver = serializers.IntegerField()
-    content = serializers.CharField(allow_blank=True)
+    content = serializers.CharField()
+    classify = serializers.CharField(default='user')
+
+    def validate(self, data):
+        classify_list = [message[0] for message in Chat.classify_MESSAGE]
+        if data['classify'] not in classify_list:
+            raise serializers.ValidationError({'classify': 'out of range'})
+        if data['classify'] == 'system':
+            raise serializers.ValidationError({'classify': 'auth error'})
+        return data

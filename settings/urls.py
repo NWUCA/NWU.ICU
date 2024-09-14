@@ -80,7 +80,8 @@ api_patterns = [
 
     # 站内信
     path('message/',MessageBoxView.as_view(),name='messageBox'),
-    path('message/<int:sender_id>',MessageBoxView.as_view(),name='messageSender'),
+    path('message/<str:classify>/<int:chatter_id>',MessageBoxView.as_view(),name='messageSender'),
+    path('message/<str:classify>/', MessageBoxView.as_view(), name='messageSender'),
     # 验证码
     path('captcha/', CaptchaView.as_view(), name='captcha'),
 

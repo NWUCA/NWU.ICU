@@ -4,6 +4,7 @@ from django.db.models.signals import post_save, post_delete, pre_save
 from django.dispatch import receiver
 from pypinyin import lazy_pinyin
 
+from common.models import ChatLike
 from common.signals import soft_delete_signal
 from .models import Review, Course, ReviewAndReplyLike, CourseLike, Teacher
 
@@ -42,13 +43,13 @@ def update_course_normalized_avg_rating(sender, instance, **kwargs):
 
 
 def update_review_reply_like_dislike_counts(instance):
-    if instance.review and not instance.review_reply:
+    if instance.review and instance.review_reply is None:
         review = instance.review
-        review.like_count = ReviewAndReplyLike.objects.filter(review=review, like=1).count()
-        review.dislike_count = ReviewAndReplyLike.objects.filter(review=review, like=-1).count()
+        review.like_count = ReviewAndReplyLike.objects.filter(review=review, review_reply=None, like=1).count()
+        review.dislike_count = ReviewAndReplyLike.objects.filter(review=review, review_reply=None, like=-1).count()
         review.save()
 
-    if instance.review_reply:
+    if instance.review_reply is not None:
         review_reply = instance.review_reply
         review_reply.like_count = ReviewAndReplyLike.objects.filter(review_reply=review_reply, like=1).count()
         review_reply.dislike_count = ReviewAndReplyLike.objects.filter(review_reply=review_reply, like=-1).count()
@@ -62,10 +63,25 @@ def update_course_like_dislike_counts(instance):
     course.save()
 
 
+def update_chat_like_counts(instance, sender):
+    if instance.review or instance.review_reply:
+        post = instance.review_reply if instance.review_reply is not None else instance.review
+        raw_post_classify = 'reply' if instance.review_reply is not None else 'review'
+        chat_like, created = ChatLike.objects.get_or_create(raw_post_classify=raw_post_classify, raw_post=post.id)
+        chat_like.like_count = post.like_count
+        chat_like.dislike_count = post.dislike_count
+        if chat_like.like_count == 0 and chat_like.dislike_count == 0:
+            chat_like.delete()
+            return
+        chat_like.latest_like_datetime = instance.create_time
+        chat_like.save()
+
+
 @receiver(post_save, sender=ReviewAndReplyLike)
 @receiver(post_delete, sender=ReviewAndReplyLike)
 def review_and_reply_like_changed(sender, instance, **kwargs):
     update_review_reply_like_dislike_counts(instance)
+    update_chat_like_counts(instance, sender)
 
 
 @receiver(post_save, sender=CourseLike)
