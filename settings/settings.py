@@ -46,6 +46,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 REST_FRAMEWORK = {
+    'EXCEPTION_HANDLER': 'common.utils.custom_exception_handler',  # 不知道为什么会报黄
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework.authentication.SessionAuthentication',
         'rest_framework.authentication.BasicAuthentication',
@@ -162,7 +163,7 @@ LOGGING = {
         },
         'file': {
             'class': 'logging.handlers.RotatingFileHandler',
-            'filename': BASE_DIR / 'logs' / 'NWUICU.log',
+            'filename': BASE_DIR / 'logs' / 'Web.log',
             'maxBytes': 10 * 1024 * 1024,
             'backupCount': 10,
             'formatter': 'simple',
@@ -203,4 +204,4 @@ UNIVERSITY_STUDENT_MAIL_SUFFIX = 'stumail.nwu.edu.cn'
 UNIVERSITY_CHINESE_NAME = '西北大学'
 UNIVERSITY_ENGLISH_NAME = 'Northwest University'
 UNIVERSITY_ENGLISH_ABBREVIATION_NAME = 'NWU'
-WEBSITE_NAME= "NWU.ICU"
+WEBSITE_NAME = "NWU.ICU"

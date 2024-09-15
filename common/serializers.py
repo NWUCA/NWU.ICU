@@ -3,6 +3,7 @@ from django.conf import settings
 from rest_framework import serializers
 
 from .models import About, Chat
+from utils import get_err_msg
 
 
 class CaptchaSerializer(serializers.Serializer):
@@ -18,9 +19,9 @@ class CaptchaSerializer(serializers.Serializer):
             captcha = CaptchaStore.objects.get(hashkey=captcha_key)
             if captcha.response != captcha_value.lower():
                 captcha.delete()
-                raise serializers.ValidationError({"captcha": "验证码错误"})
+                raise serializers.ValidationError({'captcha':get_err_msg('验证码错误')})
         except CaptchaStore.DoesNotExist:
-            raise serializers.ValidationError({"captcha": "验证码已失效"})
+            raise serializers.ValidationError({'captcha':get_err_msg('验证码已失效')})
         captcha.delete()
         return data
 
@@ -43,7 +44,7 @@ class ChatMessageSerializer(serializers.Serializer):
     def validate(self, data):
         classify_list = [message[0] for message in Chat.classify_MESSAGE]
         if data['classify'] not in classify_list:
-            raise serializers.ValidationError({'classify': 'out of range'})
+            raise serializers.ValidationError({'classify':get_err_msg('out of range')})
         if data['classify'] == 'system':
-            raise serializers.ValidationError({'classify': 'auth error'})
+            raise serializers.ValidationError({'classify':get_err_msg('auth error')})
         return data

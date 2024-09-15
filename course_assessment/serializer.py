@@ -1,5 +1,6 @@
 from rest_framework import serializers
 
+from common.utils import get_err_msg
 from .models import Review, ReviewHistory, ReviewReply
 
 
@@ -25,14 +26,16 @@ class AddReviewSerializer(serializers.ModelSerializer):
         fields = ['course', 'content', 'rating', 'anonymous', 'difficulty', 'grade', 'homework', 'reward', 'semester']
 
     def validate(self, data):
-        if data.get('rating') > 5 or data.get('rating') < 0:
-            raise serializers.ValidationError({'rating': "评分必须是0-5之间的整数"})
-        if data.get('difficulty') > 3 or data.get('difficulty') < 0:
-            raise serializers.ValidationError({'difficulty': "评分必须是0-3之间的整数"})
-        if data.get('grade') > 3 or data.get('grade') < 0:
-            raise serializers.ValidationError({'grade': "评分必须是0-3之间的整数"})
-        if data.get('homework') > 3 or data.get('homework') < 0:
-            raise serializers.ValidationError({'homework': "评分必须是0-3之间的整数"})
+        fields = {
+            'rating': (0, 5),
+            'difficulty': (0, 3),
+            'grade': (0, 3),
+            'homework': (0, 3)
+        }
+        for field, (min_val, max_val) in fields.items():
+            value = data.get(field)
+            if value is not None and (value < min_val or value > max_val):
+                raise serializers.ValidationError({'rating': get_err_msg('rating_out_range')})
         return data
 
 
@@ -51,7 +54,7 @@ class AddReviewReplySerializer(serializers.Serializer):
             try:
                 ReviewReply.objects.get(id=parent_id)
             except ReviewReply.DoesNotExist:
-                raise serializers.ValidationError({'reply': '回复对象不存在'})
+                raise serializers.ValidationError({'reply': get_err_msg('review_not_exist')})
         return data
 
 
@@ -67,7 +70,7 @@ class ReviewAndReplyLikeSerializer(serializers.Serializer):
 
     def validate(self, data):
         if data.get('like_or_dislike') not in [-1, 1]:
-            raise serializers.ValidationError({"like_or_dislike": "操作错误"})
+            raise serializers.ValidationError({'like_or_dislike': get_err_msg('operation_error')})
         return data
 
 
@@ -93,14 +96,15 @@ class AddCourseSerializer(serializers.Serializer):
 
         if teacher_exist:
             if not data.get('teacher_id'):
-                raise serializers.ValidationError({"teacher_id": "Teacher ID is required when teacher_exist is True."})
+                raise serializers.ValidationError(
+                    {'teacher_id': get_err_msg('teacher_id_when_exist')})
         else:
             if not data.get('teacher_name'):
                 raise serializers.ValidationError(
-                    {"teacher_name": "Teacher name is required when teacher_exist is False."})
+                    {'teacher_name': get_err_msg('teacher_name_when_not_exist')})
             if not data.get('teacher_school'):
                 raise serializers.ValidationError(
-                    {"teacher_school": "Teacher school is required when teacher_exist is False."})
+                    {'teacher_school': get_err_msg('teacher_school_when_not_exist')})
 
         return data
 
@@ -114,7 +118,8 @@ class TeacherSerializer(serializers.Serializer):
 class CourseLikeSerializer(serializers.Serializer):
     course_id = serializers.IntegerField(required=True)
     like = serializers.IntegerField(required=True)
+
     def validate(self, data):
         if data.get('like') not in [-1, 1]:
-            raise serializers.ValidationError({"like": "操作错误"})
+            raise serializers.ValidationError({'like': get_err_msg('operation_error')})
         return data

@@ -9,33 +9,34 @@ import settings.settings
 from common.file.models import UploadedFile
 from common.serializers import CaptchaSerializer
 from user.models import User
+from utils import get_err_msg
 
 
 def username_checker(username):
     if not (8 <= len(username) <= 29):
-        raise serializers.ValidationError({'username': "用户名长度必须在8到29个字符之间"})
+        raise serializers.ValidationError({'username': get_err_msg('username_not_match_length')})
     if not re.match(r'^[a-zA-Z0-9_]+$', username):
-        raise serializers.ValidationError({"username": "用户名只能包含字母、数字和下划线"})
+        raise serializers.ValidationError({'username': get_err_msg('username_invalid_char')})
     pattern_checks = [
-        (r'[a-z]', "用户名必须包含至少一个字母"),
+        (r'[a-z]', '用户名必须包含至少一个字母'),
     ]
 
     for pattern, error_message in pattern_checks:
         if not re.search(pattern, username):
-            raise serializers.ValidationError({"username": error_message})
+            raise serializers.ValidationError({'username': error_message})
     if User.objects.filter(username=username).exists():
-        raise serializers.ValidationError({"username": "已存在一位使用该名字的用户"})
+        raise serializers.ValidationError({'username': get_err_msg('username_duplicate')})
 
 
 def password_complexity_checker(password):
     if len(password) < 8 or len(password) > 30:
-        raise serializers.ValidationError({"password": "密码长度必须在8-30之间"})
+        raise serializers.ValidationError({'password': get_err_msg('password_not_match_length')})
 
     pattern_checks = [r'[A-Z]', r'[a-z]', r'[0-9]']
 
     for pattern in pattern_checks:
         if not re.search(pattern, password):
-            raise serializers.ValidationError({"password": "密码必须同时包含大写字母, 小写字母, 数字"})
+            raise serializers.ValidationError({'password': get_err_msg('password_invalid_char')})
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -68,10 +69,9 @@ class RegisterSerializer(serializers.ModelSerializer):
         email = data.get('email')
         username_checker(username)
         if lower(email).endswith(settings.settings.UNIVERSITY_MAIL_SUFFIX):
-            raise serializers.ValidationError(
-                {"email": f"注册时不可使用{settings.settings.UNIVERSITY_CHINESE_NAME}邮箱"})
+            raise serializers.ValidationError({"email": get_err_msg('invalid_college_email')})
         if user_model.objects.filter(email=email).exists():
-            raise serializers.ValidationError({"email": "此邮箱已被注册"})
+            raise serializers.ValidationError({'email': get_err_msg('email_duplicate')})
 
         password = data.get('password')
         password_complexity_checker(password)
@@ -116,7 +116,7 @@ class PasswordResetRequestSerializer(serializers.Serializer):  # 找回密码界
         })
 
         if not captcha_serializer.is_valid():
-            raise serializers.ValidationError("Invalid captcha")
+            raise serializers.ValidationError('Invalid captcha')
 
         return data
 
@@ -134,10 +134,10 @@ class PasswordResetMailRequestSerializer(serializers.Serializer):  # 点击邮�
         })
 
         if not captcha_serializer.is_valid():
-            raise serializers.ValidationError("Invalid captcha")
+            raise serializers.ValidationError('Invalid captcha')
 
         if data['new_password'] != data['confirm_password']:
-            raise serializers.ValidationError("Passwords do not match.")
+            raise serializers.ValidationError('Passwords do not match.')
         else:
             password_complexity_checker(data['new_password'])
         return data
@@ -157,14 +157,14 @@ class PasswordResetWhenLoginSerializer(serializers.Serializer):  # 点击邮箱�
         })
 
         if not captcha_serializer.is_valid():
-            raise serializers.ValidationError("Invalid captcha")
+            raise serializers.ValidationError('Invalid captcha')
         user = self.context['request'].user
         if not user.check_password(data.get('old_password')):
-            raise serializers.ValidationError({'password': "旧密码不正确"})
+            raise serializers.ValidationError({'password': get_err_msg('password_old_not_true')})
         if data['new_password'] != data['confirm_password']:
-            raise serializers.ValidationError({'password': "两次输入的密码不一致"})
+            raise serializers.ValidationError({'password': get_err_msg('password_re_not_consistent')})
         if user.check_password(data['confirm_password']):
-            raise serializers.ValidationError({'password': "新老密码不可以一致"})
+            raise serializers.ValidationError({'password': get_err_msg('password_re_equal_old')})
         else:
             password_complexity_checker(data['new_password'])
         return data
@@ -178,7 +178,7 @@ class BindCollegeEmailSerializer(serializers.Serializer):
         if email.endswith(settings.settings.UNIVERSITY_MAIL_SUFFIX):
             return data
         else:
-            raise serializers.ValidationError({'mail': f"非{settings.settings.UNIVERSITY_CHINESE_NAME}邮箱"})
+            raise serializers.ValidationError({'mail':get_err_msg('not_college_email')})
 
 
 class UpdateProfileSerializer(serializers.Serializer):
@@ -197,11 +197,12 @@ class UpdateProfileSerializer(serializers.Serializer):
             try:
                 UploadedFile.objects.get(id=data['avatar'])
             except (UploadedFile.DoesNotExist, ValidationError):
-                raise serializers.ValidationError({"avatar": "头像uuid错误"})
+                raise serializers.ValidationError({'avatar': get_err_msg('avatar_uuid_error')})
         if 'nickname' in data:
             if not (2 <= len(data['nickname']) <= 30):
-                raise serializers.ValidationError({"nickname": "昵称长度必须在2到30之间"})
+                raise serializers.ValidationError({'nickname': get_err_msg('nickname_not_match_length')})
             if not re.match(r'^[\u4e00-\u9fa5a-zA-Z0-9!@#$%^&*()_+~\-={}]+$', data['nickname']):
-                raise serializers.ValidationError({"nickname": "昵称只能包含汉字、英文字母、数字和!@#$%^&*()_+~\-={}"})
+                raise serializers.ValidationError(
+                    {'nickname': get_err_msg('nickname_invalid_char')})
             return data
         return data

@@ -9,8 +9,8 @@ from rest_framework.views import APIView
 
 from user.models import User
 from .models import Bulletin, About, Chat, ChatMessage
-from .serializers import AboutSerializer, CaptchaSerializer, ChatMessageSerializer
-from .utils import return_response
+from .serializers import CaptchaSerializer, ChatMessageSerializer
+from utils import return_response, get_err_msg
 
 
 class CaptchaView(APIView):
@@ -76,7 +76,8 @@ class MessageBoxView(APIView):
 
     def get(self, request, classify, chatter_id=None):
         if classify not in [message[0] for message in Chat.classify_MESSAGE]:
-            return return_response(errors={'classify': "Invalid classify"}, status_code=status.HTTP_400_BAD_REQUEST)
+            return return_response(errors={'classify': get_err_msg('invalid_classify')},
+                                   status_code=status.HTTP_400_BAD_REQUEST)
         if chatter_id is None:
             chats = Chat.objects.filter((Q(receiver=request.user) | Q(sender=request.user)) & Q(classify=classify)) \
                 .select_related('sender', 'receiver') \
@@ -136,7 +137,8 @@ class MessageBoxView(APIView):
             try:
                 receiver = User.objects.get(id=serializer.validated_data['receiver'])
             except User.DoesNotExist:
-                return return_response(errors={'user': '目标用户不存在'}, status_code=status.HTTP_400_BAD_REQUEST)
+                return return_response(errors={'user': get_err_msg('user_not_exist')},
+                                       status_code=status.HTTP_400_BAD_REQUEST)
             chat, created = Chat.get_or_create_chat(sender=request.user, receiver=receiver,
                                                     classify=serializer.validated_data['classify'])
             chat_message = ChatMessage.objects.create(
