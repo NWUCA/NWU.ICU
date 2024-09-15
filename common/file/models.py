@@ -10,3 +10,4 @@ class UploadedFile(models.Model):
     file = models.FileField(upload_to='uploads/')
     uploaded_at = models.DateTimeField(auto_now_add=True)
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    file_hash = models.CharField(max_length=64, unique=True, null=True)

@@ -9,7 +9,7 @@ import settings.settings
 from common.file.models import UploadedFile
 from common.serializers import CaptchaSerializer
 from user.models import User
-from utils import get_err_msg
+from common.utils import get_err_msg
 
 
 def username_checker(username):

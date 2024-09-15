@@ -10,7 +10,7 @@ from rest_framework.views import APIView
 from user.models import User
 from .models import Bulletin, About, Chat, ChatMessage
 from .serializers import CaptchaSerializer, ChatMessageSerializer
-from utils import return_response, get_err_msg
+from common.utils import return_response, get_err_msg
 
 
 class CaptchaView(APIView):

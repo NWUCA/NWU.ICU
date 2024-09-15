@@ -2,6 +2,8 @@ import settings.settings
 
 errcode_dict = {
     'invalid_classify': '非法类别',
+    'captcha_error': '验证码错误',
+    'captcha_overdue': '验证码已失效',
     'auth_error': '权限不足',
     'user_not_exist': '目标用户不存在',
     'file_not_exist': '目标文件不存在',
