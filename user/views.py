@@ -108,7 +108,13 @@ class PasswordResetView(APIView):
         serializer = PasswordResetRequestSerializer(data=request.data)
         if serializer.is_valid():
             email = serializer.validated_data['email']
-            user = User.objects.get(email=email)
+            try:
+                user = User.objects.get(email=email)
+            except User.DoesNotExist:
+                logger.warning(f'使用{email}邮箱的用户不存在')
+                return return_response(message="用户不存在",
+                                       status_code=status.HTTP_400_BAD_REQUEST)
+
             token = default_token_generator.make_token(user)
             cache.set(token, {'email': email, 'id': user.id}, timeout=60 * 60 * 24)
             reset_link = request.build_absolute_uri(
