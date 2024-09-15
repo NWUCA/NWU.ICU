@@ -71,10 +71,10 @@ class RegisterView(APIView):
                     cache.delete(token)
                     return return_response(message=email)
                 else:
-                    return return_response(message="无效的token", status_code=HTTP_400_BAD_REQUEST)
+                    return return_response(errors={'token': "无效的token"}, status_code=HTTP_400_BAD_REQUEST)
             except (TypeError, ValueError, OverflowError, User.DoesNotExist):
                 pass
-        return return_response(message="token参数错误", status_code=HTTP_400_BAD_REQUEST)
+        return return_response(errors={'token': "token参数错误"}, status_code=HTTP_400_BAD_REQUEST)
 
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
@@ -112,7 +112,7 @@ class PasswordResetView(APIView):
                 user = User.objects.get(email=email)
             except User.DoesNotExist:
                 logger.warning(f'使用{email}邮箱的用户不存在')
-                return return_response(message="用户不存在",
+                return return_response(errors={"email": "用户不存在"},
                                        status_code=status.HTTP_400_BAD_REQUEST)
 
             token = default_token_generator.make_token(user)
@@ -160,7 +160,7 @@ class PasswordMailResetView(APIView):  # 点击邮件重置密码链接后
             try:
                 user_info_dict = cache.get(token)
                 if user_info_dict is None:
-                    return return_response(message="错误的Token", status_code=status.HTTP_401_UNAUTHORIZED)
+                    return return_response(errors={'token': "错误的Token"}, status_code=status.HTTP_401_UNAUTHORIZED)
                 user = User.objects.get(id=user_info_dict.get('id'))
                 token_check = default_token_generator.check_token(user, token)
                 if token_check:
@@ -171,9 +171,9 @@ class PasswordMailResetView(APIView):  # 点击邮件重置密码链接后
                     cache.delete(token)
                     return return_response(message="已成功重置密码!")
                 else:
-                    return return_response(message="错误的Token", status_code=status.HTTP_401_UNAUTHORIZED)
+                    return return_response(errors={'token': "错误的Token"}, status_code=status.HTTP_401_UNAUTHORIZED)
             except User.DoesNotExist:
-                return return_response(message="未找到用户", status_code=status.HTTP_404_NOT_FOUND)
+                return return_response(errors={'user': "未找到用户"}, status_code=status.HTTP_404_NOT_FOUND)
         return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
 
 
@@ -221,7 +221,7 @@ class Login(APIView):
                 try:
                     user = User.objects.get(username=username)
                 except User.DoesNotExist:
-                    return return_response(message="用户不存在", status_code=status.HTTP_401_UNAUTHORIZED)
+                    return return_response(errors={'user': "用户不存在"}, status_code=status.HTTP_401_UNAUTHORIZED)
                 if not user.is_active:
                     if user.check_password(serializer.validated_data['password']):
                         return RegisterView.send_active_email(user, request)
