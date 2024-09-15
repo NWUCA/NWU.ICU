@@ -1,5 +1,5 @@
 from rest_framework import status
-from rest_framework.exceptions import NotAuthenticated
+from rest_framework.exceptions import NotAuthenticated, Throttled
 from rest_framework.response import Response
 from rest_framework.views import exception_handler
 
@@ -34,5 +34,8 @@ def custom_exception_handler(exc, context):
 
     if isinstance(exc, NotAuthenticated):
         return return_response(errors={'login': get_err_msg('not_login')}, status_code=status.HTTP_401_UNAUTHORIZED)
+
+    if isinstance(exc, Throttled):
+        return return_response(errors={'throttle': get_err_msg('too_many_requests')}, status_code=status.HTTP_429_TOO_MANY_REQUESTS)
 
     return response

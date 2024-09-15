@@ -7,14 +7,16 @@ from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
 
+from common.utils import return_response, get_err_msg
 from user.models import User
 from .models import Bulletin, About, Chat, ChatMessage
 from .serializers import CaptchaSerializer, ChatMessageSerializer
-from common.utils import return_response, get_err_msg
+from .throttle import CaptchaAnonRateThrottle, CaptchaUserRateThrottle
 
 
 class CaptchaView(APIView):
     permission_classes = [AllowAny]
+    throttle_classes = [CaptchaAnonRateThrottle, CaptchaUserRateThrottle]
 
     def get(self, request):
         new_key = CaptchaStore.generate_key()
