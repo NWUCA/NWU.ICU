@@ -108,7 +108,7 @@ class PasswordResetView(APIView):
         serializer = PasswordResetRequestSerializer(data=request.data)
         if serializer.is_valid():
             email = serializer.validated_data['email']
-            user = User.objects.filter(email=email)
+            user = User.objects.get(email=email)
             token = default_token_generator.make_token(user)
             cache.set(token, {'email': email, 'id': user.id}, timeout=60 * 60 * 24)
             reset_link = request.build_absolute_uri(
