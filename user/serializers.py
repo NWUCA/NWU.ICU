@@ -106,7 +106,6 @@ class LoginSerializer(serializers.Serializer):
 
 class PasswordResetRequestSerializer(serializers.Serializer):  # 找回密码界面填写重置密码的表单
     email = serializers.EmailField(required=True)
-    username = serializers.CharField(required=True)
     captcha_key = serializers.CharField(required=True)
     captcha_value = serializers.CharField(required=True)
 
