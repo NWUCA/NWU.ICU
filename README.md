@@ -4,7 +4,7 @@
 
 ## 起步
 
-本项目使用 Django 开发, 并使用 poetry 来管理依赖.
+本项目使用 Django Rest Framework开发, 并使用 poetry 来管理依赖.
 
 - 安装依赖:
     ```
@@ -42,36 +42,16 @@
 
 ## Roadmap
 
-- [x] 首页添加类似 ustc.life 的导航
-- [x] PWA
-- [ ] 课程评价的 UX 改进
-- [ ] 使用 templatetags 代替手写 bulma 风格的 forms
-- [ ] 调研是否能够集成 mypy
-    - 目前 django-stubs (1.12) 尚不支持 django 4.1
-- 图表统计 (metabase? 看起来非常不错)
-
-## TODO
-
-- [x] 生产环境的配置, static files, DEBUG, 以及启动脚本
-- [x] logging
-- [x] 静态文件的图片 404 了
-- [x] 使用 django form
-- [ ] 登录的 throttle
-- [x] 引导用户设置昵称
-
-### 课程评价
-
-- [x] 查看自己的评价
-- [ ] 评价的编辑历史
-- [ ] 用星星显示评分
-- [ ] 富文本编辑 ([quill?](https://quilljs.com/))
-- [x] 课程的分页
-- [x] 课程和评价列表改成卡片
-- [x] 搜索
-- [x] 评价的日期时间
+- [x] 用户站内信
+- [x] 楼中楼的课程评价回复
+- [x] 模糊搜索课程与教师
+- [ ] 语义化搜索评价具体内容/回复
+- [ ] 精细化的throttle
+- [ ] 上传文件前hash去重
+- [ ] 全面的站内信息提醒
+- [ ] 图片ocr搜索
+- [ ] llm总结课程评价内容
 
 ## 贡献
 
 欢迎提 PR 或 issue.
-
-commit 之前请运行 `pre-commit` 以确保代码格式规范.
