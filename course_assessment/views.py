@@ -1,5 +1,4 @@
 import logging
-from idlelib.iomenu import errors
 
 from django.core.cache import cache
 from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage
@@ -35,24 +34,23 @@ class CourseList(APIView):
             'popular': 'review_count'
         }
         order_by = order_by_dict.get(order_by, 'average_rating')
-
         total_key = 'total_courses_count'
         total = cache.get(total_key)
         if total is None:
             total = Course.objects.count()
             cache.set(total_key, total, 30 * 60)
         if course_type == 'all':
-            courses = Course.objects.only('name', 'classification', 'teachers', 'semester').order_by(order_by,
-                                                                                                     'like_count')
+            courses = (
+                Course.objects.select_related('school').prefetch_related('semester').order_by(order_by,
+                                                                                              'like_count'))
         else:
-            courses = Course.objects.filter(classification=course_type).only('name', 'classification', 'teachers',
-                                                                             'semester').order_by(order_by,
-                                                                                                  'like_count')
+            courses = (Course.objects.select_related('school').prefetch_related('semester').filter(
+                classification=course_type).order_by(order_by, 'like_count'))
         paginator = Paginator(courses, page_size)
         course_page = paginator.get_page(page)
         courses_list = [{'id': course.id,
-                         'name': course.get_name,
-                         'classification': dict(Course.classification_choices).get(course.classification),
+                         'name': course.get_name(),
+                         'classification': course.get_classification(),
                          'teacher': course.get_teachers(),
                          'semester': course.get_semester(),
                          'review_count': course.review_count,
@@ -127,7 +125,7 @@ class CourseView(APIView):
         course_info = {
             'id': course_id,
             'code': course.course_code,
-            'name': course.get_name,
+            'name': course.get_name(),
             'category': course.get_classification_display(),
             'teachers': teachers_data,
             'semester': [semester.name for semester in course.semester.all()],
@@ -192,7 +190,8 @@ class LatestReviewView(APIView):
                            "id": -1 if review.anonymous else review.created_by.id,
                            "avatar_uuid": "183840a7-4099-41ea-9afa-e4220e379651" if review.anonymous else review.created_by.avatar_uuid},
                 'datetime': review.modify_time,
-                'course': {"name": review.course.get_name, "id": review.course.id, 'semester': review.semester.name, },
+                'course': {"name": review.course.get_name(), "id": review.course.id,
+                           'semester': review.semester.name, },
                 'content': review.content,
                 "teachers": [{"name": teacher.name, "id": teacher.id} for teacher in
                              review.course.teachers.all()],
@@ -309,7 +308,7 @@ class TeacherView(APIView):
                     'id': course.id,
                     'semester': ",".join([semester.name for semester in course.semester.all()]),
                     'code': course.course_code,
-                    'name': course.get_name,
+                    'name': course.get_name(),
                 },
                 'rating_avg': rating_avg,
                 'normalized_rating_avg': normalized_avg_rating,
@@ -355,7 +354,7 @@ class MyReviewView(APIView):
                 'id': review.id,
                 'anonymous': review.anonymous,
                 'datetime': review.modify_time,
-                'course': {"name": review.course.get_name, "id": review.course.id,
+                'course': {"name": review.course.get_name(), "id": review.course.id,
                            'semester': review.semester.name, },
                 'like': {'like': review.like_count, 'dislike': review.dislike_count},
                 'content': {"current_content": review.content,
@@ -385,7 +384,7 @@ class MyReviewReplyView(APIView):
                 'id': review_reply.id,
                 'content': review_reply.review.content,
                 'datetime': review_reply.create_time,
-                'course': {"name": review_reply.review.course.get_name, "id": review_reply.review.course.id,
+                'course': {"name": review_reply.review.course.get_name(), "id": review_reply.review.course.id,
                            'semester': review_reply.review.semester.name, },
                 'reply': {'id': review_reply.review.id, 'content': review_reply.content},
                 'like': {'like': review_reply.like_count, 'dislike': review_reply.dislike_count},
@@ -527,7 +526,7 @@ class CourseLikeView(APIView):
             if not created:
                 course_like.delete()
             course.refresh_from_db()
-            return return_response(contents={'name': course.get_name, 'id': course.id,
+            return return_response(contents={'name': course.get_name(), 'id': course.id,
                                              'like': {'like': course.like_count, 'dislike': course.dislike_count}})
         else:
             return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
