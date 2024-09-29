@@ -6,6 +6,7 @@ from django.db import transaction
 from django.db.models import Q
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.status import HTTP_404_NOT_FOUND
 from rest_framework.views import APIView
 
 from common.utils import return_response, get_err_msg
@@ -151,10 +152,9 @@ class SchoolView(APIView):
             contents={'schools': [{'id': school.id, 'name': school.get_name} for school in schools]}, )
 
 
-class ReviewView(APIView):
+class LatestReviewView(APIView):
     review_model = Review
-    review_history_model = ReviewHistory
-    permission_classes = [CustomPermission]
+    permission_classes = [AllowAny]
 
     def get(self, request):  # 最近课程评价
         current_page = int(request.query_params.get('currentPage', 1))
@@ -193,29 +193,41 @@ class ReviewView(APIView):
             contents={"reviews": review_list, "total": paginator.count, 'has_next': review_page.has_next(),
                       'has_previous': review_page.has_previous(), 'current_page': review_page.number, })
 
+
+class ReviewView(APIView):
+    review_model = Review
+    review_history_model = ReviewHistory
+    permission_classes = [CustomPermission]
+
+    def put(self, request):
+        serializer = AddReviewSerializer(data=request.data)
+        if serializer.is_valid():
+            course = Course.objects.get(id=serializer.data['course'])
+            semester = Semeseter.objects.get(id=serializer.data['semester'])
+            try:
+                review = self.review_model.all_objects.get(course=course, created_by=request.user)
+
+            except Review.DoesNotExist:
+                return return_response(contents={'review': get_err_msg('review_not_exist')},
+                                       status_code=HTTP_404_NOT_FOUND)
+            if review.is_deleted:
+                review.restore()
+            fields_to_update = ['content', 'rating', 'anonymous', 'difficulty', 'grade', 'homework', 'reward']
+            for field in fields_to_update:
+                setattr(review, field, serializer.data[field])
+            review.semester = semester
+            review.save()
+            return return_response(message='更新课程评价成功')
+
     def post(self, request):
         serializer = AddReviewSerializer(data=request.data)
         if serializer.is_valid():
             course = Course.objects.get(id=serializer.data['course'])
             semester = Semeseter.objects.get(id=serializer.data['semester'])
-            updated = False
             try:
-                review = self.review_model.all_objects.get(course=course, created_by=request.user)
-                if review.is_deleted:
-                    review.restore()
-                fields_to_update = ['content', 'rating', 'anonymous', 'difficulty', 'grade', 'homework', 'reward']
-                for field in fields_to_update:
-                    setattr(review, field, serializer.data[field])
-                review.semester = semester
-                review.save()
-
-                if review.content != serializer.data['content']:
-                    self.review_history_model.objects.create(review=review, content=serializer.data['content'])
-                message = '更新课程评价成功'
-                updated = True
+                self.review_model.all_objects.get(course=course, created_by=request.user)
             except Review.DoesNotExist:
-                # 创建新评论
-                review = self.review_model.objects.create(
+                self.review_model.objects.create(
                     course=course,
                     content=serializer.data['content'],
                     created_by=request.user,
@@ -228,14 +240,11 @@ class ReviewView(APIView):
                     reward=serializer.data['reward'],
                     semester=semester,
                 )
-                message = '成功创建课程评价'
-
-            if semester not in course.semester.all():
-                course.semester.add(semester)
-
-            return return_response(
-                message=message,
-                contents={'review': review.id, 'updated': updated})
+                if semester not in course.semester.all():
+                    course.semester.add(semester)
+                return return_response(message='新建课程评价成功')
+            return return_response(contents={'review': get_err_msg('review_has_exist')},
+                                   status_code=HTTP_404_NOT_FOUND)
         else:
             return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
 
@@ -269,7 +278,8 @@ class TeacherView(APIView):
         try:
             teacher = Teacher.objects.get(id=teacher_id)
         except Teacher.DoesNotExist:
-            return return_response(errors={'teacher': get_err_msg('teacher_not_exist')}, status_code=status.HTTP_404_NOT_FOUND)
+            return return_response(errors={'teacher': get_err_msg('teacher_not_exist')},
+                                   status_code=status.HTTP_404_NOT_FOUND)
         teacher_info = {
             'id': teacher.id,
             'name': teacher.name,

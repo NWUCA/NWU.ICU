@@ -37,6 +37,7 @@ from course_assessment.views import (
     TeacherView,
     ReviewReplyView,
     ReviewAndReplyLikeView, MyReviewReplyView, CourseTeacherSearchView, CourseList, CourseLikeView, SchoolView,
+    LatestReviewView,
 )
 from user.views import (
     Login,
@@ -53,6 +54,7 @@ api_patterns = [
     path('assessment/my/review/', MyReviewView.as_view()),
     path('assessment/my/reply/', MyReviewReplyView.as_view()),
     path('assessment/review/', ReviewView.as_view()),
+    path('assessment/latest-review/', LatestReviewView.as_view()),
     path('assessment/course/', CourseList.as_view()),
     path('assessment/course/<int:course_id>/', CourseView.as_view()),
     path('assessment/course/like/', CourseLikeView.as_view()),

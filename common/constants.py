@@ -40,4 +40,6 @@ errcode_dict = {
     'nickname_invalid_char': '昵称只能包含汉字、英文字母、数字和!@#$%^&*()_+~\-={}',
     'not_active': '用户尚未激活',
     'has_active': '用户已经激活',
+    'review_update_success':'课程评价更新成功',
+    'review_has_exist':'课程评价已经存在',
 }
