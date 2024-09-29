@@ -22,7 +22,6 @@ from common.file.view import (
     FileDownloadView,
     FileUploadView,
     FileDeleteView,
-    FileUpdateView,
 )
 from common.views import (
     index,
@@ -37,7 +36,7 @@ from course_assessment.views import (
     TeacherView,
     ReviewReplyView,
     ReviewAndReplyLikeView, MyReviewReplyView, CourseTeacherSearchView, CourseList, CourseLikeView, SchoolView,
-    LatestReviewView,
+    LatestReviewView, SemesterView,
 )
 from user.views import (
     Login,
@@ -54,7 +53,7 @@ api_patterns = [
     path('assessment/my/review/', MyReviewView.as_view()),
     path('assessment/my/reply/', MyReviewReplyView.as_view()),
     path('assessment/review/', ReviewView.as_view()),
-    path('assessment/review/<int:review_id>', ReviewView.as_view()),
+    path('assessment/review/<int:review_id>/', ReviewView.as_view()),
     path('assessment/latest-review/', LatestReviewView.as_view()),
     path('assessment/courselist/', CourseList.as_view()),
     path('assessment/course/<int:course_id>/', CourseView.as_view()),
@@ -68,6 +67,7 @@ api_patterns = [
     path('assessment/course/like/', ReviewAndReplyLikeView.as_view()),
     path('assessment/search/', CourseTeacherSearchView.as_view()),
     path('assessment/school/', SchoolView.as_view()),
+    path('assessment/semester/', SemesterView.as_view()),
     # 用户
     path('user/login/', Login.as_view(), name='login'),
     path('user/profile/', ProfileView.as_view(), name='profile'),

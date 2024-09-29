@@ -595,3 +595,14 @@ class CourseTeacherSearchView(APIView):
                                        status_code=status.HTTP_400_BAD_REQUEST)
             return return_response(contents={'search_result': search_result_list, **page_info})
         return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
+
+
+class SemesterView(APIView):
+    permission_classes = [CustomPermission]
+
+    def get(self, request):
+        semesters = Semeseter.objects.all()
+        semester_dict = {}
+        for semester in semesters:
+            semester_dict[semester.id] = semester.name
+        return return_response(contents=semester_dict)
