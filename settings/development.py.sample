@@ -1,6 +1,6 @@
 from .settings import *
 
-SECRET_KEY = 'whosyourdaddy'
+SECRET_KEY = os.getenv('','whosyourdaddy')
 DEBUG = True
 
 ALLOWED_HOSTS = ['*']
@@ -23,10 +23,11 @@ INTERNAL_IPS = [
 ]
 
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = "smtp.your.email.server"
-EMAIL_PORT = 465
+EMAIL_HOST = os.getenv('EMAIL_HOST',"smtp.your.email.server")
+EMAIL_PORT = os.getenv('EMAIL_PORT','465')
 EMAIL_USE_SSL = True
 # You need to make sure your SMTP server uses SSL, otherwise use TLS
 # EMAIL_USE_TLS = True
-EMAIL_HOST_USER = "yourEmail@example.com"
-EMAIL_HOST_PASSWORD = "your_password"
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
+CAPTCHA_TEST_MODE = True

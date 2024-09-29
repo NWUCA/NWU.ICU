@@ -9,6 +9,7 @@ https://docs.djangoproject.com/en/3.1/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/3.1/ref/settings/
 """
+import os
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -85,11 +86,11 @@ WSGI_APPLICATION = 'settings.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql_psycopg2',
-        'NAME': 'your_datebase_name',
-        'USER': 'your_datebase_user',
-        'PASSWORD': 'your_datebase_password',
-        'HOST': 'your_datebase_host',
-        'PORT': 'your_datebase_port',
+        'NAME': os.getenv('DB_NAME'),
+        'USER': os.getenv('DB_USER'),
+        'PASSWORD': os.getenv('DB_PASSWORD'),
+        'HOST': os.getenv('DB_HOST'),
+        'PORT': os.getenv('DB_PORT'),
     }
 }
 
@@ -198,10 +199,10 @@ FILE_UPLOAD_SIZE_LIMIT = 25 * 1024 * 1024  # 25 MB size limit
 
 SESSION_COOKIE_HTTPONLY = False
 
-UNIVERSITY_MAIL_SUFFIX = 'nwu.edu.cn'
-UNIVERSITY_TEACHER_MAIL_SUFFIX = 'nwu.edu.cn'
-UNIVERSITY_STUDENT_MAIL_SUFFIX = 'stumail.nwu.edu.cn'
-UNIVERSITY_CHINESE_NAME = '西北大学'
-UNIVERSITY_ENGLISH_NAME = 'Northwest University'
-UNIVERSITY_ENGLISH_ABBREVIATION_NAME = 'NWU'
-WEBSITE_NAME = "NWU.ICU"
+UNIVERSITY_MAIL_SUFFIX = os.getenv('UNIVERSITY_MAIL_SUFFIX', 'nwu.edu.cn')
+UNIVERSITY_TEACHER_MAIL_SUFFIX = os.getenv('UNIVERSITY_TEACHER_MAIL_SUFFIX', 'nwu.edu.cn')
+UNIVERSITY_STUDENT_MAIL_SUFFIX = os.getenv('UNIVERSITY_STUDENT_MAIL_SUFFIX', 'stumail.nwu.edu.cn')
+UNIVERSITY_CHINESE_NAME = os.getenv('UNIVERSITY_CHINESE_NAME', '西北大学')
+UNIVERSITY_ENGLISH_NAME = os.getenv('UNIVERSITY_ENGLISH_NAME', 'Northwest University')
+UNIVERSITY_ENGLISH_ABBREVIATION_NAME = os.getenv('UNIVERSITY_ABBREVIATION_NAME', 'NWU')
+WEBSITE_NAME = os.getenv('WEBSITE_NAME', 'NWU.ICU')
