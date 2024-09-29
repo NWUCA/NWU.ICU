@@ -41,14 +41,15 @@ errcode_dict = {
     'nickname_invalid_char': '昵称只能包含汉字、英文字母、数字和!@#$%^&*()_+~\-={}',
     'not_active': '用户尚未激活',
     'has_active': '用户已经激活',
-
     'review_has_exist': '课程评价已经存在',
     'school_not_exist': '学院不存在',
-
+    'classification_not_exist': '课程类别不存在',
+    'course_has_exist': '课程已经存在',
 }
 
 message_dict = {
     'teacher_create_success': '教师创建成功',
     'review_update_success': '更新课程评价成功',
-    'review_create_success': '新建课程评价成功'
+    'review_create_success': '新建课程评价成功',
+    'course_create_success': '新建课程成功',
 }

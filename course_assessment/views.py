@@ -141,11 +141,17 @@ class CourseView(APIView):
 
     def post(self, request):
         serializer = AddCourseSerializer(data=request.data)
-        # todo 判断老师是新增还是原来的, 并且新建的课程要保证和之前的不重复 按照老师 学院 课程来
         if serializer.is_valid():
-            if serializer.validated_data['teacher_exist']:
-                course = Course.objects.get(name=serializer.validated_data['name'],
-                                            teacher_id=serializer.validated_data['teacher_id'])
+            course = Course.objects.create(name=serializer.validated_data['course_name'],
+                                           school=School.objects.get(id=serializer.validated_data['course_school']),
+                                           classification=serializer.validated_data['course_classification'],
+                                           created_by=request.user)
+            teacher = Teacher.objects.get(id=serializer.validated_data['teacher_id'])
+            course.teachers.add(teacher)
+            course.save()
+            return return_response(message=get_msg_msg('course_create_success'))
+        else:
+            return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
 
 
 class SchoolView(APIView):
@@ -322,7 +328,7 @@ class TeacherView(APIView):
             try:
                 Teacher.objects.get(name=serializer.validated_data['name'], school=school)
             except Teacher.DoesNotExist:
-                Teacher.objects.create(name=serializer.validated_data['name'], school=school)
+                Teacher.objects.create(name=serializer.validated_data['name'], school=school, created_by=request.user)
                 return return_response(message=get_msg_msg('teacher_create_success'))
             return return_response(errors={"teacher": get_err_msg('teacher_has_exist')}, )
         else:

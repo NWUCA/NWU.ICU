@@ -1,7 +1,18 @@
 from rest_framework import serializers
 
 from common.utils import get_err_msg
-from .models import Review, ReviewHistory, ReviewReply, School
+from .models import Review, ReviewHistory, ReviewReply, School, Teacher, Course
+
+
+def school_exist(school):
+    if str(school) not in [str(school.id) for school in School.objects.all()]:
+        raise serializers.ValidationError({'school': get_err_msg('school_not_exist')})
+
+
+def classification_exist(classification):
+    course_classification_list = [type[0] for type in Course.classification_choices]
+    if classification not in course_classification_list:
+        raise serializers.ValidationError({'classification': get_err_msg('classification_not_exist')})
 
 
 class ReviewHistorySerializer(serializers.ModelSerializer):
@@ -82,31 +93,24 @@ class CourseTeacherSearchSerializer(serializers.Serializer):
 
 class AddCourseSerializer(serializers.Serializer):
     course_name = serializers.CharField(required=True)
-    teacher_exist = serializers.BooleanField(required=True)
-
-    teacher_id = serializers.IntegerField(required=False)
-    teacher_name = serializers.CharField(required=False)
-    teacher_school = serializers.IntegerField(required=False)
-
-    school_name = serializers.CharField(required=True)
-    course_page = serializers.CharField(required=False)
+    course_school = serializers.IntegerField(required=True)
+    course_classification = serializers.CharField(required=True)
+    teacher_id = serializers.IntegerField(required=True)
 
     def validate(self, data):
-        teacher_exist = data.get('teacher_exist')
-
-        if teacher_exist:
-            if not data.get('teacher_id'):
-                raise serializers.ValidationError(
-                    {'teacher_id': get_err_msg('teacher_id_when_exist')})
-        else:
-            if not data.get('teacher_name'):
-                raise serializers.ValidationError(
-                    {'teacher_name': get_err_msg('teacher_name_when_not_exist')})
-            if not data.get('teacher_school'):
-                raise serializers.ValidationError(
-                    {'teacher_school': get_err_msg('teacher_school_when_not_exist')})
-
-        return data
+        try:
+            Teacher.objects.get(id=data.get('teacher_id'))
+        except Teacher.DoesNotExist:
+            raise serializers.ValidationError({'teacher': get_err_msg('teacher_not_exist')})
+        school_exist(data.get('course_school'))
+        classification_exist(data.get('course_classification'))
+        try:
+            Course.objects.get(name=data.get('course_name'),
+                               school=data.get('course_school'),
+                               classification=data.get('course_classification'))
+        except Course.DoesNotExist:
+            return data
+        raise serializers.ValidationError({'course': get_err_msg('course_has_exist')})
 
 
 class TeacherSerializer(serializers.Serializer):
@@ -130,7 +134,5 @@ class AddTeacherSerializer(serializers.Serializer):
     school = serializers.CharField(required=True)
 
     def validate(self, data):
-        school_id_list = [str(school.id) for school in School.objects.all()]
-        if data.get('school') not in school_id_list:
-            raise serializers.ValidationError({'school': get_err_msg('school_not_exist')})
+        school_exist(data.get('school'))
         return data
