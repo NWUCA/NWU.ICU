@@ -13,8 +13,8 @@ from course_assessment.managers import SearchModuleErrorException
 from course_assessment.models import Course, Review, ReviewHistory, School, Teacher, Semeseter, ReviewReply, \
     ReviewAndReplyLike, CourseLike
 from course_assessment.permissions import CustomPermission
-from course_assessment.serializer import MyReviewSerializer, AddReviewSerializer, DeleteReviewSerializer, \
-    AddReviewReplySerializer, DeleteReviewReplySerializer, ReviewAndReplyLikeSerializer, AddCourseSerializer, \
+from course_assessment.serializer import MyReviewSerializer, AddReviewSerializer, AddReviewReplySerializer, \
+    DeleteReviewReplySerializer, ReviewAndReplyLikeSerializer, AddCourseSerializer, \
     TeacherSerializer, CourseLikeSerializer, AddTeacherSerializer
 
 logger = logging.getLogger(__name__)
@@ -87,6 +87,11 @@ class CourseView(APIView):
         reviews = (Review.objects.filter(course_id=course_id)
                    .select_related('created_by')
                    .order_by('-create_time'))
+        try:
+            request_user_review = Review.objects.get(course_id=course_id, created_by=request.user)
+            request_user_review_id = request_user_review.id
+        except Review.DoesNotExist:
+            request_user_review_id = None
         reviews_data = []
         for review in reviews:
             reviewReplies = ReviewReply.objects.filter(review=review).select_related('created_by').order_by(
@@ -134,6 +139,7 @@ class CourseView(APIView):
             'like': {'like': course.like_count, 'dislike': course.dislike_count},
             'rating_avg': f"{course.average_rating:.1f}",
             'normalized_rating_avg': f"{course.normalized_rating:.1f}",
+            'request_user_review_id': request_user_review_id,
             'reviews': reviews_data
         }
         return return_response(contents=course_info)
@@ -259,26 +265,22 @@ class ReviewView(APIView):
         else:
             return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
 
-    def delete(self, request):
-        serializer = DeleteReviewSerializer(data=request.data)
-        if serializer.is_valid():
-            try:
-                review_id = self.review_model.objects.get(id=serializer.validated_data['review_id'])
-            except Review.DoesNotExist:
-                return return_response(errors={"course": get_err_msg('course_not_exist')},
-                                       status_code=status.HTTP_400_BAD_REQUEST)
-            if review_id.created_by == request.user:
-                review_item_model = self.review_model.objects.get(id=review_id.id)
-                review_item_model.soft_delete()
-                review_history_items = self.review_history_model.objects.filter(review_id=review_id.id)
-                for review_history_item in review_history_items:
-                    review_history_item.soft_delete()
-                return return_response(message="删除课程评价成功")
-            else:
-                return return_response(errors={"auth": get_err_msg('auth_error')},
-                                       status_code=status.HTTP_401_UNAUTHORIZED)
+    def delete(self, request, review_id):
+        try:
+            review = self.review_model.objects.get(id=review_id)
+        except Review.DoesNotExist:
+            return return_response(errors={"review": get_err_msg('review_not_exist')},
+                                   status_code=status.HTTP_400_BAD_REQUEST)
+        if review.created_by == request.user:
+            review_item_model = self.review_model.objects.get(id=review.id)
+            review_item_model.soft_delete()
+            review_history_items = self.review_history_model.objects.filter(review_id=review.id)
+            for review_history_item in review_history_items:
+                review_history_item.soft_delete()
+            return return_response(message=get_msg_msg('delete_review_success'))
         else:
-            return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
+            return return_response(errors={"auth": get_err_msg('auth_error')},
+                                   status_code=status.HTTP_401_UNAUTHORIZED)
 
 
 class TeacherView(APIView):

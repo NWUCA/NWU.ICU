@@ -3,6 +3,8 @@ from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.db import models
 from pypinyin import lazy_pinyin
 
+from common.models import SoftDeleteManager
+
 
 class SearchModuleErrorException(Exception):
     def __init__(self, message="There is an error"):
@@ -66,3 +68,9 @@ class SearchManager(models.Manager):
             'has_previous': paginated_results.has_previous(),
             'total_count': paginator.count
         }
+
+
+class SoftDeleteSearchManager(SoftDeleteManager, SearchManager):
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        return queryset

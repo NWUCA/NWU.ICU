@@ -11,10 +11,10 @@ from django.core.mail import send_mail
 from django.template.loader import render_to_string
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
-from rest_framework.status import HTTP_200_OK, HTTP_400_BAD_REQUEST, HTTP_403_FORBIDDEN
+from rest_framework.status import HTTP_200_OK, HTTP_400_BAD_REQUEST, HTTP_403_FORBIDDEN, HTTP_204_NO_CONTENT
 from rest_framework.views import APIView
 
-from common.utils import return_response, get_err_msg
+from common.utils import return_response, get_err_msg, get_msg_msg
 from .models import User
 from .serializers import LoginSerializer, PasswordResetMailRequestSerializer, UsernameDuplicationSerializer, \
     PasswordResetWhenLoginSerializer, BindCollegeEmailSerializer, UpdateProfileSerializer
@@ -42,7 +42,7 @@ class RegisterView(APIView):
         if settings.DEBUG:
             logger.info(f"debug mode not send activation email to {user.id}:{user.email}")
             return return_response(
-                message="已发送邮件",
+                message=get_msg_msg('has_sent_email'),
                 contents={"email": email, 'token': token, 'link': active_link})
         else:
             logger.info(f'send activation email to {user.id}:{user.email}')
@@ -53,7 +53,7 @@ class RegisterView(APIView):
                 recipient_list=[email],
                 html_message=html_message,
             )
-        return return_response(message="已发送邮件")
+        return return_response(message=get_msg_msg('has_sent_email'))
 
     def get(self, request):
         token = request.query_params.get('token')
@@ -254,7 +254,7 @@ class ActiveUser(APIView):
                     return return_response(errors={'password': get_err_msg('password_incorrect')},
                                            status_code=status.HTTP_401_UNAUTHORIZED)
             else:
-                return return_response(errors={'user': get_err_msg('has_active')}, )
+                return return_response(errors={'user': get_err_msg('has_active')}, status_code=HTTP_204_NO_CONTENT)
         return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
 
 
@@ -337,7 +337,7 @@ class BindCollegeEmailView(APIView):
                     recipient_list=[email],
                     html_message=html_message,
                 )
-            return return_response(message='已发送邮件', status_code=HTTP_200_OK)
+            return return_response(message=get_msg_msg('has_sent_email'), status_code=HTTP_200_OK)
         else:
             return return_response(errors=serializer.errors, status_code=HTTP_400_BAD_REQUEST)
 

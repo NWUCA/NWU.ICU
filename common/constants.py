@@ -54,4 +54,6 @@ message_dict = {
     'review_update_success': '更新课程评价成功',
     'review_create_success': '新建课程评价成功',
     'course_create_success': '新建课程成功',
+    'has_sent_email': '已发送邮件',
+    'delete_review_success': '删除课程评价成功',
 }
