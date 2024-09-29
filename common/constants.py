@@ -56,4 +56,5 @@ message_dict = {
     'course_create_success': '新建课程成功',
     'has_sent_email': '已发送邮件',
     'delete_review_success': '删除课程评价成功',
+    'anonymous_user_nickname': '匿名用户',
 }

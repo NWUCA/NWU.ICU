@@ -85,7 +85,7 @@ class CourseView(APIView):
             return return_response(errors={'course': get_err_msg('course_not_exist')},
                                    status_code=status.HTTP_404_NOT_FOUND)
         reviews = (Review.objects.filter(course_id=course_id)
-                   .select_related('created_by')
+                   .select_related('created_by', 'semester')
                    .order_by('-create_time'))
         try:
             request_user_review = Review.objects.get(course_id=course_id, created_by=request.user)
@@ -96,31 +96,33 @@ class CourseView(APIView):
         for review in reviews:
             reviewReplies = ReviewReply.objects.filter(review=review).select_related('created_by').order_by(
                 '-create_time')
-            if not review.anonymous:
-                reviews_data.append({
-                    'id': review.id,
-                    'content': review.content,
-                    'rating': review.rating,
-                    'modified_time': review.modify_time,
-                    'created_time': review.create_time,
-                    'edited': review.edited,
-                    'like': {'like': review.like_count,
-                             'dislike': review.dislike_count},
-                    'difficulty': review.get_difficulty_display(),
-                    'grade': review.get_grade_display(),
-                    'homework': review.get_homework_display(),
-                    'reward': review.get_reward_display(),
-                    'semester': review.semester.name,
-                    'author': {'id': review.created_by.id, 'name': review.created_by.nickname,
-                               'avatar': review.created_by.avatar_uuid},
-                    'reply': [{'content': reviewReply.content,
-                               'created_time': reviewReply.create_time,
-                               'created_by': {'id': review.created_by.id, 'name': review.created_by.nickname,
-                                              'avatar': review.created_by.avatar_uuid},
-                               'like': {'like': reviewReply.like_count,
-                                        'dislike': reviewReply.dislike_count}}
-                              for reviewReply in reviewReplies]
-                })
+            reviews_data.append({
+                'id': review.id,
+                'content': review.content,
+                'rating': review.rating,
+                'modified_time': review.modify_time,
+                'created_time': review.create_time,
+                'edited': review.edited,
+                'like': {'like': review.like_count,
+                         'dislike': review.dislike_count},
+                'difficulty': review.difficulty,
+                'grade': review.grade,
+                'homework': review.homework,
+                'reward': review.reward,
+                'semester': review.semester.name,
+                'anonymous': review.anonymous,
+                'author': {'id': -1 if review.anonymous else review.created_by.id,
+                           'nickname': get_msg_msg(
+                               'anonymous_user_nickname') if review.anonymous else review.created_by.nickname,
+                           'avatar': 'anonymous' if review.anonymous else review.created_by.avatar_uuid},
+                'reply': [{'content': reviewReply.content,
+                           'created_time': reviewReply.create_time,
+                           'created_by': {'id': review.created_by.id, 'name': review.created_by.nickname,
+                                          'avatar': review.created_by.avatar_uuid},
+                           'like': {'like': reviewReply.like_count,
+                                    'dislike': reviewReply.dislike_count}}
+                          for reviewReply in reviewReplies]
+            })
         teachers_data = []
         for teacher in course.teachers.all():
             teachers_data.append({
@@ -193,9 +195,10 @@ class LatestReviewView(APIView):
         for review in review_page:
             temp_dict = {
                 'id': review.id,
-                'author': {"name": "匿名用户" if review.anonymous else review.created_by.nickname,
+                'author': {"nickname": get_msg_msg(
+                    'anonymous_user_nickname') if review.anonymous else review.created_by.nickname,
                            "id": -1 if review.anonymous else review.created_by.id,
-                           "avatar_uuid": "183840a7-4099-41ea-9afa-e4220e379651" if review.anonymous else review.created_by.avatar_uuid},
+                           "avatar_uuid": "anonymous" if review.anonymous else review.created_by.avatar_uuid},
                 'datetime': review.modify_time,
                 'course': {"name": review.course.get_name(), "id": review.course.id,
                            'semester': review.semester.name, },
@@ -233,6 +236,7 @@ class ReviewView(APIView):
             for field in fields_to_update:
                 setattr(review, field, serializer.data[field])
             review.semester = semester
+            review.edited = True
             review.save()
             return return_response(message=get_msg_msg('review_update_success'))
 
@@ -242,7 +246,7 @@ class ReviewView(APIView):
             course = Course.objects.get(id=serializer.data['course'])
             semester = Semeseter.objects.get(id=serializer.data['semester'])
             try:
-                self.review_model.all_objects.get(course=course, created_by=request.user)
+                review = self.review_model.all_objects.get(course=course, created_by=request.user)
             except Review.DoesNotExist:
                 self.review_model.objects.create(
                     course=course,
@@ -257,6 +261,16 @@ class ReviewView(APIView):
                     reward=serializer.data['reward'],
                     semester=semester,
                 )
+                if semester not in course.semester.all():
+                    course.semester.add(semester)
+                return return_response(message=get_msg_msg('review_create_success'))
+            if review.is_deleted:
+                ReviewHistory.objects.create(review=review, content=review.content, is_deleted=True)
+                update_fields = ['content', 'rating', 'anonymous', 'difficulty', 'grade', 'homework', 'reward']
+                for field in update_fields:
+                    setattr(review, field, serializer.validated_data[field])
+                review.semester = semester
+                review.restore()
                 if semester not in course.semester.all():
                     course.semester.add(semester)
                 return return_response(message=get_msg_msg('review_create_success'))
