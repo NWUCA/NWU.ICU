@@ -9,13 +9,13 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.status import HTTP_404_NOT_FOUND
 from rest_framework.views import APIView
 
-from common.utils import return_response, get_err_msg
+from common.utils import return_response, get_err_msg, get_msg_msg
 from course_assessment.models import Course, Review, ReviewHistory, School, Teacher, Semeseter, ReviewReply, \
     ReviewAndReplyLike, CourseLike
 from course_assessment.permissions import CustomPermission
 from course_assessment.serializer import MyReviewSerializer, AddReviewSerializer, DeleteReviewSerializer, \
     AddReviewReplySerializer, DeleteReviewReplySerializer, ReviewAndReplyLikeSerializer, CourseTeacherSearchSerializer, \
-    AddCourseSerializer, TeacherSerializer, CourseLikeSerializer
+    AddCourseSerializer, TeacherSerializer, CourseLikeSerializer, AddTeacherSerializer
 
 logger = logging.getLogger(__name__)
 
@@ -222,7 +222,7 @@ class ReviewView(APIView):
                 setattr(review, field, serializer.data[field])
             review.semester = semester
             review.save()
-            return return_response(message='更新课程评价成功')
+            return return_response(message=get_msg_msg('review_update_success'))
 
     def post(self, request):
         serializer = AddReviewSerializer(data=request.data)
@@ -247,7 +247,7 @@ class ReviewView(APIView):
                 )
                 if semester not in course.semester.all():
                     course.semester.add(semester)
-                return return_response(message='新建课程评价成功')
+                return return_response(message=get_msg_msg('review_create_success'))
             return return_response(contents={'review': get_err_msg('review_has_exist')},
                                    status_code=HTTP_404_NOT_FOUND)
         else:
@@ -316,13 +316,17 @@ class TeacherView(APIView):
         return return_response(contents=teacher_course_info)
 
     def post(self, request):
-        serializer = TeacherSerializer(data=request.data)
+        serializer = AddTeacherSerializer(data=request.data)
         if serializer.is_valid():
-            teachers = Teacher.objects.search(serializer.validated_data['name'], page_size=1, current_page=1)
-            teacher_list = [{'id': teacher.id, 'name': teacher.name, 'school': teacher.school.get_name} for teacher in
-                            teachers['results']]
-            return return_response(contents=teacher_list)
-        return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
+            school = School.objects.get(id=serializer.validated_data['school'])
+            try:
+                Teacher.objects.get(name=serializer.validated_data['name'], school=school)
+            except Teacher.DoesNotExist:
+                Teacher.objects.create(name=serializer.validated_data['name'], school=school)
+                return return_response(message=get_err_msg('teacher_create_success'))
+            return return_response(errors={"teacher": get_msg_msg('teacher_has_exist')}, )
+        else:
+            return return_response(errors=serializer.errors)
 
 
 class MyReviewView(APIView):
@@ -525,6 +529,15 @@ class CourseLikeView(APIView):
 
 class CourseTeacherSearchView(APIView):
     permission_classes = [AllowAny]
+
+    def teacher_seach(self, request):
+        serializer = TeacherSerializer(data=request.data)
+        if serializer.is_valid():
+            teachers = Teacher.objects.search(serializer.validated_data['name'], page_size=1, current_page=1)
+            teacher_list = [{'id': teacher.id, 'name': teacher.name, 'school': teacher.school.get_name} for teacher in
+                            teachers['results']]
+            return return_response(contents=teacher_list)
+        return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
 
     def post(self, request):
         serializer = CourseTeacherSearchSerializer(data=request.data)

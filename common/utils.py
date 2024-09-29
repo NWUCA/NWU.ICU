@@ -29,6 +29,10 @@ def get_err_msg(err_code: str):
     return {'err_code': err_code, 'err_msg': constants.errcode_dict[err_code]}
 
 
+def get_msg_msg(msg_code: str):
+    return constants.message_dict[msg_code]
+
+
 def custom_exception_handler(exc, context):
     response = exception_handler(exc, context)
 
@@ -36,6 +40,7 @@ def custom_exception_handler(exc, context):
         return return_response(errors={'login': get_err_msg('not_login')}, status_code=status.HTTP_401_UNAUTHORIZED)
 
     if isinstance(exc, Throttled):
-        return return_response(errors={'throttle': get_err_msg('too_many_requests')}, status_code=status.HTTP_429_TOO_MANY_REQUESTS)
+        return return_response(errors={'throttle': get_err_msg('too_many_requests')},
+                               status_code=status.HTTP_429_TOO_MANY_REQUESTS)
 
     return response

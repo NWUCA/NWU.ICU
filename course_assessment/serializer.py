@@ -1,7 +1,7 @@
 from rest_framework import serializers
 
 from common.utils import get_err_msg
-from .models import Review, ReviewHistory, ReviewReply
+from .models import Review, ReviewHistory, ReviewReply, School
 
 
 class ReviewHistorySerializer(serializers.ModelSerializer):
@@ -122,4 +122,15 @@ class CourseLikeSerializer(serializers.Serializer):
     def validate(self, data):
         if data.get('like') not in [-1, 1]:
             raise serializers.ValidationError({'like': get_err_msg('operation_error')})
+        return data
+
+
+class AddTeacherSerializer(serializers.Serializer):
+    name = serializers.CharField(required=True)
+    school = serializers.CharField(required=True)
+
+    def validate(self, data):
+        school_id_list = [str(school.id) for school in School.objects.all()]
+        if data.get('school') not in school_id_list:
+            raise serializers.ValidationError({'school': get_err_msg('school_not_exist')})
         return data

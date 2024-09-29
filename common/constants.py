@@ -12,6 +12,7 @@ errcode_dict = {
     'review_not_exist': '课程评价不存在',
     'reply_not_exist': '课程评价回复不存在',
     'teacher_not_exist': '教师不存在',
+    'teacher_has_exist': '教师已存在',
     'field missed': '输入缺失',
     'invalid_token': '无效的token',
     'have_login': '已经登录',
@@ -40,6 +41,14 @@ errcode_dict = {
     'nickname_invalid_char': '昵称只能包含汉字、英文字母、数字和!@#$%^&*()_+~\-={}',
     'not_active': '用户尚未激活',
     'has_active': '用户已经激活',
-    'review_update_success':'课程评价更新成功',
-    'review_has_exist':'课程评价已经存在',
+
+    'review_has_exist': '课程评价已经存在',
+    'school_not_exist': '学院不存在',
+
+}
+
+message_dict = {
+    'teacher_create_success': '教师创建成功',
+    'review_update_success': '更新课程评价成功',
+    'review_create_success': '新建课程评价成功'
 }
