@@ -45,7 +45,7 @@ class FileUploadView(generics.CreateAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.save(created_by=request.user)
-        return return_response(contents=serializer.data, status_code=status.HTTP_201_CREATED)
+        return return_response(contents={'uuid': serializer.instance.id}, status_code=status.HTTP_201_CREATED)
 
 
 class FileUpdateView(generics.UpdateAPIView):
