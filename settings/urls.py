@@ -44,7 +44,7 @@ from user.views import (
     UsernameDuplicationView,
     RegisterView,
     PasswordResetView,
-    PasswordMailResetView, ProfileView, PasswordResetWhenLoginView, BindCollegeEmailView,
+    PasswordMailResetView, ProfileView, PasswordResetWhenLoginView, BindCollegeEmailView, ActiveUser,
 )
 
 api_patterns = [
@@ -69,6 +69,7 @@ api_patterns = [
     path('user/profile/', ProfileView.as_view(), name='profile'),
     path('user/logout/', Logout.as_view(), name='logout'),
     path('user/register/', RegisterView.as_view(), name='register'),
+    path('user/active/', ActiveUser.as_view(), name='active'),
     path('user/username/', UsernameDuplicationView.as_view(), name='username'),
     path('user/reset/', PasswordResetView.as_view(), name='reset'),
     path('user/mail-reset/<str:token>/', PasswordMailResetView.as_view(), name='mail-reset'),

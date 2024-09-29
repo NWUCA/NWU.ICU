@@ -38,5 +38,6 @@ errcode_dict = {
     'avatar_uuid_error': '头像uuid错误',
     'nickname_not_match_length': '昵称长度必须在2到30之间',
     'nickname_invalid_char': '昵称只能包含汉字、英文字母、数字和!@#$%^&*()_+~\-={}',
-
+    'not_active': '用户尚未激活',
+    'has_active': '用户已经激活',
 }

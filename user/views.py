@@ -11,7 +11,7 @@ from django.core.mail import send_mail
 from django.template.loader import render_to_string
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
-from rest_framework.status import HTTP_200_OK, HTTP_400_BAD_REQUEST
+from rest_framework.status import HTTP_200_OK, HTTP_400_BAD_REQUEST, HTTP_403_FORBIDDEN
 from rest_framework.views import APIView
 
 from common.utils import return_response, get_err_msg
@@ -227,11 +227,34 @@ class Login(APIView):
                                            status_code=status.HTTP_401_UNAUTHORIZED)
                 if not user.is_active:
                     if user.check_password(serializer.validated_data['password']):
-                        return RegisterView.send_active_email(user, request)
+                        return return_response(errors={'user': get_err_msg('not_active')},
+                                               status_code=HTTP_403_FORBIDDEN)
 
                 return return_response(errors={'password': get_err_msg('password_incorrect')},
                                        status_code=status.HTTP_401_UNAUTHORIZED)
 
+        return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
+
+
+class ActiveUser(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = LoginSerializer(data=request.data)
+        if serializer.is_valid():
+            try:
+                user = User.objects.get(username=serializer.validated_data['username'])
+            except User.DoesNotExist:
+                return return_response(errors={'user': get_err_msg('user_not_exist')},
+                                       status_code=status.HTTP_401_UNAUTHORIZED)
+            if not user.is_active:
+                if user.check_password(serializer.validated_data['password']):
+                    return RegisterView.send_active_email(user, request)
+                else:
+                    return return_response(errors={'password': get_err_msg('password_incorrect')},
+                                           status_code=status.HTTP_401_UNAUTHORIZED)
+            else:
+                return return_response(errors={'user': get_err_msg('has_active')}, )
         return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
 
 
