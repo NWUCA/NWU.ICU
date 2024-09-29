@@ -41,13 +41,18 @@ class CourseList(APIView):
         if total is None:
             total = Course.objects.count()
             cache.set(total_key, total, 30 * 60)
-
-        courses = Course.objects.only('name', 'classification', 'teachers', 'semester').order_by(order_by,
-                                                                                                 'like_count')
+        if course_type == 'all':
+            courses = Course.objects.only('name', 'classification', 'teachers', 'semester').order_by(order_by,
+                                                                                                     'like_count')
+        else:
+            courses = Course.objects.filter(classification=course_type).only('name', 'classification', 'teachers',
+                                                                             'semester').order_by(order_by,
+                                                                                                  'like_count')
         paginator = Paginator(courses, page_size)
         course_page = paginator.get_page(page)
         courses_list = [{'id': course.id,
                          'name': course.get_name,
+                         'classification': dict(Course.classification_choices).get(course.classification),
                          'teacher': course.get_teachers(),
                          'semester': course.get_semester(),
                          'review_count': course.review_count,
