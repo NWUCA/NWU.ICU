@@ -1,6 +1,6 @@
 from .settings import *
 
-SECRET_KEY = os.getenv('','whosyourdaddy')
+SECRET_KEY = os.getenv('SECRET_KEY','whosyourdaddy')
 DEBUG = True
 
 ALLOWED_HOSTS = ['*']
