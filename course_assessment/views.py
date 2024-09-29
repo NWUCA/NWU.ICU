@@ -323,8 +323,8 @@ class TeacherView(APIView):
                 Teacher.objects.get(name=serializer.validated_data['name'], school=school)
             except Teacher.DoesNotExist:
                 Teacher.objects.create(name=serializer.validated_data['name'], school=school)
-                return return_response(message=get_err_msg('teacher_create_success'))
-            return return_response(errors={"teacher": get_msg_msg('teacher_has_exist')}, )
+                return return_response(message=get_msg_msg('teacher_create_success'))
+            return return_response(errors={"teacher": get_err_msg('teacher_has_exist')}, )
         else:
             return return_response(errors=serializer.errors)
 
