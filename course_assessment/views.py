@@ -121,7 +121,7 @@ class CourseView(APIView):
             teachers_data.append({
                 'id': teacher.id,
                 'name': teacher.name,
-                'school': teacher.school.get_name if teacher.school else None,
+                'school': teacher.school.get_name() if teacher.school else None,
             })
         course_info = {
             'id': course_id,
@@ -130,7 +130,7 @@ class CourseView(APIView):
             'category': course.get_classification_display(),
             'teachers': teachers_data,
             'semester': [semester.name for semester in course.semester.all()],
-            'school': course.school.get_name,
+            'school': course.school.get_name(),
             'like': {'like': course.like_count, 'dislike': course.dislike_count},
             'rating_avg': f"{course.average_rating:.1f}",
             'normalized_rating_avg': f"{course.normalized_rating:.1f}",
@@ -159,7 +159,7 @@ class SchoolView(APIView):
     def get(self, request):
         schools = School.objects.all()
         return return_response(
-            contents={'schools': [{'id': school.id, 'name': school.get_name} for school in schools]}, )
+            contents={'schools': [{'id': school.id, 'name': school.get_name()} for school in schools]}, )
 
 
 class LatestReviewView(APIView):
@@ -294,7 +294,7 @@ class TeacherView(APIView):
         teacher_info = {
             'id': teacher.id,
             'name': teacher.name,
-            'school': teacher.school.get_name if teacher.school else None,
+            'school': teacher.school.get_name() if teacher.school else None,
         }
 
         courses = Course.objects.filter(teachers__id=teacher_id)
@@ -545,13 +545,14 @@ class CourseTeacherSearchView(APIView):
             current_page = serializer.validated_data['current_page']
             if search_type == 'teacher':
                 teachers = Teacher.objects.search(serializer.validated_data['name'], page_size=page_size,
-                                                  current_page=current_page)
-                search_result_list = [{'id': teacher.id, 'name': teacher.name, 'school': teacher.school.get_name} for
+                                                  current_page=current_page, select_related_fields=['school'])
+                search_result_list = [{'id': teacher.id, 'name': teacher.name, 'school': teacher.school.get_name()} for
                                       teacher in teachers['results']]
                 page_info = {k: v for k, v in teachers.items() if k != 'results'}
             elif search_type == 'course':
                 courses = Course.objects.search(serializer.validated_data['name'], page_size=page_size,
-                                                current_page=current_page)
+                                                current_page=current_page,
+                                                prefetch_related_fields=['semester', 'teachers'])
                 search_result_list = [{'id': course.id, 'name': course.name, 'teacher': course.get_teachers(),
                                        'classification': course.get_classification(),
                                        'school': course.school.get_name(), 'semester': course.get_semester(),
@@ -568,7 +569,8 @@ class CourseTeacherSearchView(APIView):
                 page_info = {k: v for k, v in courses.items() if k != 'results'}
             elif search_type == 'review':
                 try:
-                    reviews = Review.objects.search(serializer.validated_data['name'], page_size=page_size)
+                    reviews = Review.objects.search(serializer.validated_data['name'], page_size=page_size,
+                                                    select_related_fields=['course', 'semester', 'created_by'])
                 except SearchModuleErrorException:
                     return return_response(errors={'module': get_err_msg('invalid_search_type')}, )
                 search_result_list = [{'course': review.course.get_name(),
