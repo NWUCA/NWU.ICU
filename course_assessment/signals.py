@@ -112,6 +112,11 @@ def update_course_pinyin_and_vector(sender, instance, **kwargs):
     instance.pinyin = ''.join(lazy_pinyin(instance.name))
 
 
+@receiver(pre_save, sender=Review)
+def update_review_pinyin_and_vector(sender, instance, **kwargs):
+    instance.pinyin = ''.join(lazy_pinyin(instance.content))
+
+
 @receiver(post_save, sender=Teacher)
 def update_teacher_search_vector(sender, instance, **kwargs):
     Teacher.objects.filter(pk=instance.pk).update(
@@ -123,4 +128,11 @@ def update_teacher_search_vector(sender, instance, **kwargs):
 def update_course_search_vector(sender, instance, **kwargs):
     Course.objects.filter(pk=instance.pk).update(
         search_vector=SearchVector('name', weight='A') + SearchVector('pinyin', weight='B')
+    )
+
+
+@receiver(post_save, sender=Review)
+def update_review_search_vector(sender, instance, **kwargs):
+    Review.objects.filter(pk=instance.pk).update(
+        search_vector=SearchVector('content', weight='A') + SearchVector('pinyin', weight='B')
     )

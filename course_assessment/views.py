@@ -9,6 +9,7 @@ from rest_framework.status import HTTP_404_NOT_FOUND
 from rest_framework.views import APIView
 
 from common.utils import return_response, get_err_msg, get_msg_msg
+from course_assessment.managers import SearchModuleErrorException
 from course_assessment.models import Course, Review, ReviewHistory, School, Teacher, Semeseter, ReviewReply, \
     ReviewAndReplyLike, CourseLike
 from course_assessment.permissions import CustomPermission
@@ -565,6 +566,26 @@ class CourseTeacherSearchView(APIView):
                                        'latest_review_time': course.last_review_time} for course in
                                       courses['results']]
                 page_info = {k: v for k, v in courses.items() if k != 'results'}
+            elif search_type == 'review':
+                try:
+                    reviews = Review.objects.search(serializer.validated_data['name'], page_size=page_size)
+                except SearchModuleErrorException:
+                    return return_response(errors={'module': get_err_msg('invalid_search_type')}, )
+                search_result_list = [{'course': review.course.get_name(),
+                                       'content': review.content,
+                                       'rating': review.rating,
+                                       'created_by': {
+                                           'id': review.created_by.id,
+                                           'nickname': review.created_by.nickname,
+                                           'avatar': review.created_by.avatar_uuid},
+                                       'modify_time': review.modify_time,
+                                       'like': {
+                                           'like': review.like_count,
+                                           'dislike': review.dislike_count,
+                                       },
+                                       'semester': review.semester.name,
+                                       } for review in reviews['results']]
+                page_info = {k: v for k, v in reviews.items() if k != 'results'}
             else:
                 return return_response(errors=get_err_msg('invalid_type_field'),
                                        status_code=status.HTTP_400_BAD_REQUEST)

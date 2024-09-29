@@ -140,6 +140,9 @@ class Review(SoftDeleteModel):
     reward = models.PositiveSmallIntegerField(verbose_name='收获多少', choices=REWARD_CHOICES)
     source = models.CharField(verbose_name='来源', default='user', max_length=20)
     semester = models.ForeignKey(Semeseter, default=1, on_delete=models.CASCADE, verbose_name="开课学期")
+    pinyin = models.TextField(verbose_name='拼音', blank=True)
+    search_vector = SearchVectorField(null=True)
+    objects = SearchManager()
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=['course', 'created_by'], name='unique_review')]
