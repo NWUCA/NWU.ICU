@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   web:
     build: .
@@ -18,8 +16,8 @@ services:
       - DB_NAME=${DB_NAME}
       - DB_USER=${DB_USER}
       - DB_PASSWORD=${DB_PASSWORD}
-      - DB_HOST=${DB_HOST}
-      - DB_PORT=${DB_PORT}
+      - DB_HOST=db
+      - DB_PORT=5432
       - UNIVERSITY_MAIL_SUFFIX=${UNIVERSITY_MAIL_SUFFIX}
       - UNIVERSITY_TEACHER_MAIL_SUFFIX=${UNIVERSITY_TEACHER_MAIL_SUFFIX}
       - UNIVERSITY_STUDENT_MAIL_SUFFIX=${UNIVERSITY_STUDENT_MAIL_SUFFIX}
