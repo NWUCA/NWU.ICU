@@ -5,7 +5,7 @@ from django.contrib.postgres.search import SearchVectorField
 from django.db import models
 
 from common.models import SoftDeleteModel
-from course_assessment.managers import TeacherManager
+from course_assessment.managers import SearchManager
 from user.models import User
 
 
@@ -26,7 +26,6 @@ class School(models.Model):
     def __str__(self):
         return self.name
 
-    @property
     def get_name(self):
         return re.sub(r'^\d+', '', self.name)
 
@@ -38,7 +37,7 @@ class Teacher(models.Model):
     school = models.ForeignKey('School', on_delete=models.CASCADE, verbose_name='院系', null=True)
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, null=True)
     created_time = models.DateTimeField(auto_now_add=True)
-    objects = TeacherManager()
+    objects = SearchManager()
 
     def __str__(self):
         return f'{self.name}'
@@ -76,11 +75,13 @@ class Course(models.Model):
     dislike_count = models.IntegerField(default=0, verbose_name='不推荐')
     review_count = models.IntegerField(default=0, verbose_name='评价数量')
     last_review_time = models.DateTimeField(null=True)
+    pinyin = models.CharField(max_length=100, verbose_name='拼音', blank=True)
+    search_vector = SearchVectorField(null=True)
+    objects = SearchManager()
 
     def __str__(self):
         return f"{self.id}-{self.name}-{self.get_teachers()}"
 
-    @property
     def get_name(self):
         return self.name.replace('）', ')').replace('（', '(')
 
@@ -89,6 +90,9 @@ class Course(models.Model):
 
     def get_semester(self):
         return " ".join([t.name for t in self.semester.all()])
+
+    def get_classification(self):
+        return dict(self.classification_choices).get(self.classification)
 
     class Meta:
         ordering = ['school']

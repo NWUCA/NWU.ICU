@@ -4,7 +4,7 @@ from django.db import models
 from pypinyin import lazy_pinyin
 
 
-class TeacherQuerySet(models.QuerySet):
+class SearchQuerySet(models.QuerySet):
     def search(self, query):
         pinyin_query = ''.join(lazy_pinyin(query))
         vector = SearchVector('name', weight='A') + SearchVector('pinyin', weight='B')
@@ -21,9 +21,9 @@ class TeacherQuerySet(models.QuerySet):
         ).order_by('-rank')
 
 
-class TeacherManager(models.Manager):
+class SearchManager(models.Manager):
     def get_queryset(self):
-        return TeacherQuerySet(self.model, using=self._db)
+        return SearchQuerySet(self.model, using=self._db)
 
     def search(self, query, page_size=10, current_page=1):
         search_results = self.get_queryset().search(query)

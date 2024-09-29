@@ -117,6 +117,7 @@ class TeacherSerializer(serializers.Serializer):
     name = serializers.CharField(required=True)
     page_size = serializers.IntegerField(required=False, default=10)
     current_page = serializers.IntegerField(required=False, default=1)
+    type = serializers.CharField(required=True)
 
 
 class CourseLikeSerializer(serializers.Serializer):

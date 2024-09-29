@@ -45,6 +45,7 @@ errcode_dict = {
     'school_not_exist': '学院不存在',
     'classification_not_exist': '课程类别不存在',
     'course_has_exist': '课程已经存在',
+    'invalid_type_field': '错误的搜索类型',
 }
 
 message_dict = {

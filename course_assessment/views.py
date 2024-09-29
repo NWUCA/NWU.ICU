@@ -1,9 +1,9 @@
 import logging
+from idlelib.iomenu import errors
 
 from django.core.cache import cache
 from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage
 from django.db import transaction
-from django.db.models import Q
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.status import HTTP_404_NOT_FOUND
@@ -14,8 +14,8 @@ from course_assessment.models import Course, Review, ReviewHistory, School, Teac
     ReviewAndReplyLike, CourseLike
 from course_assessment.permissions import CustomPermission
 from course_assessment.serializer import MyReviewSerializer, AddReviewSerializer, DeleteReviewSerializer, \
-    AddReviewReplySerializer, DeleteReviewReplySerializer, ReviewAndReplyLikeSerializer, CourseTeacherSearchSerializer, \
-    AddCourseSerializer, TeacherSerializer, CourseLikeSerializer, AddTeacherSerializer
+    AddReviewReplySerializer, DeleteReviewReplySerializer, ReviewAndReplyLikeSerializer, AddCourseSerializer, \
+    TeacherSerializer, CourseLikeSerializer, AddTeacherSerializer
 
 logger = logging.getLogger(__name__)
 
@@ -536,79 +536,38 @@ class CourseLikeView(APIView):
 class CourseTeacherSearchView(APIView):
     permission_classes = [AllowAny]
 
-    def teacher_seach(self, request):
-        serializer = TeacherSerializer(data=request.data)
-        if serializer.is_valid():
-            teachers = Teacher.objects.search(serializer.validated_data['name'], page_size=1, current_page=1)
-            teacher_list = [{'id': teacher.id, 'name': teacher.name, 'school': teacher.school.get_name} for teacher in
-                            teachers['results']]
-            return return_response(contents=teacher_list)
-        return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
-
     def post(self, request):
-        serializer = CourseTeacherSearchSerializer(data=request.data)
+        serializer = TeacherSerializer(data=request.data)
+
         if serializer.is_valid():
-            return_list = {}
-            if serializer.validated_data.get('search_flag') == 'course_and_teacher':
-                course_name, teacher_name = serializer.validated_data.get('course_name'), serializer.validated_data.get(
-                    'teacher_name')
-                if course_name and teacher_name:
-                    courses = Course.objects.filter(
-                        Q(name__icontains=course_name) & Q(teachers__name__icontains=teacher_name)
-                    ).select_related('school').prefetch_related('teachers')
-                    course_list = []
-                    for course in courses:
-                        course_list.append({
-                            'course': {
-                                'id': course.id,
-                                'classification': course.get_classification_display(),
-                                'name': course.get_name,
-                                'course_code': course.course_code,
-                                'teachers': [{'id': teacher.id, 'name': teacher.name, 'school': teacher.school.get_name}
-                                             for
-                                             teacher in
-                                             course.teachers.all()],
-                                'school': course.school.get_name,
-
-                                'average_rating': course.average_rating,
-                                'normalized_rating': course.normalized_rating,
-                            },
-                        })
-                    return return_response(contents=course_list)
-                else:
-                    return return_response(errors={'field': 'field missed'}, status_code=status.HTTP_400_BAD_REQUEST)
-            if serializer.validated_data.get('search_flag') == 'course':
-                course_name = serializer.validated_data['course_name']
-                courses = (Course.objects.filter(name__icontains=course_name)
-                           .select_related('school', ).prefetch_related('teachers'))
-                course_list = []
-                for course in courses:
-                    course_list.append({
-                        'id': course.id,
-                        'classification': course.get_classification_display(),
-                        'name': course.get_name,
-                        'course_code': course.course_code,
-                        'teachers': [{'id': teacher.id, 'name': teacher.name, 'school': teacher.school.get_name} for
-                                     teacher
-                                     in course.teachers.all()],
-                        'school': course.school.get_name,
-
-                        'average_rating': course.average_rating,
-                        'normalized_rating': course.normalized_rating,
-                    })
-                return_list['course'] = course_list
-
-            if serializer.validated_data.get('search_flag') == 'teacher':
-                teacher_name = serializer.validated_data['teacher_name']
-                teachers = Teacher.objects.filter(name__icontains=teacher_name).select_related('school')
-                teacher_list = []
-                for teacher in teachers:
-                    teacher_list.append({
-                        'id': teacher.id,
-                        'name': teacher.name,
-                        'school': teacher.school.get_name,
-                    })
-                return_list['teacher'] = teacher_list
-            return return_response(contents=return_list, status_code=status.HTTP_400_BAD_REQUEST)
-        else:
-            return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
+            search_type = request.data.get('type')
+            page_size = serializer.validated_data['page_size']
+            current_page = serializer.validated_data['current_page']
+            if search_type == 'teacher':
+                teachers = Teacher.objects.search(serializer.validated_data['name'], page_size=page_size,
+                                                  current_page=current_page)
+                search_result_list = [{'id': teacher.id, 'name': teacher.name, 'school': teacher.school.get_name} for
+                                      teacher in teachers['results']]
+                page_info = {k: v for k, v in teachers.items() if k != 'results'}
+            elif search_type == 'course':
+                courses = Course.objects.search(serializer.validated_data['name'], page_size=page_size,
+                                                current_page=current_page)
+                search_result_list = [{'id': course.id, 'name': course.name, 'teacher': course.get_teachers(),
+                                       'classification': course.get_classification(),
+                                       'school': course.school.get_name(), 'semester': course.get_semester(),
+                                       'rating': {
+                                           'average_rating': course.average_rating,
+                                           'normalized_rating': course.normalized_rating},
+                                       'like': {
+                                           'like': course.like_count,
+                                           'dislike': course.dislike_count
+                                       },
+                                       'review_count': course.review_count,
+                                       'latest_review_time': course.last_review_time} for course in
+                                      courses['results']]
+                page_info = {k: v for k, v in courses.items() if k != 'results'}
+            else:
+                return return_response(errors=get_err_msg('invalid_type_field'),
+                                       status_code=status.HTTP_400_BAD_REQUEST)
+            return return_response(contents={'search_result': search_result_list, **page_info})
+        return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
