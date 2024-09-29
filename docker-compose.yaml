@@ -1,0 +1,42 @@
+services:
+  web:
+    build: .
+    command: poetry run python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - .:/app
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      - DJANGO_SETTINGS_MODULE=settings.development
+      - SECRET_KEY=${SECRET_KEY}
+      - EMAIL_HOST=${EMAIL_HOST}
+      - EMAIL_PORT=${EMAIL_PORT}
+      - EMAIL_HOST_USER=${EMAIL_HOST_USER}
+      - EMAIL_HOST_PASSWORD=${EMAIL_HOST_PASSWORD}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_HOST=db
+      - DB_PORT=5432
+      - UNIVERSITY_MAIL_SUFFIX=${UNIVERSITY_MAIL_SUFFIX}
+      - UNIVERSITY_TEACHER_MAIL_SUFFIX=${UNIVERSITY_TEACHER_MAIL_SUFFIX}
+      - UNIVERSITY_STUDENT_MAIL_SUFFIX=${UNIVERSITY_STUDENT_MAIL_SUFFIX}
+      - UNIVERSITY_CHINESE_NAME=${UNIVERSITY_CHINESE_NAME}
+      - UNIVERSITY_ENGLISH_NAME=${UNIVERSITY_ENGLISH_NAME}
+      - UNIVERSITY_ENGLISH_ABBREVIATION_NAME=${UNIVERSITY_ENGLISH_ABBREVIATION_NAME}
+      - WEBSITE_NAME=${WEBSITE_NAME}
+    depends_on:
+      - db
+
+  db:
+    image: abcfy2/zhparser:latest
+    container_name: pgsql
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=${DB_NAME}
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+
+volumes:
+  pgdata:
