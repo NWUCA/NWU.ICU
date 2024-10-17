@@ -49,9 +49,11 @@ class About(models.Model):
 class Chat(models.Model):
     classify_MESSAGE = [
         ('user', '站内信'),
-        ('system', '系统通知')
+        ('system', '系统通知'),
+        ('like', '点赞提醒'),
+        ('reply', '回复提醒')
     ]
-    sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='messages_sender')
+    sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='messages_sender', null=True)
     receiver = models.ForeignKey(User, on_delete=models.CASCADE, related_name='messages_receiver')
     classify = models.CharField(choices=classify_MESSAGE, default='system')
     last_message_content = models.TextField(null=True, blank=True)
@@ -96,13 +98,17 @@ class ChatMessage(models.Model):
 
 
 class ChatReply(models.Model):
-    content = models.ForeignKey('course_assessment.ReviewReply', on_delete=models.CASCADE)
+    unread = models.BooleanField(default=True)
+    reply_content = models.ForeignKey('course_assessment.ReviewReply', on_delete=models.CASCADE)
     reply_classify = [
-        ('review', '评价'),
-        ('reply', '评论回复'),
+        ('review', '关于评价的回复'),
+        ('reply', '楼中楼的回复'),
     ]
+    receiver = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reply_notice_receiver')
     raw_post_classify = CharField(choices=reply_classify)
-    raw_post = models.IntegerField()
+    raw_post_id = models.IntegerField()
+    raw_post_content = models.TextField()
+    raw_post_course = models.ForeignKey('course_assessment.Course', on_delete=models.CASCADE)
 
 
 class ChatLike(models.Model):
@@ -111,7 +117,10 @@ class ChatLike(models.Model):
         ('reply', '评论回复'),
     ]
     raw_post_classify = CharField(choices=reply_classify)
-    raw_post = models.IntegerField()
+    raw_post_id = models.IntegerField(null=True)
+    raw_post_course = models.ForeignKey('course_assessment.Course', on_delete=models.CASCADE, null=True)
+    raw_post_content = models.TextField(null=True)
+    receiver = models.ForeignKey(User, on_delete=models.CASCADE, related_name='like_notice_receiver', null=True)
     like_count = models.IntegerField(default=0)
     dislike_count = models.IntegerField(default=0)
     latest_like_datetime = models.DateTimeField(null=True)

@@ -1,12 +1,14 @@
+from Tools.demo.mcast import sender
 from django.contrib.postgres.search import SearchVector
 from django.db.models import Avg, Sum, Count
 from django.db.models.signals import post_save, post_delete, pre_save
 from django.dispatch import receiver
 from pypinyin import lazy_pinyin
 
-from common.models import ChatLike
+from common.models import ChatLike, ChatReply, Chat
 from common.signals import soft_delete_signal
-from .models import Review, Course, ReviewAndReplyLike, CourseLike, Teacher
+from user.models import User
+from .models import Review, Course, ReviewAndReplyLike, CourseLike, Teacher, ReviewReply
 
 
 @receiver([post_save, post_delete], sender=Review)
@@ -67,14 +69,59 @@ def update_chat_like_counts(instance, sender):
     if instance.review or instance.review_reply:
         post = instance.review_reply if instance.review_reply is not None else instance.review
         raw_post_classify = 'reply' if instance.review_reply is not None else 'review'
-        chat_like, created = ChatLike.objects.get_or_create(raw_post_classify=raw_post_classify, raw_post=post.id)
+        chat_like, created = ChatLike.objects.get_or_create(raw_post_classify=raw_post_classify, raw_post_id=post.id)
         chat_like.like_count = post.like_count
         chat_like.dislike_count = post.dislike_count
         if chat_like.like_count == 0 and chat_like.dislike_count == 0:
             chat_like.delete()
             return
+        chat_like.raw_post_id = post.id
+        chat_like.raw_post_classify = raw_post_classify
+        chat_like.raw_post_content = post.content
+        chat_like.raw_post_course = post.course
         chat_like.latest_like_datetime = instance.create_time
+        chat_like.receiver = post.created_by
         chat_like.save()
+
+
+def update_chat_reply(instance: ReviewReply, created: bool):
+    if created:
+        if instance.parent is not None:
+            parent = instance.parent
+            raw_post_id = parent.id
+            raw_post_classify = 'reply'
+            raw_post_content = parent.content
+            raw_post_course = parent.review.course
+            receiver_user = parent.created_by
+        else:
+            raw_post_id = instance.review_id
+            raw_post_classify = 'review'
+            raw_post_content = instance.review.content
+            raw_post_course = instance.review.course
+            receiver_user = instance.review.created_by
+        if instance.created_by != receiver_user:
+            ChatReply.objects.create(reply_content=instance, receiver=receiver_user,
+                                     raw_post_classify=raw_post_classify,
+                                     raw_post_id=raw_post_id, raw_post_content=raw_post_content,
+                                     raw_post_course=raw_post_course, unread=True)
+    else:
+        if instance.parent is not None:
+            receiver_user = instance.parent.created_by
+        else:
+            receiver_user = instance.review.created_by
+    reply_notices_count = ChatReply.objects.filter(reply_content=instance, receiver=receiver_user).count()
+    Chat.objects.update_or_create(receiver=receiver_user, classify='reply', sender=User.objects.get(id=1),
+                                  unread_count=reply_notices_count)
+
+
+@receiver(post_save, sender=ReviewReply)
+def reply_saved(sender, instance, **kwargs):
+    update_chat_reply(instance, created=True)
+
+
+@receiver(post_delete, sender=ReviewReply)
+def reply_deleted(sender, instance, **kwargs):
+    update_chat_reply(instance, created=False)
 
 
 @receiver(post_save, sender=ReviewAndReplyLike)
