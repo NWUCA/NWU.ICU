@@ -88,8 +88,11 @@ class CourseView(APIView):
                    .select_related('created_by', 'semester')
                    .order_by('-create_time'))
         try:
-            request_user_review = Review.objects.get(course_id=course_id, created_by=request.user)
-            request_user_review_id = request_user_review.id
+            if not request.user.is_anonymous:
+                request_user_review = Review.objects.get(course_id=course_id, created_by=request.user)
+                request_user_review_id = request_user_review.id
+            else:
+                request_user_review_id = None
         except Review.DoesNotExist:
             request_user_review_id = None
         reviews_data = []
