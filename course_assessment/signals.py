@@ -65,10 +65,13 @@ def update_course_like_dislike_counts(instance):
     course.save()
 
 
-def update_chat_like_counts(instance, sender):
+def update_chat_like_counts(instance: ReviewAndReplyLike, sender):
+    like_create_by = instance.created_by
     if instance.review or instance.review_reply:
         post = instance.review_reply if instance.review_reply is not None else instance.review
         raw_post_classify = 'reply' if instance.review_reply is not None else 'review'
+        if post.created_by == like_create_by:
+            return
         chat_like, created = ChatLike.objects.get_or_create(raw_post_classify=raw_post_classify, raw_post_id=post.id)
         chat_like.like_count = post.like_count
         chat_like.dislike_count = post.dislike_count
