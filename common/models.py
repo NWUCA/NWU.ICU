@@ -1,11 +1,8 @@
-from Tools.demo.mcast import sender
 from django.conf import settings
 from django.db import models
 from django.db.models import CharField
-from django.utils import timezone
 
 from user.models import User
-from .signals import soft_delete_signal
 
 
 class Announcement(models.Model):
@@ -77,7 +74,6 @@ class Chat(models.Model):
     def save(self, *args, **kwargs):
         if self.sender is not None and self.sender_id > self.receiver_id:
             self.sender, self.receiver = self.receiver, self.sender
-            self.sender_unread_count, self.receiver_unread_count = self.receiver_unread_count, self.sender_unread_count
         super().save(*args, **kwargs)
 
     @classmethod
@@ -90,6 +86,7 @@ class Chat(models.Model):
 class ChatMessage(models.Model):
     content = models.TextField()
     create_time = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(User, on_delete=models.DO_NOTHING, related_name='messages_create_by', null=True)
     chat_item = models.ForeignKey(Chat, null=True, on_delete=models.CASCADE, related_name='messages')
     read = models.BooleanField(default=False)
 
@@ -97,6 +94,7 @@ class ChatMessage(models.Model):
         indexes = [
             models.Index(fields=['chat_item']),
             models.Index(fields=['create_time']),
+            models.Index(fields=['created_by']),
         ]
 
 
@@ -127,30 +125,3 @@ class ChatLike(models.Model):
     like_count = models.IntegerField(default=0)
     dislike_count = models.IntegerField(default=0)
     latest_like_datetime = models.DateTimeField(null=True)
-
-
-class SoftDeleteManager(models.Manager):
-    def get_queryset(self):
-        return super().get_queryset().filter(is_deleted=False)
-
-
-class SoftDeleteModel(models.Model):
-    is_deleted = models.BooleanField(default=False)
-    deleted_at = models.DateTimeField(null=True, blank=True)
-
-    objects = SoftDeleteManager()
-    all_objects = models.Manager()
-
-    def soft_delete(self):
-        self.is_deleted = True
-        self.deleted_at = timezone.now()
-        self.save()
-        soft_delete_signal.send(sender=self.__class__, instance=self)
-
-    def restore(self):
-        self.is_deleted = False
-        self.deleted_at = None
-        self.save()
-
-    class Meta:
-        abstract = True

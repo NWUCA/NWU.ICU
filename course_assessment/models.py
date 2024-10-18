@@ -4,7 +4,7 @@ from django.contrib.postgres.indexes import GinIndex
 from django.contrib.postgres.search import SearchVectorField
 from django.db import models
 
-from common.models import SoftDeleteModel
+from utils.models import SoftDeleteModel
 from course_assessment.managers import SearchManager, SoftDeleteSearchManager
 from user.models import User
 

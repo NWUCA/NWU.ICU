@@ -3,7 +3,7 @@ from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.db import models
 from pypinyin import lazy_pinyin
 
-from common.models import SoftDeleteManager
+from utils.models import SoftDeleteManager
 
 
 class SearchModuleErrorException(Exception):
