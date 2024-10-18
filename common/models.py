@@ -1,3 +1,4 @@
+from Tools.demo.mcast import sender
 from django.conf import settings
 from django.db import models
 from django.db.models import CharField
@@ -74,7 +75,7 @@ class Chat(models.Model):
         ]
 
     def save(self, *args, **kwargs):
-        if self.sender_id > self.receiver_id:
+        if self.sender is not None and self.sender_id > self.receiver_id:
             self.sender, self.receiver = self.receiver, self.sender
             self.sender_unread_count, self.receiver_unread_count = self.receiver_unread_count, self.sender_unread_count
         super().save(*args, **kwargs)

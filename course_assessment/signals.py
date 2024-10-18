@@ -117,7 +117,7 @@ def update_chat_reply(instance: ReviewReply, created: bool):
         else:
             receiver_user = instance.review.created_by
     reply_notices_count = ChatReply.objects.filter(reply_content=instance, receiver=receiver_user).count()
-    Chat.objects.update_or_create(receiver=receiver_user, classify='reply', sender=User.objects.get(id=1),
+    Chat.objects.update_or_create(receiver=receiver_user, classify='reply', sender=None,
                                   receiver_unread_count=reply_notices_count)
 
 
