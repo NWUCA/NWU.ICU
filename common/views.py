@@ -1,17 +1,17 @@
 from captcha.helpers import captcha_image_url
 from captcha.models import CaptchaStore
 from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage
-from django.db.models import Q, Count
+from django.db.models import Q
 from django.shortcuts import render
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
 
-from utils.utils import return_response, get_err_msg
 from user.models import User
+from utils.throttle import CaptchaAnonRateThrottle, CaptchaUserRateThrottle
+from utils.utils import return_response, get_err_msg
 from .models import Bulletin, About, Chat, ChatMessage, ChatLike, ChatReply
 from .serializers import CaptchaSerializer, ChatMessageSerializer
-from utils.throttle import CaptchaAnonRateThrottle, CaptchaUserRateThrottle
 
 
 class CaptchaView(APIView):
@@ -117,6 +117,9 @@ class MessageBoxView(APIView):
             message_page = paginator.page(paginator.num_pages)
         message_list = []
         for message in message_page:
+            if message.created_by != request.user:
+                message.read = True
+                message.save()
             message_list.append({
                 'id': message.id,
                 'content': message.content,
@@ -237,11 +240,15 @@ class MessageBoxView(APIView):
             except User.DoesNotExist:
                 return return_response(errors={'user': get_err_msg('user_not_exist')},
                                        status_code=status.HTTP_400_BAD_REQUEST)
+            if receiver == request.user:
+                return return_response(errors={'user': get_err_msg('cannot_send_message_to_self')},
+                                       status_code=status.HTTP_400_BAD_REQUEST)
             chat, created = Chat.get_or_create_chat(sender=request.user, receiver=receiver,
                                                     classify=serializer.validated_data['classify'])
-            chat_message = ChatMessage.objects.create(
+            ChatMessage.objects.create(
                 content=serializer.validated_data['content'],
                 chat_item=chat,
+                created_by=request.user,
             )
             return return_response(contents=serializer.validated_data, status_code=status.HTTP_201_CREATED)
         else:
@@ -249,15 +256,13 @@ class MessageBoxView(APIView):
 
 
 class MessageUnreadView(APIView):
+
     def get(self, request):
-        unread_count = Chat.objects.filter(receiver=request.user).values('classify').annotate(count=Count('classify'))
-        unread_count_list = list(unread_count)
-        total = 0
-        for i in unread_count_list:
-            total += i['count']
-        exist_classify=[i['classify'] for i in unread_count_list]
-        for classify in Chat.classify_MESSAGE:
-            if classify[0] not in exist_classify:
-                unread_count_list.append({'classify': classify[0], 'count': 0})
-        unread_count_list.append({'classify': 'total', 'count': total})
-        return return_response(contents={'unread_count': unread_count_list})
+        unread_counts = {}
+        for i in Chat.classify_MESSAGE:
+            unread_counts[i[0]] = 0
+        for chat in Chat.objects.filter(sender=request.user):
+            unread_counts[chat.classify] += chat.sender_unread_count
+        for chat in Chat.objects.filter(receiver=request.user):
+            unread_counts[chat.classify] += chat.receiver_unread_count
+        return return_response(contents={'unread': unread_counts, 'total': sum(unread_counts.values())})
