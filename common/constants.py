@@ -47,6 +47,7 @@ errcode_dict = {
     'course_has_exist': '课程已经存在',
     'invalid_type_field': '错误的搜索类型',
     'invalid_search_type': '非法搜索模型',
+    'chat_not_exist': '站内信不存在',
 }
 
 message_dict = {
