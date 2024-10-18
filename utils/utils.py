@@ -6,6 +6,7 @@ from rest_framework.exceptions import NotAuthenticated, Throttled
 from rest_framework.response import Response
 from rest_framework.views import exception_handler
 
+from settings.settings import BASE_DIR
 from utils import constants
 
 
@@ -49,10 +50,11 @@ def custom_exception_handler(exc, context):
 
 
 def generate_random_nickname():
-    with open('./static_file/adjective.json') as f:
+    with open(BASE_DIR / 'utils' / 'static_file' / 'adjective.json', encoding='utf-8') as f:
         adjective = json.loads(f.read())
-    with open('./static_file/noun.json') as f:
+    with open(BASE_DIR / 'utils' / 'static_file' / 'noun.json', encoding='utf-8') as f:
         noun = json.loads(f.read())
-
-    for i in range(5):
-        print(adjective[random.randrange(len(adjective) - 1)] + '的' + noun[random.randrange(len(noun) - 1)])
+    random_suffix = ''.join(
+        random.choice(list('1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ')) for _ in range(4))
+    return adjective[random.randrange(len(adjective) - 1)] + '的' + noun[
+        random.randrange(len(noun) - 1)] + random_suffix
