@@ -132,6 +132,8 @@ class CourseView(APIView):
                 'id': teacher.id,
                 'name': teacher.name,
                 'school': teacher.school.get_name() if teacher.school else None,
+                'course': [{'id': course.id, 'name': course.get_name()} for course in
+                           Course.objects.filter(teachers__id=teacher.id) if course.id != course_id]
             })
         course_info = {
             'id': course_id,
@@ -145,7 +147,10 @@ class CourseView(APIView):
             'rating_avg': f"{course.average_rating:.1f}",
             'normalized_rating_avg': f"{course.normalized_rating:.1f}",
             'request_user_review_id': request_user_review_id,
-            'reviews': reviews_data
+            'reviews': reviews_data,
+            'other_dup_name_course': [
+                {'course_id': course.id, 'teacher_name': course.get_teachers(), 'rating': course.normalized_rating} for course in
+                Course.objects.filter(name=course.get_name()) if course.id != course_id]
         }
         return return_response(contents=course_info)
 
