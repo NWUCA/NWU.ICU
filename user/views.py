@@ -14,7 +14,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.status import HTTP_200_OK, HTTP_400_BAD_REQUEST, HTTP_403_FORBIDDEN, HTTP_204_NO_CONTENT
 from rest_framework.views import APIView
 
-from common.utils import return_response, get_err_msg, get_msg_msg
+import utils.utils
+from utils.utils import return_response, get_err_msg, get_msg_msg
 from .models import User
 from .serializers import LoginSerializer, PasswordResetMailRequestSerializer, UsernameDuplicationSerializer, \
     PasswordResetWhenLoginSerializer, BindCollegeEmailSerializer, UpdateProfileSerializer
@@ -82,6 +83,7 @@ class RegisterView(APIView):
         if serializer.is_valid():
             user = serializer.save()
             user.is_active = False
+            user.nickname = utils.utils.generate_random_nickname()
             user.save()
             return self.send_active_email(user, request)
         else:
