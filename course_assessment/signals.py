@@ -1,11 +1,10 @@
-from Tools.demo.mcast import sender
 from django.contrib.postgres.search import SearchVector
 from django.db.models import Avg, Sum, Count
 from django.db.models.signals import post_save, post_delete, pre_save
 from django.dispatch import receiver
 from pypinyin import lazy_pinyin
 
-from common.models import ChatLike, ChatReply, Chat
+from common.models import ChatLike, ChatReply, Chat, ChatMessage
 from common.signals import soft_delete_signal
 from user.models import User
 from .models import Review, Course, ReviewAndReplyLike, CourseLike, Teacher, ReviewReply
@@ -85,6 +84,11 @@ def update_chat_like_counts(instance: ReviewAndReplyLike, sender):
         chat_like.latest_like_datetime = instance.create_time
         chat_like.receiver = post.created_by
         chat_like.save()
+        Chat.objects.update_or_create(receiver=post.created_by, classify=raw_post_classify,
+                                      sender=User.objects.get(id=1),
+                                      receiver_unread_count=ChatLike.objects.filter(receiver=post.created_by,
+                                                                                    raw_post_classify=raw_post_classify,
+                                                                                    unread=True).count())
 
 
 def update_chat_reply(instance: ReviewReply, created: bool):
