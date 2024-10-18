@@ -2,7 +2,7 @@ from captcha.models import CaptchaStore
 from django.conf import settings
 from rest_framework import serializers
 
-from common.utils import get_err_msg
+from utils.utils import get_err_msg
 from .models import About, Chat
 
 

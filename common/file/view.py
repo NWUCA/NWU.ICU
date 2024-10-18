@@ -4,9 +4,9 @@ from rest_framework import status, generics
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
-from common.utils import get_err_msg
+from utils.utils import get_err_msg
 
-from common.utils import return_response
+from utils.utils import return_response
 from .models import UploadedFile
 from .serializers import UploadedFileSerializer
 

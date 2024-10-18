@@ -7,11 +7,11 @@ from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
 
-from common.utils import return_response, get_err_msg
+from utils.utils import return_response, get_err_msg
 from user.models import User
 from .models import Bulletin, About, Chat, ChatMessage, ChatLike, ChatReply
 from .serializers import CaptchaSerializer, ChatMessageSerializer
-from .throttle import CaptchaAnonRateThrottle, CaptchaUserRateThrottle
+from utils.throttle import CaptchaAnonRateThrottle, CaptchaUserRateThrottle
 
 
 class CaptchaView(APIView):

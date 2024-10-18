@@ -8,7 +8,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.status import HTTP_404_NOT_FOUND
 from rest_framework.views import APIView
 
-from common.utils import return_response, get_err_msg, get_msg_msg
+from utils.utils import return_response, get_err_msg, get_msg_msg
 from course_assessment.managers import SearchModuleErrorException
 from course_assessment.models import Course, Review, ReviewHistory, School, Teacher, Semeseter, ReviewReply, \
     ReviewAndReplyLike, CourseLike

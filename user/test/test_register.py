@@ -4,7 +4,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from common.utils import get_msg_msg
+from utils.utils import get_msg_msg
 
 
 @override_settings(DEBUG=True)

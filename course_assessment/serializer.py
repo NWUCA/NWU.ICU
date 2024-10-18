@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from common.utils import get_err_msg
+from utils.utils import get_err_msg
 from .models import Review, ReviewHistory, ReviewReply, School, Teacher, Course
 
 

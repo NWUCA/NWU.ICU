@@ -47,7 +47,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 REST_FRAMEWORK = {
-    'EXCEPTION_HANDLER': 'common.utils.custom_exception_handler',  # 不知道为什么会报黄
+    'EXCEPTION_HANDLER': 'utils.utils.custom_exception_handler',  # 不知道为什么会报黄
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework.authentication.SessionAuthentication',
         'rest_framework.authentication.BasicAuthentication',
@@ -70,9 +70,9 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
-                'common.context_processors.announcements',
-                'common.context_processors.version',
-                'common.context_processors.login_status_get',
+                'utils.context_processors.announcements',
+                'utils.context_processors.version',
+                'utils.context_processors.login_status_get',
             ],
         },
     },
