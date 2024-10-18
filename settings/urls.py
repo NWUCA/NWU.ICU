@@ -27,7 +27,7 @@ from common.views import (
     index,
     AboutView,
     CaptchaView,
-    TosView, MessageBoxView, BulletinListView,
+    TosView, MessageBoxView, BulletinListView, MessageUnreadView,
 )
 from course_assessment.views import (
     MyReviewView,
@@ -84,9 +84,11 @@ api_patterns = [
          name='bind-college-email-post'),
 
     # 站内信
-    path('message/', MessageBoxView.as_view(), name='messageBox'),
-    path('message/<str:classify>/<int:chatter_id>', MessageBoxView.as_view(), name='messageSender'),
-    path('message/<str:classify>/', MessageBoxView.as_view(), name='messageSender'),
+    path('message/', MessageBoxView.as_view(), name='send_message'),
+    path('message/unread/', MessageUnreadView.as_view(), name='unread_message'),
+    path('message/<str:classify>/<int:chatter_id>', MessageBoxView.as_view(), name='check_particular_message'),
+    path('message/<str:classify>/', MessageBoxView.as_view(), name='check_all_message'),
+
     # 验证码
     path('captcha/', CaptchaView.as_view(), name='captcha'),
 
