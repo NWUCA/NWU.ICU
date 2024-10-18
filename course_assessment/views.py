@@ -209,7 +209,7 @@ class LatestReviewView(APIView):
                 "teachers": [{"name": teacher.name, "id": teacher.id} for teacher in
                              review.course.teachers.all()],
                 'edited': review.edited,
-                'is_student': review.created_by.college_email,
+                'is_verify': review.created_by.college_email.endswith('nwu.edu.cn'),
             }
             review_list.append(temp_dict)
         return return_response(
