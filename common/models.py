@@ -58,7 +58,8 @@ class Chat(models.Model):
     classify = models.CharField(choices=classify_MESSAGE, default='system')
     last_message_content = models.TextField(null=True, blank=True)
     last_message_datetime = models.DateTimeField(null=True)
-    unread_count = models.IntegerField(default=0)
+    receiver_unread_count = models.IntegerField(default=0)
+    sender_unread_count = models.IntegerField(default=0)
 
     class Meta:
         constraints = [
@@ -75,6 +76,7 @@ class Chat(models.Model):
     def save(self, *args, **kwargs):
         if self.sender_id > self.receiver_id:
             self.sender, self.receiver = self.receiver, self.sender
+            self.sender_unread_count, self.receiver_unread_count = self.receiver_unread_count, self.sender_unread_count
         super().save(*args, **kwargs)
 
     @classmethod
@@ -92,8 +94,8 @@ class ChatMessage(models.Model):
 
     class Meta:
         indexes = [
-            models.Index(fields=['chat_item']),  # 添加索引到 chat_item 字段
-            models.Index(fields=['create_time']),  # 添加索引到 create_time 字段，如果你经常按时间查询
+            models.Index(fields=['chat_item']),
+            models.Index(fields=['create_time']),
         ]
 
 

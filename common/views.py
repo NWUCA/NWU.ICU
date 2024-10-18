@@ -1,7 +1,7 @@
 from captcha.helpers import captcha_image_url
 from captcha.models import CaptchaStore
 from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage
-from django.db.models import Q
+from django.db.models import Q, Count
 from django.shortcuts import render
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -220,7 +220,11 @@ class MessageBoxView(APIView):
                 return self.get_reply_notice(request)
 
         else:
-            chat = Chat.objects.get(id=chatter_id)
+            try:
+                chat = Chat.objects.get(id=chatter_id)
+            except Chat.DoesNotExist:
+                return return_response(errors={'chat': get_err_msg('chat_not_exist')},
+                                       status_code=status.HTTP_400_BAD_REQUEST)
             chat.unread_count = 0
             chat.save()
             return self.get_particular_user_message(request, chatter_id)
@@ -242,3 +246,18 @@ class MessageBoxView(APIView):
             return return_response(contents=serializer.validated_data, status_code=status.HTTP_201_CREATED)
         else:
             return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
+
+
+class MessageUnreadView(APIView):
+    def get(self, request):
+        unread_count = Chat.objects.filter(receiver=request.user).values('classify').annotate(count=Count('classify'))
+        unread_count_list = list(unread_count)
+        total = 0
+        for i in unread_count_list:
+            total += i['count']
+        exist_classify=[i['classify'] for i in unread_count_list]
+        for classify in Chat.classify_MESSAGE:
+            if classify[0] not in exist_classify:
+                unread_count_list.append({'classify': classify[0], 'count': 0})
+        unread_count_list.append({'classify': 'total', 'count': total})
+        return return_response(contents={'unread_count': unread_count_list})

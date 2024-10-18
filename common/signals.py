@@ -9,5 +9,6 @@ def chat_message_handler(sender, instance, **kwargs):
     chat_item = instance.chat_item
     chat_item.last_message_content = instance.content
     chat_item.last_message_datetime = instance.create_time
-    chat_item.unread_count += 1
+    chat_item.receiver_unread_count += 1
+    chat_item.sender_unread_count += 1
     chat_item.save()

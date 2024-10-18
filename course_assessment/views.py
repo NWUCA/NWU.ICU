@@ -196,6 +196,10 @@ class LatestReviewView(APIView):
             review_page = paginator.page(paginator.num_pages)
         review_list = []
         for review in review_page:
+            is_verify = False
+            if review.created_by.college_email is not None:
+                if review.created_by.college_email.endswith('@nwu.edu.cn'):
+                    is_verify = True
             temp_dict = {
                 'id': review.id,
                 'author': {"nickname": get_msg_msg(
@@ -209,7 +213,7 @@ class LatestReviewView(APIView):
                 "teachers": [{"name": teacher.name, "id": teacher.id} for teacher in
                              review.course.teachers.all()],
                 'edited': review.edited,
-                'is_verify': review.created_by.college_email.endswith('nwu.edu.cn'),
+                'is_verify': is_verify
             }
             review_list.append(temp_dict)
         return return_response(
@@ -449,7 +453,11 @@ class ReviewReplyView(APIView):
                 return return_response(errors={'course': get_err_msg('review_not_exist')},
                                        status_code=status.HTTP_404_NOT_FOUND)
             parent_id = serializer.validated_data['parent_id']
-            parent = None if parent_id == 0 else ReviewReply.objects.get(id=parent_id)
+            try:
+                parent = None if parent_id == 0 else ReviewReply.objects.get(id=parent_id)
+            except ReviewReply.DoesNotExist:
+                return return_response(errors={'review': get_err_msg('reply_not_exist')},
+                                       status_code=status.HTTP_404_NOT_FOUND)
             reply = ReviewReply.objects.create(
                 review=review,
                 parent=parent,
