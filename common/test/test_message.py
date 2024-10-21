@@ -43,13 +43,12 @@ class MessageTests(APITestCase):
         self.user_B_id = self.client_B.get(self.user_profile_url).data['contents']['id']
 
     def test_send_message(self):
-        data_A = {
-            "receiver": self.user_B_id,
-            "content": "Hello, testUserB"
-        }
         response = None
-        for i in range(15):  # user_a 发送15条消息给user_b
-            data_A['content'] = f'Hello, testUserB{i}'
+        for i in range(15):
+            data_A = {
+                "receiver": self.user_B_id,
+                "content": f'Hello, testUserB{i}'
+            }
             response = self.client_A.post(self.send_message_url, data_A, format='json')
         chat = Chat.objects.get(sender=self.user_A_id, receiver=self.user_B_id)
         A_unread_count = self.client_B.get(self.unread_count_url).data['contents']
@@ -61,21 +60,62 @@ class MessageTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         user_A_to_user_B_message = self.client_A.get(reverse('api:check_particular_message',
                                                              kwargs={'classify': 'user',
-                                                                     'chatter_id': self.user_A_id}),
+                                                                     'chatter_id': self.user_B_id}),
                                                      format='json').data['contents']  # A读了10条
         self.assertEqual(len(user_A_to_user_B_message['chats']), 10)
         self.assertEqual(user_A_to_user_B_message['chats'][-1]['content'], 'Hello, testUserB5')  # 默认分页大小为10
 
-        data_B = {
-            "receiver": self.user_A_id,
-            "content": "Hello, testUserA"
-        }
         for i in range(10):  # user_b 发送10条消息给user_a
-            data_B['content'] = f'Hello, testUserA{i}'
-            response = self.client_B.post(self.send_message_url, data_B, format='json')
+            data_B = {
+                "receiver": self.user_A_id,
+                "content": f'Hello, testUserA{i}'
+            }
+            self.client_B.post(self.send_message_url, data_B, format='json')
         B_unread_count = self.client_B.get(self.unread_count_url).data['contents']['total']
         chat.refresh_from_db()
         self.assertEqual(chat.sender_unread_count, 10)
-        self.assertEqual(chat.receiver_unread_count, 15)  # 上面读了10条, 一共发了15条, 所以还有5条未读
+        self.assertEqual(chat.receiver_unread_count, 15)
         self.assertEqual(B_unread_count, 15)
+        self.client_B.get(reverse('api:check_particular_message', kwargs={'classify': 'user',
+                                                                          'chatter_id': self.user_A_id}), format='json')
+        chat.refresh_from_db()
+        B_unread_count = self.client_B.get(self.unread_count_url).data['contents']['total']
+        self.assertEqual(chat.sender_unread_count, 10)
+        self.assertEqual(chat.receiver_unread_count, 15)  # B读了第一页聊天记录, 第一页有10条, 全是B自己发的, 所以未读消息数量不变
+        self.assertEqual(B_unread_count, 15)
+
+        self.client_B.get(reverse('api:check_particular_message', kwargs={'classify': 'user',
+                                                                          'chatter_id': self.user_A_id}) + '?page=2',
+                          format='json')
+        chat.refresh_from_db()
+        B_unread_count = self.client_B.get(self.unread_count_url).data['contents']['total']
+        self.assertEqual(chat.sender_unread_count, 10)
+        self.assertEqual(chat.receiver_unread_count, 5)  # B读了第二页聊天记录, 第二页有10条, 全是A发的, 所以未读消息-10
+        self.assertEqual(B_unread_count, 5)
+
+    def test_send_message_one_by_one(self):
+
+        for i in range(6):
+            data_A = {
+                "receiver": self.user_B_id,
+                "content": f"Hello, testUserB{i}"
+            }
+            self.client_A.post(self.send_message_url, data_A, format='json')
+        for i in range(6):
+            data_B = {
+                "receiver": self.user_A_id,
+                "content": f"Hello, testUserA{i}"
+            }
+            self.client_B.post(self.send_message_url, data_B, format='json')
+        self.client_A.get(
+            reverse('api:check_particular_message', kwargs={'classify': 'user', 'chatter_id': self.user_B_id}),
+            format='json')
+        A_unread_count = self.client_A.get(self.unread_count_url).data['contents']['total']
+        self.assertEqual(A_unread_count, 0)
+
+        self.client_B.get(
+            reverse('api:check_particular_message', kwargs={'classify': 'user', 'chatter_id': self.user_A_id}),
+            format='json')
+        B_unread_count = self.client_B.get(self.unread_count_url).data['contents']['total']
+        self.assertEqual(B_unread_count, 6 - (10 - 6))
     # def test_like_notice(self):

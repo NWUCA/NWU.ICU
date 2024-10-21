@@ -48,3 +48,13 @@ class ChatMessageSerializer(serializers.Serializer):
         if data['classify'] == 'system':
             raise serializers.ValidationError({'classify': get_err_msg('auth error')})
         return data
+
+
+class ChatMessageGetSerializer(serializers.Serializer):
+    classify = serializers.CharField()
+
+    def validate(self, data):
+        classify_list = [message[0] for message in Chat.classify_MESSAGE]
+        if data['classify'] not in classify_list:
+            raise serializers.ValidationError({'classify': get_err_msg('out of range')})
+        return data

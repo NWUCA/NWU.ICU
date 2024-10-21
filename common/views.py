@@ -11,7 +11,7 @@ from user.models import User
 from utils.throttle import CaptchaAnonRateThrottle, CaptchaUserRateThrottle
 from utils.utils import return_response, get_err_msg
 from .models import Bulletin, About, Chat, ChatMessage, ChatLike, ChatReply
-from .serializers import CaptchaSerializer, ChatMessageSerializer
+from .serializers import CaptchaSerializer, ChatMessageSerializer, ChatMessageGetSerializer
 
 
 class CaptchaView(APIView):
@@ -105,8 +105,8 @@ class MessageBoxView(APIView):
         }
         return return_response(contents=chat_dict)
 
-    def get_particular_user_message(self, request, chatter_id):
-        chat_message = ChatMessage.objects.filter(chat_item_id=chatter_id).order_by('-create_time')
+    def get_particular_user_message(self, request, chat_object: Chat):
+        chat_message = ChatMessage.objects.filter(chat_item=chat_object).order_by('-create_time')
         paginator = Paginator(chat_message, 10)
         page = request.query_params.get('page', 1)
         try:
@@ -211,26 +211,25 @@ class MessageBoxView(APIView):
         return return_response(contents=notice_dict)
 
     def get(self, request, classify, chatter_id=None):
-        if classify not in [message[0] for message in Chat.classify_MESSAGE]:
-            return return_response(errors={'classify': get_err_msg('invalid_classify')},
-                                   status_code=status.HTTP_400_BAD_REQUEST)
-        if chatter_id is None:
-            if classify == 'user':
-                return self.get_user_message_list(request, classify)
-            elif classify == 'like':
-                return self.get_like_notice(request)
-            elif classify == 'reply':
-                return self.get_reply_notice(request)
+        serializer = ChatMessageGetSerializer(data={'classify': classify})
+        if serializer.is_valid():
+            if chatter_id is None:
+                if classify == 'user':
+                    return self.get_user_message_list(request, classify)
+                elif classify == 'like':
+                    return self.get_like_notice(request)
+                elif classify == 'reply':
+                    return self.get_reply_notice(request)
 
+            else:
+                try:
+                    chat = Chat.get_chat_object(sender=request.user, receiver=User.objects.get(id=chatter_id))
+                except Chat.DoesNotExist:
+                    return return_response(errors={'chat': get_err_msg('chat_not_exist')},
+                                           status_code=status.HTTP_400_BAD_REQUEST)
+                return self.get_particular_user_message(request, chat)
         else:
-            try:
-                chat = Chat.objects.get(id=chatter_id)
-            except Chat.DoesNotExist:
-                return return_response(errors={'chat': get_err_msg('chat_not_exist')},
-                                       status_code=status.HTTP_400_BAD_REQUEST)
-            chat.unread_count = 0
-            chat.save()
-            return self.get_particular_user_message(request, chatter_id)
+            return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
 
     def post(self, request):
         serializer = ChatMessageSerializer(data=request.data)
