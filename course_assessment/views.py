@@ -35,11 +35,14 @@ class CourseList(APIView):
             'popular': 'review_count'
         }
         order_by = order_by_dict.get(order_by, 'average_rating')
-        total_key = 'total_courses_count'
+        total_key = 'total_courses_count' + course_type
         total = cache.get(total_key)
         if total is None:
-            total = Course.objects.count()
-            cache.set(total_key, total, 30 * 60)
+            if course_type == 'all':
+                total = Course.objects.count()
+            else:
+                total = Course.objects.filter(classification=course_type).count()
+            cache.set(total_key, total, timeout=None)
         if course_type == 'all':
             courses = Course.objects.select_related('school').prefetch_related('semester').order_by(order_by,
                                                                                                     'like_count')
@@ -72,7 +75,7 @@ class CourseView(APIView):
     course_model = Course
     review_model = Review
     school_model = School
-    permission_classes = [AllowAny]
+    permission_classes = [CustomPermission]
 
     def get(self, request, course_id):
         try:
@@ -186,13 +189,14 @@ class LatestReviewView(APIView):
         current_page = int(request.query_params.get('currentPage', 1))
         page_size = int(request.query_params.get('pageSize', 10))
         desc = request.query_params.get('desc', '1')
-        review__all_set = (
-            Review.objects.all()
-            .order_by(('-' if desc == '1' else '') + 'modify_time')
-            .select_related('created_by', 'course', 'course__school')
-            .prefetch_related('course__teachers')
-        )
+        review__all_set = Review.objects.all().order_by(('-' if desc == '1' else '') + 'modify_time').select_related(
+            'created_by', 'course', 'course__school').prefetch_related('course__teachers')
         paginator = Paginator(review__all_set, page_size)
+        total_key = 'total_review_count'
+        total = cache.get(total_key)
+        if total is None:
+            total = review__all_set.count()
+            cache.set(total_key, total, timeout=None)
         try:
             review_page = paginator.page(current_page)
         except PageNotAnInteger:
@@ -222,7 +226,7 @@ class LatestReviewView(APIView):
             }
             review_list.append(temp_dict)
         return return_response(
-            contents={"reviews": review_list, "total": paginator.count, 'has_next': review_page.has_next(),
+            contents={"reviews": review_list, "total": total, 'has_next': review_page.has_next(),
                       'has_previous': review_page.has_previous(), 'current_page': review_page.number, })
 
 
@@ -260,7 +264,7 @@ class ReviewView(APIView):
             try:
                 review = self.review_model.all_objects.get(course=course, created_by=request.user)
             except Review.DoesNotExist:
-                self.review_model.objects.create(
+                review = self.review_model.objects.create(
                     course=course,
                     content=serializer.data['content'],
                     created_by=request.user,
@@ -275,7 +279,7 @@ class ReviewView(APIView):
                 )
                 if semester not in course.semester.all():
                     course.semester.add(semester)
-                return return_response(message=get_msg_msg('review_create_success'))
+                return return_response(message=get_msg_msg('review_create_success'), contents={'review_id': review.id})
             if review.is_deleted:
                 ReviewHistory.objects.create(review=review, content=review.content, is_deleted=True)
                 update_fields = ['content', 'rating', 'anonymous', 'difficulty', 'grade', 'homework', 'reward']
@@ -285,7 +289,7 @@ class ReviewView(APIView):
                 review.restore()
                 if semester not in course.semester.all():
                     course.semester.add(semester)
-                return return_response(message=get_msg_msg('review_create_success'))
+                return return_response(message=get_msg_msg('review_create_success'), contents={'review_id': review.id})
             return return_response(contents={'review': get_err_msg('review_has_exist')},
                                    status_code=HTTP_404_NOT_FOUND)
         else:

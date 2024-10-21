@@ -1,10 +1,11 @@
 from django.contrib.postgres.search import SearchVector
+from django.core.cache import cache
 from django.db.models import Avg, Sum, Count
 from django.db.models.signals import post_save, post_delete, pre_save
 from django.dispatch import receiver
 from pypinyin import lazy_pinyin
 
-from common.models import ChatLike, ChatReply, Chat, ChatMessage
+from common.models import ChatLike, ChatReply, Chat
 from common.signals import soft_delete_signal
 from user.models import User
 from .models import Review, Course, ReviewAndReplyLike, CourseLike, Teacher, ReviewReply
@@ -164,6 +165,25 @@ def update_teacher_pinyin_and_vector(sender, instance, **kwargs):
 @receiver(pre_save, sender=Course)
 def update_course_pinyin_and_vector(sender, instance, **kwargs):
     instance.pinyin = ''.join(lazy_pinyin(instance.name))
+
+
+@receiver(post_save, sender=Course)
+def update_course_count(sender, instance, **kwargs):
+    course_classification = instance.classification
+    course_total_key = 'total_courses_count' + course_classification
+    course_total = cache.get(course_total_key)
+    if course_total is None:
+        course_total = Course.objects.filter(classification=course_classification).count()
+        cache.set(course_total_key, course_total, timeout=None)
+
+
+@receiver(post_save, sender=Review)
+def update_review_count(sender, instance, **kwargs):
+    review_total_key = 'total_reviews_count'
+    review_total = cache.get(review_total_key)
+    if review_total is None:
+        review_total = Review.objects.count()
+        cache.set(review_total_key, review_total, timeout=None)
 
 
 @receiver(pre_save, sender=Review)
