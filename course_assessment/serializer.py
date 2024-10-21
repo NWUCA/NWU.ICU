@@ -51,7 +51,14 @@ class AddReviewSerializer(serializers.ModelSerializer):
 
 
 class DeleteReviewSerializer(serializers.Serializer):
-    review_id = serializers.CharField(write_only=True, required=True)
+    review_id = serializers.CharField(required=True)
+
+    def validate(self, data):
+        try:
+            Review.objects.get(id=data.get('review_id'))
+        except Review.DoesNotExist:
+            raise serializers.ValidationError({'review': get_err_msg('review_not_exist')})
+        return data
 
 
 class AddReviewReplySerializer(serializers.Serializer):

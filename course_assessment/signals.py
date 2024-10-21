@@ -8,6 +8,7 @@ from pypinyin import lazy_pinyin
 from common.models import ChatLike, ChatReply, Chat
 from common.signals import soft_delete_signal
 from user.models import User
+from utils.utils import get_cache_key
 from .models import Review, Course, ReviewAndReplyLike, CourseLike, Teacher, ReviewReply
 
 
@@ -168,22 +169,23 @@ def update_course_pinyin_and_vector(sender, instance, **kwargs):
 
 
 @receiver(post_save, sender=Course)
+@receiver(post_delete, sender=Course)
 def update_course_count(sender, instance, **kwargs):
     course_classification = instance.classification
-    course_total_key = 'total_courses_count' + course_classification
-    course_total = cache.get(course_total_key)
-    if course_total is None:
-        course_total = Course.objects.filter(classification=course_classification).count()
-        cache.set(course_total_key, course_total, timeout=None)
+    course_total_key = get_cache_key('total_courses_count')
+    course_classify_total_key = course_total_key + course_classification
+    course_classify_total = Course.objects.filter(classification=course_classification).count()
+    cache.set(course_classify_total_key, course_classify_total, timeout=None)
+    course_total = Course.objects.count()
+    cache.set(course_total_key, course_total, timeout=None)
 
 
 @receiver(post_save, sender=Review)
+@receiver(soft_delete_signal, sender=Review)
 def update_review_count(sender, instance, **kwargs):
-    review_total_key = 'total_reviews_count'
-    review_total = cache.get(review_total_key)
-    if review_total is None:
-        review_total = Review.objects.count()
-        cache.set(review_total_key, review_total, timeout=None)
+    review_total_key = get_cache_key('total_review_count')
+    review_total = Review.objects.count()
+    cache.set(review_total_key, review_total, timeout=None)
 
 
 @receiver(pre_save, sender=Review)

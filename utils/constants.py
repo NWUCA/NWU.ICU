@@ -60,3 +60,7 @@ message_dict = {
     'delete_review_success': '删除课程评价成功',
     'anonymous_user_nickname': '匿名用户',
 }
+cache_key_dict = {
+    'total_review_count': 'total_review_count',
+    'total_courses_count': 'total_courses_count',
+}
