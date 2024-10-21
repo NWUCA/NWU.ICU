@@ -8,12 +8,20 @@ from course_assessment.models import Semeseter
 class Command(BaseCommand):
     help = 'Updates the semester annually'
 
+    def add_arguments(self, parser):
+        parser.add_argument(
+            '--start_year',
+            type=int,
+            default=2017,
+            help='The starting year for the semester update'
+        )
+
     def handle(self, *args, **options):
+        start_year = options['start_year']
         self.stdout.write(f'Starting to update semester...')
         current_date = datetime.datetime.now()
         current_year = current_date.year
         current_month = current_date.month
-        start_year = 2017
         semester_list = []
         spring_semester_month = 3
         autumn_semester_month = 7
