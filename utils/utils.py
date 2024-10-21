@@ -37,6 +37,10 @@ def get_msg_msg(msg_code: str):
     return constants.message_dict[msg_code]
 
 
+def get_cache_key(cache_key: str):
+    return constants.cache_key_dict[cache_key]
+
+
 def custom_exception_handler(exc, context):
     response = exception_handler(exc, context)
 

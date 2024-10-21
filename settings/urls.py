@@ -53,7 +53,6 @@ api_patterns = [
     path('assessment/my/review/', MyReviewView.as_view(), name='my_review'),
     path('assessment/my/reply/', MyReviewReplyView.as_view(), name='my_reply'),
     path('assessment/review/', ReviewView.as_view(), name='review'),
-    path('assessment/review/<int:review_id>/', ReviewView.as_view(), name='delete_review'),
     path('assessment/latest-review/', LatestReviewView.as_view(), name='latest_review'),
     path('assessment/courselist/', CourseList.as_view(), name='course_list'),
     path('assessment/course/<int:course_id>/', CourseView.as_view(), name='course'),
