@@ -14,8 +14,8 @@ from course_assessment.models import Course, Review, ReviewHistory, School, Teac
 from course_assessment.permissions import CustomPermission
 from course_assessment.serializer import MyReviewSerializer, AddReviewSerializer, AddReviewReplySerializer, \
     DeleteReviewReplySerializer, ReviewAndReplyLikeSerializer, AddCourseSerializer, \
-    TeacherSerializer, CourseLikeSerializer, AddTeacherSerializer
-from utils.utils import return_response, get_err_msg, get_msg_msg
+    TeacherSerializer, CourseLikeSerializer, AddTeacherSerializer, DeleteReviewSerializer
+from utils.utils import return_response, get_err_msg, get_msg_msg, get_cache_key
 
 logger = logging.getLogger(__name__)
 
@@ -120,8 +120,10 @@ class CourseView(APIView):
                            'nickname': get_msg_msg(
                                'anonymous_user_nickname') if review.anonymous else review.created_by.nickname,
                            'avatar': 'anonymous' if review.anonymous else review.created_by.avatar_uuid},
-                'reply': [{'content': reviewReply.content,
+                'reply': [{'id': reviewReply.id,
+                           'content': reviewReply.content,
                            'created_time': reviewReply.create_time,
+                           'parent': 0 if (reviewReply.parent is None) else reviewReply.parent.id,
                            'created_by': {'id': review.created_by.id, 'name': review.created_by.nickname,
                                           'avatar': review.created_by.avatar_uuid},
                            'like': {'like': reviewReply.like_count,
@@ -192,7 +194,7 @@ class LatestReviewView(APIView):
         review__all_set = Review.objects.all().order_by(('-' if desc == '1' else '') + 'modify_time').select_related(
             'created_by', 'course', 'course__school').prefetch_related('course__teachers')
         paginator = Paginator(review__all_set, page_size)
-        total_key = 'total_review_count'
+        total_key = get_cache_key('total_review_count')
         total = cache.get(total_key)
         if total is None:
             total = review__all_set.count()
@@ -242,19 +244,21 @@ class ReviewView(APIView):
             semester = Semeseter.objects.get(id=serializer.data['semester'])
             try:
                 review = self.review_model.all_objects.get(course=course, created_by=request.user)
-
             except Review.DoesNotExist:
                 return return_response(contents={'review': get_err_msg('review_not_exist')},
                                        status_code=HTTP_404_NOT_FOUND)
             if review.is_deleted:
                 review.restore()
+            ReviewHistory.objects.create(review=review, content=review.content, is_deleted=False)
             fields_to_update = ['content', 'rating', 'anonymous', 'difficulty', 'grade', 'homework', 'reward']
             for field in fields_to_update:
                 setattr(review, field, serializer.data[field])
             review.semester = semester
             review.edited = True
             review.save()
-            return return_response(message=get_msg_msg('review_update_success'))
+            return return_response(message=get_msg_msg('review_update_success'), contents={'review_id': review.id})
+        else:
+            return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
 
     def post(self, request):
         serializer = AddReviewSerializer(data=request.data)
@@ -295,22 +299,22 @@ class ReviewView(APIView):
         else:
             return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
 
-    def delete(self, request, review_id):
-        try:
-            review = self.review_model.objects.get(id=review_id)
-        except Review.DoesNotExist:
-            return return_response(errors={"review": get_err_msg('review_not_exist')},
-                                   status_code=status.HTTP_400_BAD_REQUEST)
-        if review.created_by == request.user:
-            review_item_model = self.review_model.objects.get(id=review.id)
-            review_item_model.soft_delete()
-            review_history_items = self.review_history_model.objects.filter(review_id=review.id)
-            for review_history_item in review_history_items:
-                review_history_item.soft_delete()
-            return return_response(message=get_msg_msg('delete_review_success'))
+    def delete(self, request):
+        serializer = DeleteReviewSerializer(data=request.data)
+        if serializer.is_valid():
+            review = self.review_model.objects.get(id=serializer.validated_data['review_id'])
+            if review.created_by == request.user:
+                review_item_model = self.review_model.objects.get(id=review.id)
+                review_item_model.soft_delete()
+                review_history_items = self.review_history_model.objects.filter(review_id=review.id)
+                for review_history_item in review_history_items:
+                    review_history_item.soft_delete()
+                return return_response(message=get_msg_msg('delete_review_success'), contents={'review_id': review.id})
+            else:
+                return return_response(errors={"auth": get_err_msg('auth_error')},
+                                       status_code=status.HTTP_401_UNAUTHORIZED)
         else:
-            return return_response(errors={"auth": get_err_msg('auth_error')},
-                                   status_code=status.HTTP_401_UNAUTHORIZED)
+            return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
 
 
 class TeacherView(APIView):
