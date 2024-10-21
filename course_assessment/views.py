@@ -8,7 +8,6 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.status import HTTP_404_NOT_FOUND
 from rest_framework.views import APIView
 
-from utils.utils import return_response, get_err_msg, get_msg_msg
 from course_assessment.managers import SearchModuleErrorException
 from course_assessment.models import Course, Review, ReviewHistory, School, Teacher, Semeseter, ReviewReply, \
     ReviewAndReplyLike, CourseLike
@@ -16,6 +15,7 @@ from course_assessment.permissions import CustomPermission
 from course_assessment.serializer import MyReviewSerializer, AddReviewSerializer, AddReviewReplySerializer, \
     DeleteReviewReplySerializer, ReviewAndReplyLikeSerializer, AddCourseSerializer, \
     TeacherSerializer, CourseLikeSerializer, AddTeacherSerializer
+from utils.utils import return_response, get_err_msg, get_msg_msg
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ class CourseList(APIView):
         page_size = 10
         page = request.query_params.get('page', 1)
         course_type = request.query_params.get('course_type', 'all')
-        if course_type not in {choice[0] for choice in Course.classification_choices}:
+        if course_type not in {choice[0] for choice in Course.classification_choices} and course_type != 'all':
             course_type = 'all'
         order_by = request.query_params.get('order_by', 'rating')
         order_by_dict = {
@@ -41,12 +41,11 @@ class CourseList(APIView):
             total = Course.objects.count()
             cache.set(total_key, total, 30 * 60)
         if course_type == 'all':
-            courses = (
-                Course.objects.select_related('school').prefetch_related('semester').order_by(order_by,
-                                                                                              'like_count'))
+            courses = Course.objects.select_related('school').prefetch_related('semester').order_by(order_by,
+                                                                                                    'like_count')
         else:
-            courses = (Course.objects.select_related('school').prefetch_related('semester').filter(
-                classification=course_type).order_by(order_by, 'like_count'))
+            courses = Course.objects.select_related('school').prefetch_related('semester').filter(
+                classification=course_type).order_by(order_by, 'like_count')
         paginator = Paginator(courses, page_size)
         course_page = paginator.get_page(page)
         courses_list = [{'id': course.id,
@@ -149,7 +148,8 @@ class CourseView(APIView):
             'request_user_review_id': request_user_review_id,
             'reviews': reviews_data,
             'other_dup_name_course': [
-                {'course_id': course.id, 'teacher_name': course.get_teachers(), 'rating': course.normalized_rating} for course in
+                {'course_id': course.id, 'teacher_name': course.get_teachers(), 'rating': course.normalized_rating} for
+                course in
                 Course.objects.filter(name=course.get_name()) if course.id != course_id]
         }
         return return_response(contents=course_info)
@@ -164,7 +164,7 @@ class CourseView(APIView):
             teacher = Teacher.objects.get(id=serializer.validated_data['teacher_id'])
             course.teachers.add(teacher)
             course.save()
-            return return_response(message=get_msg_msg('course_create_success'))
+            return return_response(message=get_msg_msg('course_create_success'), contents={'course_id': course.id})
         else:
             return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
 
@@ -356,8 +356,10 @@ class TeacherView(APIView):
             try:
                 Teacher.objects.get(name=serializer.validated_data['name'], school=school)
             except Teacher.DoesNotExist:
-                Teacher.objects.create(name=serializer.validated_data['name'], school=school, created_by=request.user)
-                return return_response(message=get_msg_msg('teacher_create_success'))
+                teacher = Teacher.objects.create(name=serializer.validated_data['name'], school=school,
+                                                 created_by=request.user)
+                return return_response(message=get_msg_msg('teacher_create_success'),
+                                       contents={'teacher_id': teacher.id})
             return return_response(errors={"teacher": get_err_msg('teacher_has_exist')}, )
         else:
             return return_response(errors=serializer.errors)

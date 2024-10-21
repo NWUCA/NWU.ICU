@@ -59,7 +59,7 @@ api_patterns = [
     path('assessment/course/<int:course_id>/', CourseView.as_view(), name='course'),
     path('assessment/course/', CourseView.as_view(), name='add_course'),
     path('assessment/course/like/', CourseLikeView.as_view(), name='course_like'),
-    path('assessment/teacher/<int:teacher_id>/', TeacherView.as_view(), 'teacher'),
+    path('assessment/teacher/<int:teacher_id>/', TeacherView.as_view(), name='teacher'),
     path('assessment/teacher/', TeacherView.as_view(), name='add_teacher'),
     path('assessment/reply/<int:review_id>/', ReviewReplyView.as_view(), name='reply'),
     path('assessment/reply/', ReviewReplyView.as_view(), name='add_reply'),
