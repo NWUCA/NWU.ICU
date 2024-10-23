@@ -1,5 +1,6 @@
 import logging
 
+from django.conf import settings
 from django.core.cache import cache
 from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage
 from django.db import transaction
@@ -115,11 +116,10 @@ class CourseView(APIView):
                 'homework': review.homework,
                 'reward': review.reward,
                 'semester': review.semester.name,
-                'anonymous': review.anonymous,
                 'author': {'id': -1 if review.anonymous else review.created_by.id,
                            'nickname': get_msg_msg(
                                'anonymous_user_nickname') if review.anonymous else review.created_by.nickname,
-                           'avatar': 'anonymous' if review.anonymous else review.created_by.avatar_uuid},
+                           'avatar': settings.ANONYMOUS_USER_AVATAR_UUID if review.anonymous else review.created_by.avatar_uuid},
                 'reply': [{'id': reviewReply.id,
                            'content': reviewReply.content,
                            'created_time': reviewReply.create_time,
@@ -216,7 +216,7 @@ class LatestReviewView(APIView):
                 'author': {"nickname": get_msg_msg(
                     'anonymous_user_nickname') if review.anonymous else review.created_by.nickname,
                            "id": -1 if review.anonymous else review.created_by.id,
-                           "avatar_uuid": "anonymous" if review.anonymous else review.created_by.avatar_uuid},
+                           "avatar_uuid": settings.ANONYMOUS_USER_AVATAR_UUID if review.anonymous else review.created_by.avatar_uuid},
                 'datetime': review.modify_time,
                 'course': {"name": review.course.get_name(), "id": review.course.id,
                            'semester': review.semester.name, },
@@ -319,7 +319,7 @@ class ReviewView(APIView):
 
 class TeacherView(APIView):
     model = Teacher
-    permission_classes = [AllowAny]
+    permission_classes = [CustomPermission]
 
     def get(self, request, teacher_id):
         try:
