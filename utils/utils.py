@@ -19,11 +19,19 @@ def return_response(message: str = None, errors=None, contents=None, status_code
         message = ""
     errors_list = []
     for key, value in errors.items():
-        errors_list.append({
-            'field': key,
-            'err_code': value['err_code'],
-            'err_msg': value['err_msg']
-        })
+        try:
+            errors_list.append({
+                'field': key,
+                'err_code': value['err_code'],
+                'err_msg': value['err_msg']
+            })
+        except TypeError:
+            value = value[-1]
+            errors_list.append({
+                'field': key,
+                'err_code': value.code,
+                'err_msg': str(value)
+            })
     return Response({"message": message,
                      "errors": errors_list,
                      "contents": contents}, status=status_code)
