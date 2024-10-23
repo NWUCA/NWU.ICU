@@ -88,6 +88,10 @@ class FileDownloadView(APIView):
         except UploadedFile.DoesNotExist:
             return return_response(errors={"file": get_err_msg('file_not_exist')},
                                    status_code=status.HTTP_404_NOT_FOUND)
-        response = FileResponse(file_instance.file)
+        try:
+            response = FileResponse(file_instance.file)
+        except FileNotFoundError:
+            return return_response(errors={"file": get_err_msg('file_not_exist')},
+                                   status_code=status.HTTP_404_NOT_FOUND)
         response['Content-Disposition'] = f'attachment; filename="{file_instance.file.name}"'
         return response
