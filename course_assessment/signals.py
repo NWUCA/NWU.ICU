@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib.postgres.search import SearchVector
 from django.core.cache import cache
 from django.db.models import Avg, Sum, Count
@@ -87,7 +88,7 @@ def update_chat_like_counts(instance: ReviewAndReplyLike, sender):
         chat_like.receiver = post.created_by
         chat_like.save()
         Chat.objects.update_or_create(receiver=post.created_by, classify=raw_post_classify,
-                                      sender=User.objects.get(id=1),
+                                      sender=User.objects.get(id=settings.DEFAULT_SUPER_USER_ID),
                                       receiver_unread_count=ChatLike.objects.filter(receiver=post.created_by,
                                                                                     raw_post_classify=raw_post_classify,
                                                                                     unread=True).count())

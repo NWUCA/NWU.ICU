@@ -12,8 +12,13 @@ https://docs.djangoproject.com/en/3.1/ref/settings/
 import os
 from pathlib import Path
 
+import environ
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+env = environ.Env()
+environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
 
 # Application definition
 
@@ -86,11 +91,11 @@ WSGI_APPLICATION = 'settings.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql_psycopg2',
-        'NAME': os.getenv('DB_NAME'),
-        'USER': os.getenv('DB_USER'),
-        'PASSWORD': os.getenv('DB_PASSWORD'),
-        'HOST': os.getenv('DB_HOST'),
-        'PORT': os.getenv('DB_PORT'),
+        'NAME': env('DB_NAME'),
+        'USER': env('DB_USER'),
+        'PASSWORD': env('DB_PASSWORD'),
+        'HOST': env('DB_HOST'),
+        'PORT': env('DB_PORT'),
     }
 }
 
@@ -199,10 +204,16 @@ FILE_UPLOAD_SIZE_LIMIT = 25 * 1024 * 1024  # 25 MB size limit
 
 SESSION_COOKIE_HTTPONLY = False
 
-UNIVERSITY_MAIL_SUFFIX = os.getenv('UNIVERSITY_MAIL_SUFFIX', 'nwu.edu.cn')
-UNIVERSITY_TEACHER_MAIL_SUFFIX = os.getenv('UNIVERSITY_TEACHER_MAIL_SUFFIX', 'nwu.edu.cn')
-UNIVERSITY_STUDENT_MAIL_SUFFIX = os.getenv('UNIVERSITY_STUDENT_MAIL_SUFFIX', 'stumail.nwu.edu.cn')
-UNIVERSITY_CHINESE_NAME = os.getenv('UNIVERSITY_CHINESE_NAME', '西北大学')
-UNIVERSITY_ENGLISH_NAME = os.getenv('UNIVERSITY_ENGLISH_NAME', 'Northwest University')
-UNIVERSITY_ENGLISH_ABBREVIATION_NAME = os.getenv('UNIVERSITY_ABBREVIATION_NAME', 'NWU')
-WEBSITE_NAME = os.getenv('WEBSITE_NAME', 'NWU.ICU')
+UNIVERSITY_MAIL_SUFFIX = env('UNIVERSITY_MAIL_SUFFIX')
+UNIVERSITY_TEACHER_MAIL_SUFFIX = env('UNIVERSITY_TEACHER_MAIL_SUFFIX')
+UNIVERSITY_STUDENT_MAIL_SUFFIX = env('UNIVERSITY_STUDENT_MAIL_SUFFIX')
+UNIVERSITY_CHINESE_NAME = env('UNIVERSITY_CHINESE_NAME')
+UNIVERSITY_ENGLISH_NAME = env('UNIVERSITY_ENGLISH_NAME')
+UNIVERSITY_ENGLISH_ABBREVIATION_NAME = env('UNIVERSITY_ENGLISH_ABBREVIATION_NAME')
+WEBSITE_NAME = env('WEBSITE_NAME', default='NWU.ICU')
+
+# 默认超级用户设置
+DEFAULT_SUPER_USER_ID = env('DEFAULT_SUPER_USER_ID')
+DEFAULT_SUPER_USER_PASSWORD = env('DEFAULT_SUPER_USER_PASSWORD')
+DEFAULT_SUPER_USER_USERNAME = env('DEFAULT_SUPER_USER_USERNAME')
+DEFAULT_SUPER_USER_EMAIL = env('DEFAULT_SUPER_USER_EMAIL')
