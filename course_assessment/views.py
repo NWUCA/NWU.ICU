@@ -2,10 +2,12 @@ import logging
 
 from django.conf import settings
 from django.core.cache import cache
-from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage
+from django.core.paginator import Paginator
 from django.db import transaction
 from rest_framework import status
+from rest_framework.generics import GenericAPIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.response import Response
 from rest_framework.status import HTTP_404_NOT_FOUND
 from rest_framework.views import APIView
 
@@ -16,7 +18,8 @@ from course_assessment.permissions import CustomPermission
 from course_assessment.serializer import MyReviewSerializer, AddReviewSerializer, AddReviewReplySerializer, \
     DeleteReviewReplySerializer, ReviewAndReplyLikeSerializer, AddCourseSerializer, \
     TeacherSerializer, CourseLikeSerializer, AddTeacherSerializer, DeleteReviewSerializer
-from utils.utils import return_response, get_err_msg, get_msg_msg, get_cache_key
+from utils.custom_pagination import StandardResultsSetPagination
+from utils.utils import return_response, get_err_msg, get_msg_msg, userUtils
 
 logger = logging.getLogger(__name__)
 
@@ -73,14 +76,11 @@ class CourseList(APIView):
 
 
 class CourseView(APIView):
-    course_model = Course
-    review_model = Review
-    school_model = School
     permission_classes = [CustomPermission]
 
     def get(self, request, course_id):
         try:
-            course = (self.course_model.objects
+            course = (Course.objects
                       .select_related('school', 'created_by')
                       .prefetch_related('teachers', 'semester')
                       .get(id=course_id))
@@ -162,12 +162,8 @@ class CourseView(APIView):
     def post(self, request):
         serializer = AddCourseSerializer(data=request.data)
         if serializer.is_valid():
-            course = Course.objects.create(name=serializer.validated_data['course_name'],
-                                           school=School.objects.get(id=serializer.validated_data['course_school']),
-                                           classification=serializer.validated_data['course_classification'],
-                                           created_by=request.user)
-            teacher = Teacher.objects.get(id=serializer.validated_data['teacher_id'])
-            course.teachers.add(teacher)
+            serializer.create(serializer.validated_data)
+            course = serializer.instance
             course.save()
             return return_response(message=get_msg_msg('course_create_success'), contents={'course_id': course.id})
         else:
@@ -183,53 +179,40 @@ class SchoolView(APIView):
             contents={'schools': [{'id': school.id, 'name': school.get_name()} for school in schools]}, )
 
 
-class LatestReviewView(APIView):
+class LatestReviewView(GenericAPIView):
     review_model = Review
     permission_classes = [AllowAny]
+    pagination_class = StandardResultsSetPagination
 
-    def get(self, request):  # 最近课程评价
-        current_page = int(request.query_params.get('currentPage', 1))
-        page_size = int(request.query_params.get('pageSize', 10))
+    def get(self, request):
         desc = request.query_params.get('desc', '1')
-        review__all_set = Review.objects.all().order_by(('-' if desc == '1' else '') + 'modify_time').select_related(
+        review_all_set = Review.objects.all().order_by(('-' if desc == '1' else '') + 'modify_time').select_related(
             'created_by', 'course', 'course__school').prefetch_related('course__teachers')
-        paginator = Paginator(review__all_set, page_size)
-        total_key = get_cache_key('total_review_count')
-        total = cache.get(total_key)
-        if total is None:
-            total = review__all_set.count()
-            cache.set(total_key, total, timeout=None)
-        try:
-            review_page = paginator.page(current_page)
-        except PageNotAnInteger:
-            review_page = paginator.page(1)
-        except EmptyPage:
-            review_page = paginator.page(paginator.num_pages)
+
+        page = self.paginate_queryset(review_all_set)
+        if page is not None:
+            review_list = self.get_paginated_response(self.build_review_list(page))
+            return review_list
+
+        return Response(self.build_review_list(review_all_set))
+
+    def build_review_list(self, review_page):
         review_list = []
         for review in review_page:
-            is_verify = False
-            if review.created_by.college_email is not None:
-                if review.created_by.college_email.endswith('@nwu.edu.cn'):
-                    is_verify = True
-            temp_dict = {
+            review_list.append({
                 'id': review.id,
-                'author': {"nickname": get_msg_msg(
-                    'anonymous_user_nickname') if review.anonymous else review.created_by.nickname,
-                           "id": -1 if review.anonymous else review.created_by.id,
-                           "avatar_uuid": settings.ANONYMOUS_USER_AVATAR_UUID if review.anonymous else review.created_by.avatar_uuid},
+                'author': userUtils.get_user_info_in_review(review),
                 'datetime': review.modify_time,
-                'course': {"name": review.course.get_name(), "id": review.course.id,
-                           'semester': review.semester.name, },
+                'course': {
+                    "name": review.course.get_name(),
+                    "id": review.course.id,
+                    'semester': review.semester.name,
+                },
                 'content': review.content,
-                "teachers": [{"name": teacher.name, "id": teacher.id} for teacher in
-                             review.course.teachers.all()],
+                "teachers": [{"name": teacher.name, "id": teacher.id} for teacher in review.course.teachers.all()],
                 'edited': review.edited,
-                'is_verify': is_verify
-            }
-            review_list.append(temp_dict)
-        return return_response(
-            contents={"reviews": review_list, "total": total, 'has_next': review_page.has_next(),
-                      'has_previous': review_page.has_previous(), 'current_page': review_page.number, })
+            })
+        return review_list
 
 
 class ReviewView(APIView):

@@ -6,6 +6,8 @@ from rest_framework.exceptions import NotAuthenticated, Throttled
 from rest_framework.response import Response
 from rest_framework.views import exception_handler
 
+from course_assessment.models import Review
+from settings import settings
 from settings.settings import BASE_DIR
 from utils import constants
 
@@ -61,12 +63,25 @@ def custom_exception_handler(exc, context):
     return response
 
 
-def generate_random_nickname():
-    with open(BASE_DIR / 'utils' / 'static_file' / 'adjective.json', encoding='utf-8') as f:
-        adjective = json.loads(f.read())
-    with open(BASE_DIR / 'utils' / 'static_file' / 'noun.json', encoding='utf-8') as f:
-        noun = json.loads(f.read())
-    random_suffix = ''.join(
-        random.choice(list('1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ')) for _ in range(4))
-    return adjective[random.randrange(len(adjective) - 1)] + '的' + noun[
-        random.randrange(len(noun) - 1)] + random_suffix
+class userUtils:
+    @staticmethod
+    def get_user_info_in_review(review: Review):
+        return {
+            "nickname": get_msg_msg(
+                'anonymous_user_nickname') if review.anonymous else review.created_by.nickname,
+            "id": -1 if review.anonymous else review.created_by.id,
+            "avatar_uuid": settings.ANONYMOUS_USER_AVATAR_UUID if review.anonymous else review.created_by.avatar_uuid,
+            'is_verify': review.created_by.college_email is not None and
+                         review.created_by.college_email.endswith('@nwu.edu.cn')
+        }
+
+    @staticmethod
+    def generate_random_nickname():
+        with open(BASE_DIR / 'utils' / 'static_file' / 'adjective.json', encoding='utf-8') as f:
+            adjective = json.loads(f.read())
+        with open(BASE_DIR / 'utils' / 'static_file' / 'noun.json', encoding='utf-8') as f:
+            noun = json.loads(f.read())
+        random_suffix = ''.join(
+            random.choice(list('1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ')) for _ in range(4))
+        return adjective[random.randrange(len(adjective) - 1)] + '的' + noun[
+            random.randrange(len(noun) - 1)] + random_suffix

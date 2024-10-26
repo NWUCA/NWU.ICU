@@ -119,6 +119,12 @@ class AddCourseSerializer(serializers.Serializer):
             return data
         raise serializers.ValidationError({'course': get_err_msg('course_has_exist')})
 
+    def create(self, validated_data):
+        created_by = self.context['request'].user
+        teacher = Teacher.objects.get(id=validated_data.pop('teacher_id'))
+        review = Review.objects.create(created_by=created_by, teacher=teacher, **validated_data)
+        return review
+
 
 class TeacherSerializer(serializers.Serializer):
     name = serializers.CharField(required=True)

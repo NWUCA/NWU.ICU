@@ -83,7 +83,7 @@ class RegisterView(APIView):
         if serializer.is_valid():
             user = serializer.save()
             user.is_active = False
-            user.nickname = utils.utils.generate_random_nickname()
+            user.nickname = utils.utils.userUtils.generate_random_nickname()
             user.avatar_uuid = settings.DEFAULT_USER_AVATAR_UUID
             user.save()
             return self.send_active_email(user, request)
