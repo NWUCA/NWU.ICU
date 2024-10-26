@@ -348,10 +348,7 @@ class BindCollegeEmailView(APIView):
 class Logout(APIView):
     def post(self, request):
         current_url = request.data.get('currentUrl', "/")
-        if request.user.is_authenticated:
-            logout(request)
-            response = return_response(message='成功登出', contents={'redirectUrl': current_url})
-            response.delete_cookie('sessionid')
-        else:
-            response = return_response(message='用户尚未登录', contents={'redirectUrl': current_url})
+        logout(request)
+        response = return_response(message='成功登出', contents={'redirectUrl': current_url})
+        response.delete_cookie('sessionid')
         return response
