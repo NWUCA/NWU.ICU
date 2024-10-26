@@ -99,9 +99,9 @@ class CourseTeacherSearchSerializer(serializers.Serializer):
 
 
 class AddCourseSerializer(serializers.Serializer):
-    course_name = serializers.CharField(required=True)
-    course_school = serializers.IntegerField(required=True)
-    course_classification = serializers.CharField(required=True)
+    name = serializers.CharField(required=True)
+    school = serializers.IntegerField(required=True)
+    classification = serializers.CharField(required=True)
     teacher_id = serializers.IntegerField(required=True)
 
     def validate(self, data):
@@ -109,12 +109,12 @@ class AddCourseSerializer(serializers.Serializer):
             Teacher.objects.get(id=data.get('teacher_id'))
         except Teacher.DoesNotExist:
             raise serializers.ValidationError({'teacher': get_err_msg('teacher_not_exist')})
-        school_exist(data.get('course_school'))
-        classification_exist(data.get('course_classification'))
+        school_exist(data.get('school'))
+        classification_exist(data.get('classification'))
         try:
-            Course.objects.get(name=data.get('course_name'),
-                               school=data.get('course_school'),
-                               classification=data.get('course_classification'))
+            Course.objects.get(name=data.get('name'),
+                               school=data.get('school'),
+                               classification=data.get('classification'))
         except Course.DoesNotExist:
             return data
         raise serializers.ValidationError({'course': get_err_msg('course_has_exist')})
@@ -122,8 +122,10 @@ class AddCourseSerializer(serializers.Serializer):
     def create(self, validated_data):
         created_by = self.context['request'].user
         teacher = Teacher.objects.get(id=validated_data.pop('teacher_id'))
-        review = Review.objects.create(created_by=created_by, teacher=teacher, **validated_data)
-        return review
+        school = School.objects.get(id=validated_data.pop('school'))
+        course = Course.objects.create(created_by=created_by, school=school, **validated_data)
+        course.teachers.add(teacher)
+        return course
 
 
 class TeacherSerializer(serializers.Serializer):
@@ -138,6 +140,10 @@ class CourseLikeSerializer(serializers.Serializer):
     like = serializers.IntegerField(required=True)
 
     def validate(self, data):
+        try:
+            course = Course.objects.get(id=data.get('course_id'))
+        except Course.DoesNotExist:
+            raise serializers.ValidationError({'course': get_err_msg('course_not_exist')})
         if data.get('like') not in [-1, 1]:
             raise serializers.ValidationError({'like': get_err_msg('operation_error')})
         return data

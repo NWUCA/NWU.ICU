@@ -160,11 +160,9 @@ class CourseView(APIView):
         return return_response(contents=course_info)
 
     def post(self, request):
-        serializer = AddCourseSerializer(data=request.data)
+        serializer = AddCourseSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
-            serializer.create(serializer.validated_data)
-            course = serializer.instance
-            course.save()
+            course = serializer.create(serializer.validated_data)
             return return_response(message=get_msg_msg('course_create_success'), contents={'course_id': course.id})
         else:
             return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
@@ -539,11 +537,7 @@ class CourseLikeView(APIView):
     def post(self, request):
         serializer = CourseLikeSerializer(data=request.data)
         if serializer.is_valid():
-            try:
-                course = Course.objects.get(id=serializer.validated_data['course_id'])
-            except Course.DoesNotExist:
-                return return_response(errors={'course': get_err_msg('course_not_exist')},
-                                       status_code=status.HTTP_404_NOT_FOUND)
+            course = Course.objects.get(id=serializer.validated_data['course_id'])
             course_like, created = CourseLike.objects.get_or_create(
                 course=course,
                 created_by=request.user,

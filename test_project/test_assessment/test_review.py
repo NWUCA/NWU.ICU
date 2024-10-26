@@ -3,13 +3,14 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.core.management import call_command
 from django.test import override_settings
 from django.urls import reverse
-from rest_framework.test import APITestCase
+from rest_framework.test import APITestCase, APIClient
 
 from course_assessment.models import ReviewHistory, Review
+from test_project.common import create_user, login_user
 
 
 @override_settings(DEBUG=True)
-class CourseTests(APITestCase):
+class ReviewTests(APITestCase):
     fixtures = ['school_initial_data.json']
 
     def add_teacher_course(self):
@@ -17,9 +18,9 @@ class CourseTests(APITestCase):
         teacher_response = self.client.post(reverse('api:add_teacher'), data={'name': teacher_name, 'school': 1})
         teacher_id = teacher_response.data['contents']['teacher_id']
         course_data = {
-            "course_name": "testCourse",
-            "course_school": 1,
-            "course_classification": "general",
+            "name": "testCourse",
+            "school": 1,
+            "classification": "general",
             "teacher_id": teacher_id
         }
         course_response = self.client.post(reverse('api:add_course'), data=course_data)
@@ -30,24 +31,12 @@ class CourseTests(APITestCase):
         call_command('flush', '--noinput')
         call_command('loaddata', 'school_initial_data.json')
         call_command('update_semester', start_year=2017)
-        self.register_data = {
-            "username": "testUser",
-            "password": "testPassword1",
-            "email": "asd@exapmple.com",
-            "captcha_key": "captcha_key",
-            "captcha_value": "PASSED"
-        }
-        self.register_url = reverse('api:register')
         self.review_list_url = reverse('api:latest_review')
         self.review_url = reverse('api:review')
-        token = self.client.post(self.register_url, self.register_data, format='json').data['contents']['token']
-        self.client.get(self.register_url + "?token=" + token)
-        self.login_data = {
-            'username': self.register_data['username'],
-            'password': self.register_data['password'],
-        }
-        login_response = self.client.post(reverse('api:login'), self.login_data, format='json')
-        self.user_id = login_response.data['contents']['id']
+        self.client = APIClient()
+        self.user = create_user(is_active=True)
+        login_user(self.client)
+        self.user_id = self.user.id
         self.course_id = self.add_teacher_course()
 
     def test_add_review(self):
@@ -103,7 +92,7 @@ class CourseTests(APITestCase):
         with self.assertRaises(ObjectDoesNotExist):
             Review.objects.get(id=review_id)
         self.assertEqual(Review.all_objects.get(id=review_id).is_deleted, True)
-        self.assertEqual(latest_review_list_response.data['contents']['total'], 0)
+        self.assertEqual(latest_review_list_response.data['contents']['count'], 0)
 
     def test_edit_review(self):
         review_id, course_id = self.test_add_review()
