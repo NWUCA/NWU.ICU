@@ -5,7 +5,7 @@ from django.test import override_settings
 from django.urls import reverse
 from rest_framework.test import APITestCase, APIClient
 
-from course_assessment.models import ReviewHistory, Review
+from course_assessment.models import ReviewHistory, Review, Semeseter
 from test_project.common import create_user, login_user
 
 
@@ -115,7 +115,6 @@ class ReviewTests(APITestCase):
         self.assertNotEquals(review.content, old_review_content)
         review_history = ReviewHistory.objects.get(review=review)
         self.assertEqual(review_history.content, old_review_content)
-
         self.assertEqual(review.content, edit_review_data['content'])
         self.assertEqual(review.rating, edit_review_data['rating'])
         self.assertEqual(review.difficulty, edit_review_data['difficulty'])
@@ -124,3 +123,64 @@ class ReviewTests(APITestCase):
         self.assertEqual(review.reward, edit_review_data['reward'])
         self.assertEqual(review.semester_id, edit_review_data['semester'])
         self.assertEqual(review.anonymous, edit_review_data['anonymous'])
+
+    def test_my_review(self):
+        self.test_edit_review()
+        my_review_response = self.client.get(reverse('api:my_review'))
+        self.assertEqual(my_review_response.data['contents']['count'], 1)
+        my_review = my_review_response.data['contents']['results'][-1]
+        self.assertEqual(my_review['content']['current_content'], 'test_message_edit')
+        self.assertEqual(len(my_review['content']['content_history']), 1)
+        self.assertEqual(my_review['content']['content_history'][-1], 'test_message')
+        self.assertEqual(my_review['rating']['rating'], 3)
+        self.assertEqual(my_review['rating']['difficulty'], 3)
+        self.assertEqual(my_review['rating']['grade'], 2)
+        self.assertEqual(my_review['rating']['homework'], 3)
+        self.assertEqual(my_review['rating']['reward'], 2)
+        self.assertEqual(my_review['semester'], str(Semeseter.objects.get(id=1)))
+        self.assertEqual(my_review['anonymous'], False)
+        self.assertEqual(my_review['course']['id'], self.course_id)
+        self.assertEqual(my_review['course']['name'], 'testCourse')
+        self.assertEqual(my_review['teachers'][-1]['id'], 1)
+        self.assertEqual(my_review['teachers'][-1]['name'], 'testTeacher')
+
+    def test_review_like_dislike(self):
+        clientB = APIClient()
+        userB = create_user(is_active=True, username='test_userB', email='testB@example.com')
+        login_user(clientB, user_info_dict={'username': 'test_userB', 'password': 'test_password'})
+
+        review_id, _ = self.test_add_review()
+        like_response = clientB.post(reverse('api:review_like'),
+                                     data={'review_id': review_id, 'reply_id': 0, 'like_or_dislike': 1})
+        self.assertEqual(like_response.status_code, 200)
+        review = Review.objects.get(id=review_id)
+        self.assertEqual(review.like_count, 1)
+        self.assertEqual(review.dislike_count, 0)
+
+        repeal_like_response = clientB.post(reverse('api:review_like'),
+                                            data={'review_id': review_id, 'reply_id': 0, 'like_or_dislike': 1})
+        self.assertEqual(repeal_like_response.status_code, 200)
+        review = Review.objects.get(id=review_id)
+        self.assertEqual(review.like_count, 0)
+        self.assertEqual(review.dislike_count, 0)
+
+        clientB.post(reverse('api:review_like'),
+                     data={'review_id': review_id, 'reply_id': 0, 'like_or_dislike': -1})
+        review.refresh_from_db()
+        self.assertEqual(review.like_count, 0)
+        self.assertEqual(review.dislike_count, 1)
+
+        user_A_review_response = self.client.get(reverse('api:my_review'))
+        self.assertEqual(user_A_review_response.data['contents']['results'][0]['like']['like'], 0)
+        self.assertEqual(user_A_review_response.data['contents']['results'][0]['like']['dislike'], 1)
+
+        user_A_unread_message_response = self.client.get(reverse('api:unread_message'))
+        self.assertEqual(user_A_unread_message_response.data['contents']['unread']['like'], 1)
+
+        user_A_like_notice_response = self.client.get(reverse('api:check_all_message', args=['like']))
+        self.assertEqual(user_A_like_notice_response.data['contents']['count'], 1)
+        self.assertEqual(user_A_like_notice_response.data['contents']['results'][0]['like']['like'], 0)
+        self.assertEqual(user_A_like_notice_response.data['contents']['results'][0]['like']['dislike'], 1)
+
+        user_A_unread_message_response = self.client.get(reverse('api:unread_message'))
+        self.assertEqual(user_A_unread_message_response.data['contents']['unread']['like'], 0)

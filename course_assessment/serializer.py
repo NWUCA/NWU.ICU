@@ -89,6 +89,10 @@ class ReviewAndReplyLikeSerializer(serializers.Serializer):
     def validate(self, data):
         if data.get('like_or_dislike') not in [-1, 1]:
             raise serializers.ValidationError({'like_or_dislike': get_err_msg('operation_error')})
+        try:
+            Review.objects.get(id=data.get('review_id'))
+        except Review.DoesNotExist:
+            raise serializers.ValidationError({'review': get_err_msg('review_not_exist')})
         return data
 
 

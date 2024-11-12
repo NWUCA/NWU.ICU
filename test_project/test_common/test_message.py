@@ -62,8 +62,8 @@ class MessageTests(APITestCase):
                                                              kwargs={'classify': 'user',
                                                                      'chatter_id': self.user_B_id}),
                                                      format='json').data['contents']  # A读了10条
-        self.assertEqual(len(user_A_to_user_B_message['chats']), 10)
-        self.assertEqual(user_A_to_user_B_message['chats'][-1]['content'], 'Hello, testUserB5')  # 默认分页大小为10
+        self.assertEqual(len(user_A_to_user_B_message['results']), 10)
+        self.assertEqual(user_A_to_user_B_message['results'][-1]['content'], 'Hello, testUserB5')  # 默认分页大小为10
 
         for i in range(10):  # user_b 发送10条消息给user_a
             data_B = {

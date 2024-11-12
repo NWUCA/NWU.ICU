@@ -1,13 +1,14 @@
 from captcha.helpers import captcha_image_url
 from captcha.models import CaptchaStore
-from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage
 from django.db.models import Q
 from django.shortcuts import render
 from rest_framework import status
+from rest_framework.generics import GenericAPIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
 
 from user.models import User
+from utils.custom_pagination import StandardResultsSetPagination
 from utils.throttle import CaptchaAnonRateThrottle, CaptchaUserRateThrottle
 from utils.utils import return_response, get_err_msg
 from .models import Bulletin, About, Chat, ChatMessage, ChatLike, ChatReply
@@ -73,21 +74,15 @@ class AboutView(APIView):
         return return_response(contents={"about": tos_content_database.content})
 
 
-class MessageBoxView(APIView):
+class MessageBoxView(GenericAPIView):
     permission_classes = [IsAuthenticated]
+    pagination_class = StandardResultsSetPagination
 
     def get_user_message_list(self, request, classify):
         chats = Chat.objects.filter((Q(receiver=request.user) | Q(sender=request.user)) & Q(classify=classify)) \
             .select_related('sender', 'receiver') \
             .order_by('-last_message_datetime')
-        paginator = Paginator(chats, 10)
-        page = request.query_params.get('page', 1)
-        try:
-            chats_page = paginator.page(page)
-        except PageNotAnInteger:
-            chats_page = paginator.page(1)
-        except EmptyPage:
-            chats_page = paginator.page(paginator.num_pages)
+        chats_page = self.paginate_queryset(chats)
         chat_list = []
         for chat in chats_page:
             chatter = chat.sender if chat.receiver == request.user else chat.receiver
@@ -98,23 +93,11 @@ class MessageBoxView(APIView):
                 'unread_count': chat.unread_count,
             }
             chat_list.append(temp_dict)
-        chat_dict = {
-            'chats': chat_list,
-            'current_page': chats_page.number,
-            'has_next': chats_page.has_next(),
-        }
-        return return_response(contents=chat_dict)
+        return self.get_paginated_response(chat_list)
 
     def get_particular_user_message(self, request, chat_object: Chat):
         chat_message = ChatMessage.objects.filter(chat_item=chat_object).order_by('-create_time')
-        paginator = Paginator(chat_message, 10)
-        page = request.query_params.get('page', 1)
-        try:
-            message_page = paginator.page(page)
-        except PageNotAnInteger:
-            message_page = paginator.page(1)
-        except EmptyPage:
-            message_page = paginator.page(paginator.num_pages)
+        message_page = self.paginate_queryset(chat_message)
         message_list = []
         for message in message_page:
             if message.created_by != request.user:
@@ -125,23 +108,11 @@ class MessageBoxView(APIView):
                 'content': message.content,
                 'datetime': message.create_time,
             })
-        message_dict = {
-            'chats': message_list,
-            'current_page': message_page.number,
-            'has_next': message_page.has_next(),
-        }
-        return return_response(contents=message_dict)
+        return self.get_paginated_response(message_list)
 
     def get_like_notice(self, request):
         like_notices = ChatLike.objects.filter(receiver=request.user).select_related('raw_post_course')
-        paginator = Paginator(like_notices, 10)
-        page = request.query_params.get('page', 1)
-        try:
-            notice_page = paginator.page(page)
-        except PageNotAnInteger:
-            notice_page = paginator.page(1)
-        except EmptyPage:
-            notice_page = paginator.page(paginator.num_pages)
+        notice_page = self.paginate_queryset(like_notices)
         notice_list = []
         for notice in notice_page:
             notice_list.append({
@@ -159,25 +130,15 @@ class MessageBoxView(APIView):
                 },
                 'datetime': notice.latest_like_datetime,
             })
-        notice_dict = {
-            'notices': notice_list,
-            'current_page': notice_page.number,
-            'has_next': notice_page.has_next(),
-        }
-        return return_response(contents=notice_dict)
+            notice.read = True
+            notice.save()
+        return self.get_paginated_response(notice_list)
 
     def get_reply_notice(self, request):
         reply_notices = ChatReply.objects.filter(receiver=request.user).select_related('reply_content',
                                                                                        'raw_post_course',
                                                                                        'reply_content__created_by')
-        paginator = Paginator(reply_notices, 10)
-        page = request.query_params.get('page', 1)
-        try:
-            notice_page = paginator.page(page)
-        except PageNotAnInteger:
-            notice_page = paginator.page(1)
-        except EmptyPage:
-            notice_page = paginator.page(paginator.num_pages)
+        notice_page = self.paginate_queryset(reply_notices)
         notice_list = []
         for notice in notice_page:
             if notice.reply_content.created_by != request.user:
@@ -203,12 +164,7 @@ class MessageBoxView(APIView):
                     },
                     'datetime': notice.reply_content.create_time,
                 })
-        notice_dict = {
-            'notices': notice_list,
-            'current_page': notice_page.number,
-            'has_next': notice_page.has_next(),
-        }
-        return return_response(contents=notice_dict)
+        return self.get_paginated_response(notice_list)
 
     def get(self, request, classify, chatter_id=None):
         serializer = ChatMessageGetSerializer(data={'classify': classify})

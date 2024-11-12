@@ -105,7 +105,7 @@ class ChatMessage(models.Model):
 
 
 class ChatReply(models.Model):
-    unread = models.BooleanField(default=True)
+    read = models.BooleanField(default=False)
     reply_content = models.ForeignKey('course_assessment.ReviewReply', on_delete=models.CASCADE)
     reply_classify = [
         ('review', '关于评价的回复'),
@@ -116,6 +116,7 @@ class ChatReply(models.Model):
     raw_post_id = models.IntegerField()
     raw_post_content = models.TextField()
     raw_post_course = models.ForeignKey('course_assessment.Course', on_delete=models.CASCADE)
+    chat_item = models.ForeignKey(Chat, on_delete=models.CASCADE, related_name='reply_messages', null=True)
 
 
 class ChatLike(models.Model):
@@ -131,3 +132,5 @@ class ChatLike(models.Model):
     like_count = models.IntegerField(default=0)
     dislike_count = models.IntegerField(default=0)
     latest_like_datetime = models.DateTimeField(null=True)
+    read = models.BooleanField(default=False)
+    chat_item = models.ForeignKey(Chat, on_delete=models.CASCADE, related_name='like_messages', null=True)

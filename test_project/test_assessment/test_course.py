@@ -62,7 +62,7 @@ class CourseTests(APITestCase):
         self.assertEqual(Course.objects.get(id=course_id).name, course_data['name'])
         self.assertEqual(Course.objects.get(id=course_id).classification, course_data['classification'])
 
-    def testCourseLike(self):
+    def test_course_like(self):
         self.test_add_teacher()
         course_data = {
             "name": "testCourse",

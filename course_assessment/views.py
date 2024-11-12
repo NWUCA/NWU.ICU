@@ -7,7 +7,6 @@ from django.db import transaction
 from rest_framework import status
 from rest_framework.generics import GenericAPIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
-from rest_framework.response import Response
 from rest_framework.status import HTTP_404_NOT_FOUND
 from rest_framework.views import APIView
 
@@ -192,7 +191,7 @@ class LatestReviewView(GenericAPIView):
             review_list = self.get_paginated_response(self.build_review_list(page))
             return review_list
 
-        return Response(self.build_review_list(review_all_set))
+        return return_response(errors={'review': get_err_msg('review_not_exist')})
 
     def build_review_list(self, review_page):
         review_list = []
@@ -354,9 +353,10 @@ class TeacherView(APIView):
             return return_response(errors=serializer.errors)
 
 
-class MyReviewView(APIView):
+class MyReviewView(GenericAPIView):
     permission_classes = [IsAuthenticated]
     model = Review
+    pagination_class = StandardResultsSetPagination
 
     def get(self, request):
         desc = request.query_params.get('desc', '1')
@@ -366,14 +366,22 @@ class MyReviewView(APIView):
             .select_related('created_by', 'course', 'semester')
             .prefetch_related('course__teachers')
         )
+        page = self.paginate_queryset(review_set)
+        if page is not None:
+            my_review_list = self.build_my_review_list(page)
+            return self.get_paginated_response(my_review_list)
+        return return_response(errors={'review': get_err_msg('review_not_exist')})
+
+    def build_my_review_list(self, my_review_page):
         my_review_list = []
 
-        for review in review_set:
+        for review in my_review_page:
             content_history = MyReviewSerializer(review).data
-            temp_dict = {
+            my_review_list.append({
                 'id': review.id,
                 'anonymous': review.anonymous,
                 'datetime': review.modify_time,
+                'semester': review.semester.name,
                 'course': {"name": review.course.get_name(), "id": review.course.id,
                            'semester': review.semester.name, },
                 'like': {'like': review.like_count, 'dislike': review.dislike_count},
@@ -381,10 +389,10 @@ class MyReviewView(APIView):
                             "content_history": [x['content'] for x in content_history['review_history']]},
                 "teachers": [{"name": teacher.name, "id": teacher.id} for teacher in
                              review.course.teachers.all()],
-
-            }
-            my_review_list.append(temp_dict)
-        return return_response(contents=my_review_list)
+                'rating': {'rating': review.rating, 'difficulty': review.difficulty, 'grade': review.grade,
+                           'homework': review.homework, 'reward': review.reward},
+            })
+        return my_review_list
 
 
 class MyReviewReplyView(APIView):
@@ -499,11 +507,7 @@ class ReviewAndReplyLikeView(APIView):
     def post(self, request):
         serializer = ReviewAndReplyLikeSerializer(data=request.data)
         if serializer.is_valid():
-            try:
-                review_object = Review.objects.get(id=serializer.validated_data['review_id'])
-            except Review.DoesNotExist:
-                return return_response(errors={'review': get_err_msg('review_not_exist')},
-                                       status_code=status.HTTP_404_NOT_FOUND)
+            review_object = Review.objects.get(id=serializer.validated_data['review_id'])
             try:
                 review_reply_object = None if serializer.validated_data['reply_id'] == 0 else ReviewReply.objects.get(
                     id=serializer.validated_data['reply_id'])
@@ -528,6 +532,8 @@ class ReviewAndReplyLikeView(APIView):
                 review_and_reply_like.save()
 
             return return_response(contents={'like': self.like_dislike_count(review_object, review_reply_object)}, )
+        else:
+            return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
 
 
 class CourseLikeView(APIView):

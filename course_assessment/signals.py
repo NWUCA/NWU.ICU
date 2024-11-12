@@ -75,6 +75,7 @@ def update_chat_like_counts(instance: ReviewAndReplyLike, sender):
         if post.created_by == like_create_by:
             return
         chat_like, created = ChatLike.objects.get_or_create(raw_post_classify=raw_post_classify, raw_post_id=post.id)
+        chat_like.read = False
         chat_like.like_count = post.like_count
         chat_like.dislike_count = post.dislike_count
         if chat_like.like_count == 0 and chat_like.dislike_count == 0:
@@ -86,12 +87,10 @@ def update_chat_like_counts(instance: ReviewAndReplyLike, sender):
         chat_like.raw_post_course = post.course
         chat_like.latest_like_datetime = instance.create_time
         chat_like.receiver = post.created_by
+        chat, _ = Chat.objects.get_or_create(receiver=post.created_by, classify='like',
+                                                sender=User.objects.get(id=settings.DEFAULT_SUPER_USER_ID))
+        chat_like.chat_item = chat
         chat_like.save()
-        Chat.objects.update_or_create(receiver=post.created_by, classify=raw_post_classify,
-                                      sender=User.objects.get(id=settings.DEFAULT_SUPER_USER_ID),
-                                      receiver_unread_count=ChatLike.objects.filter(receiver=post.created_by,
-                                                                                    raw_post_classify=raw_post_classify,
-                                                                                    unread=True).count())
 
 
 def update_chat_reply(instance: ReviewReply, created: bool):
