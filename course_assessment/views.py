@@ -132,7 +132,7 @@ class CourseView(APIView):
                 'homework': review.homework,
                 'reward': review.reward,
                 'semester': review.semester.name,
-                'author': {'id':  -1 if review.anonymous else review.created_by.id,
+                'author': {'id': -1 if review.anonymous else review.created_by.id,
                            'nickname': get_msg_msg(
                                'anonymous_user_nickname') if review.anonymous else review.created_by.nickname,
                            'avatar': settings.ANONYMOUS_USER_AVATAR_UUID if review.anonymous else review.created_by.avatar_uuid},
@@ -567,10 +567,14 @@ class CourseLikeView(APIView):
             course_like, created = CourseLike.objects.get_or_create(
                 course=course,
                 created_by=request.user,
-                like=serializer.validated_data['like']
             )
             if not created:
                 course_like.delete()
+            else:
+                if course_like.like == serializer.validated_data['like']:
+                    course_like.delete()
+                else:
+                    course_like.like = serializer.validated_data['like']
             course.refresh_from_db()
             return return_response(contents={'name': course.get_name(), 'id': course.id,
                                              'like': {'like': course.like_count, 'dislike': course.dislike_count}})
