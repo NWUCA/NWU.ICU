@@ -77,7 +77,9 @@ class CourseList(APIView):
 class CourseView(APIView):
     permission_classes = [CustomPermission]
 
-    def get_user_option(self, review, user, reply=None,course=None):
+    def get_user_option(self, review, user, reply=None, course=None):
+        if user.id is None:
+            return 0
         if course is not None:
             try:
                 user_review_option = CourseLike.objects.get(course=course, created_by=user).like
@@ -162,7 +164,8 @@ class CourseView(APIView):
             'teachers': teachers_data,
             'semester': [semester.name for semester in course.semester.all()],
             'school': course.school.get_name(),
-            'like': {'like': course.like_count, 'dislike': course.dislike_count,'user_option': self.get_user_option(course, request.user)},
+            'like': {'like': course.like_count, 'dislike': course.dislike_count,
+                     'user_option': self.get_user_option(course, request.user)},
             'rating_avg': f"{course.average_rating:.1f}",
             'normalized_rating_avg': f"{course.normalized_rating:.1f}",
             'request_user_review_id': request_user_review_id,
