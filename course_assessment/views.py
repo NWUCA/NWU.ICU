@@ -77,6 +77,20 @@ class CourseList(APIView):
 class CourseView(APIView):
     permission_classes = [CustomPermission]
 
+    def get_user_option(self, review, user, reply=None,course=None):
+        if course is not None:
+            try:
+                user_review_option = CourseLike.objects.get(course=course, created_by=user).like
+            except CourseLike.DoesNotExist:
+                user_review_option = 0
+            return user_review_option
+        try:
+            user_review_option = ReviewAndReplyLike.objects.get(review=review, created_by=user,
+                                                                review_reply=reply).like
+        except (ReviewAndReplyLike.DoesNotExist, AttributeError):
+            user_review_option = 0
+        return user_review_option
+
     def get(self, request, course_id):
         try:
             course = (Course.objects
@@ -109,7 +123,8 @@ class CourseView(APIView):
                 'created_time': review.create_time,
                 'edited': review.edited,
                 'like': {'like': review.like_count,
-                         'dislike': review.dislike_count},
+                         'dislike': review.dislike_count,
+                         'user_option': self.get_user_option(review, request.user)},
                 'difficulty': review.difficulty,
                 'grade': review.grade,
                 'homework': review.homework,
@@ -126,7 +141,8 @@ class CourseView(APIView):
                            'created_by': {'id': review.created_by.id, 'name': review.created_by.nickname,
                                           'avatar': review.created_by.avatar_uuid},
                            'like': {'like': reviewReply.like_count,
-                                    'dislike': reviewReply.dislike_count}}
+                                    'dislike': reviewReply.dislike_count,
+                                    'user_option': self.get_user_option(review, request.user, reviewReply)}, }
                           for reviewReply in reviewReplies]
             })
         teachers_data = []
@@ -146,7 +162,7 @@ class CourseView(APIView):
             'teachers': teachers_data,
             'semester': [semester.name for semester in course.semester.all()],
             'school': course.school.get_name(),
-            'like': {'like': course.like_count, 'dislike': course.dislike_count},
+            'like': {'like': course.like_count, 'dislike': course.dislike_count,'user_option': self.get_user_option(course, request.user)},
             'rating_avg': f"{course.average_rating:.1f}",
             'normalized_rating_avg': f"{course.normalized_rating:.1f}",
             'request_user_review_id': request_user_review_id,
