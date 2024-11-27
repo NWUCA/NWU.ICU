@@ -126,13 +126,13 @@ class CourseView(APIView):
                 'edited': review.edited,
                 'like': {'like': review.like_count,
                          'dislike': review.dislike_count,
-                         'user_option': self.get_user_option(review, request.user)},
+                         'user_option': self.get_user_option(review=review, user=request.user)},
                 'difficulty': review.difficulty,
                 'grade': review.grade,
                 'homework': review.homework,
                 'reward': review.reward,
                 'semester': review.semester.name,
-                'author': {'id': -1 if review.anonymous else review.created_by.id,
+                'author': {'id':  -1 if review.anonymous else review.created_by.id,
                            'nickname': get_msg_msg(
                                'anonymous_user_nickname') if review.anonymous else review.created_by.nickname,
                            'avatar': settings.ANONYMOUS_USER_AVATAR_UUID if review.anonymous else review.created_by.avatar_uuid},
@@ -144,7 +144,8 @@ class CourseView(APIView):
                                           'avatar': review.created_by.avatar_uuid},
                            'like': {'like': reviewReply.like_count,
                                     'dislike': reviewReply.dislike_count,
-                                    'user_option': self.get_user_option(review, request.user, reviewReply)}, }
+                                    'user_option': self.get_user_option(review=review, user=request.user,
+                                                                        reply=reviewReply)}, }
                           for reviewReply in reviewReplies]
             })
         teachers_data = []
@@ -165,7 +166,7 @@ class CourseView(APIView):
             'semester': [semester.name for semester in course.semester.all()],
             'school': course.school.get_name(),
             'like': {'like': course.like_count, 'dislike': course.dislike_count,
-                     'user_option': self.get_user_option(course, request.user)},
+                     'user_option': self.get_user_option(review=None, course=course, user=request.user)},
             'rating_avg': f"{course.average_rating:.1f}",
             'normalized_rating_avg': f"{course.normalized_rating:.1f}",
             'request_user_review_id': request_user_review_id,
