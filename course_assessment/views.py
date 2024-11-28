@@ -83,7 +83,7 @@ class CourseView(APIView):
         if course is not None:
             try:
                 user_review_option = CourseLike.objects.get(course=course, created_by=user).like
-            except CourseLike.DoesNotExist:
+            except (CourseLike.DoesNotExist, AttributeError):
                 user_review_option = 0
             return user_review_option
         try:
