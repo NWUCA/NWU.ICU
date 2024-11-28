@@ -568,13 +568,10 @@ class CourseLikeView(APIView):
                 course=course,
                 created_by=request.user,
             )
-            if not created:
+            if course_like.like == serializer.validated_data['like']:
                 course_like.delete()
             else:
-                if course_like.like == serializer.validated_data['like']:
-                    course_like.delete()
-                else:
-                    course_like.like = serializer.validated_data['like']
+                course_like.like = serializer.validated_data['like']
                 course_like.save()
             course.refresh_from_db()
             return return_response(contents={'name': course.get_name(), 'id': course.id,
