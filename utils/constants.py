@@ -49,6 +49,7 @@ errcode_dict = {
     'invalid_search_type': '非法搜索模型',
     'chat_not_exist': '站内信不存在',
     'cannot_send_message_to_self': '不能给自己发送站内信',
+    'wrong_parent_id': '错误的父评论ID',
 }
 
 message_dict = {

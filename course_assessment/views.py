@@ -471,17 +471,9 @@ class ReviewReplyView(APIView):
     def post(self, request):
         serializer = AddReviewReplySerializer(data=request.data)
         if serializer.is_valid():
-            try:
-                review = Review.objects.get(id=serializer.validated_data['review_id'])
-            except Review.DoesNotExist:
-                return return_response(errors={'course': get_err_msg('review_not_exist')},
-                                       status_code=status.HTTP_404_NOT_FOUND)
+            review = Review.objects.get(id=serializer.validated_data['review_id'])
             parent_id = serializer.validated_data['parent_id']
-            try:
-                parent = None if parent_id == 0 else ReviewReply.objects.get(id=parent_id)
-            except ReviewReply.DoesNotExist:
-                return return_response(errors={'review': get_err_msg('reply_not_exist')},
-                                       status_code=status.HTTP_404_NOT_FOUND)
+            parent = None if parent_id == 0 else ReviewReply.objects.get(id=parent_id)
             reply = ReviewReply.objects.create(
                 review=review,
                 parent=parent,

@@ -68,11 +68,19 @@ class AddReviewReplySerializer(serializers.Serializer):
 
     def validate(self, data):
         parent_id = data.get('parent_id')
+        review_id = data.get('review_id')
+        try:
+            review = Review.objects.get(id=review_id)
+        except Review.DoesNotExist:
+            raise serializers.ValidationError({'course': get_err_msg('review_not_exist')})
         if parent_id != 0:
             try:
-                ReviewReply.objects.get(id=parent_id)
+                review_reply = ReviewReply.objects.get(id=parent_id)
             except ReviewReply.DoesNotExist:
                 raise serializers.ValidationError({'reply': get_err_msg('review_not_exist')})
+            if review_reply.review_id != review_id:
+                raise serializers.ValidationError({'reply': get_err_msg('wrong_parent_id')})
+
         return data
 
 

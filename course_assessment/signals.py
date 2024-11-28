@@ -1,3 +1,5 @@
+from enum import Enum
+
 from django.conf import settings
 from django.contrib.postgres.search import SearchVector
 from django.core.cache import cache
@@ -88,49 +90,58 @@ def update_chat_like_counts(instance: ReviewAndReplyLike, sender):
         chat_like.latest_like_datetime = instance.create_time
         chat_like.receiver = post.created_by
         chat, _ = Chat.objects.get_or_create(receiver=post.created_by, classify='like',
-                                                sender=User.objects.get(id=settings.DEFAULT_SUPER_USER_ID))
+                                             sender=User.objects.get(id=settings.DEFAULT_SUPER_USER_ID))
         chat_like.chat_item = chat
         chat_like.save()
 
 
-def update_chat_reply(instance: ReviewReply, created: bool):
-    if created:
-        if instance.parent is not None:
-            parent = instance.parent
-            raw_post_id = parent.id
-            raw_post_classify = 'reply'
-            raw_post_content = parent.content
-            raw_post_course = parent.review.course
-            receiver_user = parent.created_by
-        else:
-            raw_post_id = instance.review_id
-            raw_post_classify = 'review'
-            raw_post_content = instance.review.content
-            raw_post_course = instance.review.course
-            receiver_user = instance.review.created_by
-        if instance.created_by != receiver_user:
-            ChatReply.objects.create(reply_content=instance, receiver=receiver_user,
-                                     raw_post_classify=raw_post_classify,
-                                     raw_post_id=raw_post_id, raw_post_content=raw_post_content,
-                                     raw_post_course=raw_post_course, unread=True)
+class Operate(Enum):
+    ADD = 'add'
+    DELETE = 'delete'
+
+
+def update_chat_reply(instance: ReviewReply, operate: Operate):
+    # if operate == Operate.ADD:
+    if instance.parent is not None:
+        parent = instance.parent
+        raw_post_id = parent.id
+        raw_post_classify = 'reply'
+        raw_post_content = parent.content
+        raw_post_course = parent.review.course
+        receiver_user = parent.created_by
     else:
-        if instance.parent is not None:
-            receiver_user = instance.parent.created_by
-        else:
-            receiver_user = instance.review.created_by
-    reply_notices_count = ChatReply.objects.filter(reply_content=instance, receiver=receiver_user).count()
-    Chat.objects.update_or_create(receiver=receiver_user, classify='reply', sender=None,
-                                  receiver_unread_count=reply_notices_count)
+        raw_post_id = instance.review_id
+        raw_post_classify = 'review'
+        raw_post_content = instance.review.content
+        raw_post_course = instance.review.course
+        receiver_user = instance.review.created_by
+    if instance.created_by != receiver_user:
+        if operate == Operate.ADD:
+            chat_reply = ChatReply.objects.create(reply_content=instance, receiver=receiver_user,
+                                                  raw_post_classify=raw_post_classify,
+                                                  raw_post_id=raw_post_id, raw_post_content=raw_post_content,
+                                                  raw_post_course=raw_post_course)
+            reply_notices_count = ChatReply.objects.filter(reply_content=instance, receiver=receiver_user).count()
+            chat, _ = Chat.objects.update_or_create(receiver=receiver_user, classify='reply', sender=None,
+                                                    receiver_unread_count=reply_notices_count)
+            chat_reply.chat_item = chat
+            chat_reply.save()
+        elif operate == Operate.DELETE:
+            chat_reply = ChatReply.objects.get(reply_content=instance, receiver=receiver_user,
+                                               raw_post_classify=raw_post_classify,
+                                               raw_post_id=raw_post_id, raw_post_content=raw_post_content,
+                                               raw_post_course=raw_post_course)
+            chat_reply.delete()
 
 
 @receiver(post_save, sender=ReviewReply)
 def reply_saved(sender, instance, **kwargs):
-    update_chat_reply(instance, created=True)
+    update_chat_reply(instance, operate=Operate.ADD)
 
 
-@receiver(post_delete, sender=ReviewReply)
-def reply_deleted(sender, instance, **kwargs):
-    update_chat_reply(instance, created=False)
+# @receiver(post_delete, sender=ReviewReply)
+# def reply_deleted(sender, instance, **kwargs):
+#     update_chat_reply(instance, operate=Operate.DELETE)
 
 
 @receiver(post_save, sender=ReviewAndReplyLike)
