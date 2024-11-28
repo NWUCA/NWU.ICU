@@ -575,6 +575,7 @@ class CourseLikeView(APIView):
                     course_like.delete()
                 else:
                     course_like.like = serializer.validated_data['like']
+                course_like.save()
             course.refresh_from_db()
             return return_response(contents={'name': course.get_name(), 'id': course.id,
                                              'like': {'like': course.like_count, 'dislike': course.dislike_count}})
