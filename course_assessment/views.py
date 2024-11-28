@@ -152,6 +152,7 @@ class CourseView(APIView):
         for teacher in course.teachers.all():
             teachers_data.append({
                 'id': teacher.id,
+                'avatar_uuid': teacher.avatar_uuid,
                 'name': teacher.name,
                 'school': teacher.school.get_name() if teacher.school else None,
                 'course': [{'id': course.id, 'name': course.get_name()} for course in
@@ -330,6 +331,7 @@ class TeacherView(APIView):
         teacher_info = {
             'id': teacher.id,
             'name': teacher.name,
+            'avatar_uuid': teacher.avatar_uuid,
             'school': teacher.school.get_name() if teacher.school else None,
         }
 
@@ -585,7 +587,8 @@ class CourseTeacherSearchView(APIView):
             if search_type == 'teacher':
                 teachers = Teacher.objects.search(serializer.validated_data['name'], page_size=page_size,
                                                   current_page=current_page, select_related_fields=['school'])
-                search_result_list = [{'id': teacher.id, 'name': teacher.name, 'school': teacher.school.get_name()} for
+                search_result_list = [{'id': teacher.id, 'name': teacher.name, 'school': teacher.school.get_name(),
+                                       'avatar_uuid': teacher.avatar_uuid} for
                                       teacher in teachers['results']]
                 page_info = {k: v for k, v in teachers.items() if k != 'results'}
             elif search_type == 'course':

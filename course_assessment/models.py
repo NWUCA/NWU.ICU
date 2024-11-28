@@ -1,12 +1,13 @@
 import re
+import uuid
 
 from django.contrib.postgres.indexes import GinIndex
 from django.contrib.postgres.search import SearchVectorField
 from django.db import models
 
-from utils.models import SoftDeleteModel
 from course_assessment.managers import SearchManager, SoftDeleteSearchManager
 from user.models import User
+from utils.models import SoftDeleteModel
 
 
 class Semeseter(models.Model):
@@ -37,6 +38,7 @@ class Teacher(models.Model):
     school = models.ForeignKey('School', on_delete=models.CASCADE, verbose_name='院系', null=True)
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, null=True)
     created_time = models.DateTimeField(auto_now_add=True)
+    avatar_uuid = models.UUIDField(null=True, default=uuid.uuid4)
     objects = SearchManager()
 
     def __str__(self):

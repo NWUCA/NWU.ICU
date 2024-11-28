@@ -164,6 +164,7 @@ class CourseLikeSerializer(serializers.Serializer):
 class AddTeacherSerializer(serializers.Serializer):
     name = serializers.CharField(required=True)
     school = serializers.CharField(required=True)
+    avatar_uuid = serializers.CharField(required=False)
 
     def validate(self, data):
         school_exist(data.get('school'))
