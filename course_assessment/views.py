@@ -310,6 +310,9 @@ class ReviewView(APIView):
                 review_history_items = self.review_history_model.objects.filter(review_id=review.id)
                 for review_history_item in review_history_items:
                     review_history_item.soft_delete()
+                review_reply_items = ReviewReply.objects.filter(review_id=review.id)
+                for review_reply_item in review_reply_items:
+                    review_reply_item.soft_delete()
                 return return_response(message=get_msg_msg('delete_review_success'), contents={'review_id': review.id})
             else:
                 return return_response(errors={"auth": get_err_msg('auth_error')},
