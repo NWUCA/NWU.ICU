@@ -236,7 +236,6 @@ class LatestReviewView(GenericAPIView):
 
 
 class ReviewView(APIView):
-    review_model = Review
     review_history_model = ReviewHistory
     permission_classes = [CustomPermission]
 
@@ -246,12 +245,10 @@ class ReviewView(APIView):
             course = Course.objects.get(id=serializer.data['course'])
             semester = Semeseter.objects.get(id=serializer.data['semester'])
             try:
-                review = self.review_model.all_objects.get(course=course, created_by=request.user)
+                review = Review.objects.get(course=course, created_by=request.user)
             except Review.DoesNotExist:
                 return return_response(contents={'review': get_err_msg('review_not_exist')},
                                        status_code=HTTP_404_NOT_FOUND)
-            if review.is_deleted:
-                review.restore()
             ReviewHistory.objects.create(review=review, content=review.content, is_deleted=False)
             fields_to_update = ['content', 'rating', 'anonymous', 'difficulty', 'grade', 'homework', 'reward']
             for field in fields_to_update:
@@ -269,9 +266,9 @@ class ReviewView(APIView):
             course = Course.objects.get(id=serializer.data['course'])
             semester = Semeseter.objects.get(id=serializer.data['semester'])
             try:
-                review = self.review_model.all_objects.get(course=course, created_by=request.user)
+                review = Review.objects.get(course=course, created_by=request.user)
             except Review.DoesNotExist:
-                review = self.review_model.objects.create(
+                review = Review.objects.create(
                     course=course,
                     content=serializer.data['content'],
                     created_by=request.user,
@@ -287,17 +284,7 @@ class ReviewView(APIView):
                 if semester not in course.semester.all():
                     course.semester.add(semester)
                 return return_response(message=get_msg_msg('review_create_success'), contents={'review_id': review.id})
-            if review.is_deleted:
-                ReviewHistory.objects.create(review=review, content=review.content, is_deleted=True)
-                update_fields = ['content', 'rating', 'anonymous', 'difficulty', 'grade', 'homework', 'reward']
-                for field in update_fields:
-                    setattr(review, field, serializer.validated_data[field])
-                review.semester = semester
-                review.restore()
-                if semester not in course.semester.all():
-                    course.semester.add(semester)
-                return return_response(message=get_msg_msg('review_create_success'), contents={'review_id': review.id})
-            return return_response(contents={'review': get_err_msg('review_has_exist')},
+            return return_response(contents={'review': review.id}, errors={'review': get_err_msg('review_has_exist')},
                                    status_code=HTTP_404_NOT_FOUND)
         else:
             return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
@@ -305,9 +292,9 @@ class ReviewView(APIView):
     def delete(self, request):
         serializer = DeleteReviewSerializer(data=request.data)
         if serializer.is_valid():
-            review = self.review_model.objects.get(id=serializer.validated_data['review_id'])
+            review = Review.objects.get(id=serializer.validated_data['review_id'])
             if review.created_by == request.user:
-                review_item_model = self.review_model.objects.get(id=review.id)
+                review_item_model = Review.objects.get(id=review.id)
                 review_item_model.soft_delete()
                 review_history_items = self.review_history_model.objects.filter(review_id=review.id)
                 for review_history_item in review_history_items:

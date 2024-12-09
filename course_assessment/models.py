@@ -147,7 +147,10 @@ class Review(SoftDeleteModel):
     objects = SoftDeleteSearchManager()
 
     class Meta:
-        constraints = [models.UniqueConstraint(fields=['course', 'created_by'], name='unique_review')]
+        constraints = [
+            models.UniqueConstraint(fields=['course', 'created_by'], condition=models.Q(is_deleted=False),
+                                    name='unique_review'),
+        ]
 
 
 class ReviewHistory(SoftDeleteModel):
