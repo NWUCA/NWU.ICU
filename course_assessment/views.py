@@ -132,10 +132,12 @@ class CourseView(APIView):
                 'homework': review.homework,
                 'reward': review.reward,
                 'semester': review.semester.name,
-                'author': {'id': -1 if review.anonymous else review.created_by.id,
+                'author': {'id': -1 if (
+                        review.anonymous and review.created_by.id != request.user.id) else review.created_by.id,
                            'nickname': get_msg_msg(
                                'anonymous_user_nickname') if review.anonymous else review.created_by.nickname,
-                           'avatar': settings.ANONYMOUS_USER_AVATAR_UUID if review.anonymous else review.created_by.avatar_uuid},
+                           'avatar': settings.ANONYMOUS_USER_AVATAR_UUID if review.anonymous else review.created_by.avatar_uuid,
+                           'anonymous': review.anonymous},
                 'reply': [{'id': reviewReply.id,
                            'content': reviewReply.content,
                            'created_time': reviewReply.create_time,
