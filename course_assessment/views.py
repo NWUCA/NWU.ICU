@@ -139,6 +139,7 @@ class CourseView(APIView):
                            'avatar': settings.ANONYMOUS_USER_AVATAR_UUID if review.anonymous else review.created_by.avatar_uuid,
                            'anonymous': review.anonymous},
                 'reply': [{'id': reviewReply.id,
+                           'floor_number': index + 1,
                            'content': reviewReply.content,
                            'created_time': reviewReply.create_time,
                            'parent': 0 if (reviewReply.parent is None) else reviewReply.parent.id,
@@ -148,7 +149,7 @@ class CourseView(APIView):
                                     'dislike': reviewReply.dislike_count,
                                     'user_option': self.get_user_option(review=review, user=request.user,
                                                                         reply=reviewReply)}, }
-                          for reviewReply in reviewReplies]
+                          for index, reviewReply in enumerate(reviewReplies)]
             })
         teachers_data = []
         for teacher in course.teachers.all():
