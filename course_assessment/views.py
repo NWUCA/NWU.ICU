@@ -490,11 +490,12 @@ class ReviewReplyView(APIView):
                 return return_response(errors={'review': get_err_msg('review_not_exist')},
                                        status_code=status.HTTP_404_NOT_FOUND)
             try:
-                ReviewReply.objects.get(id=serializer.validated_data['reply_id'], review=review,
-                                        created_by=request.user).delete()
+                review_reply = ReviewReply.objects.get(id=serializer.validated_data['reply_id'], review=review,
+                                                       created_by=request.user)
             except ReviewReply.DoesNotExist:
                 return return_response(errors={'review': get_err_msg('reply_not_exist')},
                                        status_code=status.HTTP_404_NOT_FOUND)
+            review_reply.soft_delete()
             return return_response(message='成功删除课程评价回复')
         else:
             return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
