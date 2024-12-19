@@ -71,8 +71,8 @@ class userUtils:
                 'anonymous_user_nickname') if review.anonymous else review.created_by.nickname,
             "id": -1 if review.anonymous else review.created_by.id,
             "avatar_uuid": settings.ANONYMOUS_USER_AVATAR_UUID if review.anonymous else review.created_by.avatar_uuid,
-            'is_verify': review.created_by.college_email is not None and
-                         review.created_by.college_email.endswith('@nwu.edu.cn')
+            'is_student': review.created_by.college_email is not None and
+                          review.created_by.college_email.endswith(settings.UNIVERSITY_STUDENT_MAIL_SUFFIX)
         }
 
     @staticmethod
