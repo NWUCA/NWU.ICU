@@ -34,8 +34,8 @@ class CourseList(APIView):
             course_type = 'all'
         order_by = request.query_params.get('order_by', 'rating')
         order_by_dict = {
-            'rating': 'average_rating',
-            'popular': 'review_count'
+            'rating': '-average_rating',
+            'popular': '-review_count'
         }
         order_by = order_by_dict.get(order_by, 'average_rating')
         total_key = 'total_courses_count' + course_type
