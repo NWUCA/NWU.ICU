@@ -1,7 +1,7 @@
 services:
   web:
     build: .
-    command: bash -c "poetry install && poetry run python manage.py migrate && poetry run python manage.py runserver 0.0.0.0:8000"
+    command: bash -c "poetry install && poetry run python manage.py migrate && poetry run python manage.py create_super_user -y && poetry run python manage.py runserver 0.0.0.0:8000"
     volumes:
       - .:/app
     ports:
