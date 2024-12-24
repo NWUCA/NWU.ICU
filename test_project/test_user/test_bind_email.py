@@ -12,7 +12,7 @@ class BindCollegeEmailTest(APITestCase):
     def setUp(self):
         self.client = APIClient()
         self.user = create_user(is_active=True)
-        self.bind_email = reverse('api:bind-college-email-post')
+        self.bind_email = reverse('api:bind-college-email-bind')
         self.bind_college_email = {"college_email": "test@" + settings.UNIVERSITY_MAIL_SUFFIX}
 
     def test_bind_college_email_get_token_success(self):
@@ -30,12 +30,12 @@ class BindCollegeEmailTest(APITestCase):
         login_user(self.client)
         response = self.client.post(self.bind_email, self.bind_college_email, format='json')
         token = response.data['contents']['token'][::-1]
-        response = self.client.get(reverse('api:bind-college-email-get', args=[token]))
+        response = self.client.get(reverse('api:bind-college-email-verify') + f'?token={token}')
         self.assertEqual(response.status_code, 400)
 
     def test_bind_college_email_from_email_token(self):
         login_user(self.client)
         response = self.client.post(self.bind_email, self.bind_college_email, format='json')
         token = response.data['contents']['token']
-        response = self.client.get(reverse('api:bind-college-email-get', args=[token]))
+        response = self.client.get(reverse('api:bind-college-email-verify') + f'?token={token}')
         self.assertEqual(response.status_code, 200)

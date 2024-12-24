@@ -302,7 +302,8 @@ class ProfileView(APIView):
 class BindCollegeEmailView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def get(self, request, token):
+    def get(self, request):
+        token = request.GET.get('token')
         try:
             user_info_dict = cache.get(token)
             user = User.objects.get(id=user_info_dict.get('id'))
@@ -324,7 +325,7 @@ class BindCollegeEmailView(APIView):
             mail_subject = f'[{settings.WEBSITE_NAME}] 绑定{settings.UNIVERSITY_CHINESE_NAME}邮箱'
             token = default_token_generator.make_token(user)
             cache.set(token, {"id": user.id, 'email': email}, timeout=24 * 60 * 60)
-            bind_link = request.build_absolute_uri(f'/user/bind-college-email/{token}/')
+            bind_link = request.build_absolute_uri(f'/user/bind-college-email/?token={token}/')
             html_message = render_to_string('password_reset_email.html', {
                 'nickname': user.nickname,
                 'bind_link': bind_link,

@@ -78,10 +78,10 @@ api_patterns = [
     path('user/reset/', PasswordResetView.as_view(), name='reset'),
     path('user/mail-reset/<str:token>/', PasswordMailResetView.as_view(), name='mail-reset'),
     path('user/reset-login/', PasswordResetWhenLoginView.as_view(), name='reset-login'),  # 通过旧密码在登录时重置密码
-    path('user/bind-college-email/<str:token>/', BindCollegeEmailView.as_view(),
-         name='bind-college-email-get'),
-    path('user/bind-college-email/', BindCollegeEmailView.as_view(),
-         name='bind-college-email-post'),
+    path('user/bind-college-email/verify/', BindCollegeEmailView.as_view(),
+         name='bind-college-email-verify'),
+    path('user/bind-college-email/bind/', BindCollegeEmailView.as_view(),
+         name='bind-college-email-bind'),
 
     # 站内信
     path('message/', MessageBoxView.as_view(), name='send_message'),
