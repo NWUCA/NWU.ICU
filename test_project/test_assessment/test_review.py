@@ -61,7 +61,7 @@ class ReviewTests(APITestCase):
         self.assertEqual(course_response.data['contents']['reviews'][-1]['author']['id'], self.user_id)
         return add_review_response.data['contents']['review_id'], self.course_id
 
-    def test_add_anonymous_review(self):
+    def test_add_anonymous_review_browse_by_add_user(self):
         review_data = {
             "course": self.course_id,
             "content": "test_message",
@@ -81,7 +81,8 @@ class ReviewTests(APITestCase):
         self.assertEqual(latest_review_list_response.data['contents']['results'][-1]['author']['id'], -1)
         self.assertEqual(latest_review_list_response.data['contents']['results'][-1]['author']['avatar_uuid'],
                          settings.ANONYMOUS_USER_AVATAR_UUID)
-        self.assertEqual(course_response.data['contents']['reviews'][-1]['author']['id'], -1)
+        self.assertEqual(course_response.data['contents']['reviews'][-1]['author']['id'], 1)
+        self.assertTrue(course_response.data['contents']['reviews'][-1]['author']['anonymous'])
         self.assertEqual(latest_review_list_response.data['contents']['count'], 1)
 
     def test_delete_review(self):
