@@ -140,11 +140,16 @@ class AddCourseSerializer(serializers.Serializer):
         return course
 
 
-class TeacherSerializer(serializers.Serializer):
-    name = serializers.CharField(required=True)
+class SearchSerializer(serializers.Serializer):
+    keyword = serializers.CharField(required=True)
     page_size = serializers.IntegerField(required=False, default=10)
     current_page = serializers.IntegerField(required=False, default=1)
     type = serializers.CharField(required=True)
+
+    def validate(self, data):
+        if data.get('type') not in ['course', 'teacher', 'review', 'resource']:
+            raise serializers.ValidationError({'type': get_err_msg('operation_error')})
+        return data
 
 
 class CourseLikeSerializer(serializers.Serializer):

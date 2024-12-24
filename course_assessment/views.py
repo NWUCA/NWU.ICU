@@ -1,5 +1,7 @@
+import json
 import logging
 
+import requests
 from django.conf import settings
 from django.core.cache import cache
 from django.core.paginator import Paginator
@@ -16,7 +18,7 @@ from course_assessment.models import Course, Review, ReviewHistory, School, Teac
 from course_assessment.permissions import CustomPermission
 from course_assessment.serializer import MyReviewSerializer, AddReviewSerializer, AddReviewReplySerializer, \
     DeleteReviewReplySerializer, ReviewAndReplyLikeSerializer, AddCourseSerializer, \
-    TeacherSerializer, CourseLikeSerializer, AddTeacherSerializer, DeleteReviewSerializer
+    SearchSerializer, CourseLikeSerializer, AddTeacherSerializer, DeleteReviewSerializer
 from utils.custom_pagination import StandardResultsSetPagination
 from utils.utils import return_response, get_err_msg, get_msg_msg, userUtils
 
@@ -572,58 +574,106 @@ class CourseTeacherSearchView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        serializer = TeacherSerializer(data=request.data)
+        serializer = SearchSerializer(data=request.data)
+
+        def course_search(search_keyword):
+            courses = Course.objects.search(search_keyword, page_size=page_size,
+                                            current_page=current_page,
+                                            prefetch_related_fields=['semester', 'teachers'])
+            search_result_list = [{'id': course.id, 'name': course.name, 'teacher': course.get_teachers(),
+                                   'classification': course.get_classification(),
+                                   'school': course.school.get_name(), 'semester': course.get_semester(),
+                                   'rating': {
+                                       'average_rating': course.average_rating,
+                                       'normalized_rating': course.normalized_rating},
+                                   'like': {
+                                       'like': course.like_count,
+                                       'dislike': course.dislike_count
+                                   },
+                                   'review_count': course.review_count,
+                                   'latest_review_time': course.last_review_time} for course in
+                                  courses['results']]
+            page_info = {k: v for k, v in courses.items() if k != 'results'}
+            return page_info, search_result_list
+
+        def review_search(search_keyword):
+            try:
+                reviews = Review.objects.search(search_keyword, page_size=page_size,
+                                                select_related_fields=['course', 'semester', 'created_by'])
+            except SearchModuleErrorException:
+                return return_response(errors={'module': get_err_msg('invalid_search_type')}, )
+            search_result_list = [{'course': review.course.get_name(),
+                                   'content': review.content,
+                                   'rating': review.rating,
+                                   'created_by': {
+                                       'id': review.created_by.id,
+                                       'nickname': review.created_by.nickname,
+                                       'avatar': review.created_by.avatar_uuid},
+                                   'modify_time': review.modify_time,
+                                   'like': {
+                                       'like': review.like_count,
+                                       'dislike': review.dislike_count,
+                                   },
+                                   'semester': review.semester.name,
+                                   } for review in reviews['results']]
+            page_info = {k: v for k, v in reviews.items() if k != 'results'}
+            return page_info, search_result_list
+
+        def teacher_search(search_keyword):
+            teachers = Teacher.objects.search(search_keyword, page_size=page_size,
+                                              current_page=current_page, select_related_fields=['school'])
+            search_result_list = [{'id': teacher.id, 'name': teacher.name, 'school': teacher.school.get_name(),
+                                   'avatar_uuid': teacher.avatar_uuid} for
+                                  teacher in teachers['results']]
+            page_info = {k: v for k, v in teachers.items() if k != 'results'}
+            return page_info, search_result_list
+
+        def resources_search(keyword, scope=0):
+            base_url = settings.RESOURCES_WEBSITE_URL
+            json_data = {
+                'parent': '/',
+                'keywords': keyword,
+                'scope': scope,
+                'page': current_page,
+                'per_page': page_size,
+                'password': '',
+            }
+            response = requests.post(base_url + '/api/fs/search', json=json_data)
+            search_result_json = json.loads(response.text)
+            if search_result_json['code'] != 200:
+                return []
+            file_list = []
+            total = search_result_json['data']['total']
+            for file in search_result_json['data']['content']:
+                file_list.append({
+                    'name': file['name'],
+                    'size': file['size'],
+                    'path': file['parent'],
+                    'type': 'dir' if file['is_dir'] else 'file',
+                    'url': base_url + file['parent']
+                })
+            page_info = {
+                'total_pages': total // page_size + (0 if total % page_size == 0 else 1),
+                'current_page': current_page,
+                'has_next': total > current_page * page_size,
+                'has_previous': current_page > 1,
+                'total_count': total
+            }
+            return page_info, file_list
 
         if serializer.is_valid():
             search_type = request.data.get('type')
             page_size = serializer.validated_data['page_size']
             current_page = serializer.validated_data['current_page']
+            search_keyword = serializer.validated_data['keyword']
             if search_type == 'teacher':
-                teachers = Teacher.objects.search(serializer.validated_data['name'], page_size=page_size,
-                                                  current_page=current_page, select_related_fields=['school'])
-                search_result_list = [{'id': teacher.id, 'name': teacher.name, 'school': teacher.school.get_name(),
-                                       'avatar_uuid': teacher.avatar_uuid} for
-                                      teacher in teachers['results']]
-                page_info = {k: v for k, v in teachers.items() if k != 'results'}
+                page_info, search_result_list = teacher_search(search_keyword)
             elif search_type == 'course':
-                courses = Course.objects.search(serializer.validated_data['name'], page_size=page_size,
-                                                current_page=current_page,
-                                                prefetch_related_fields=['semester', 'teachers'])
-                search_result_list = [{'id': course.id, 'name': course.name, 'teacher': course.get_teachers(),
-                                       'classification': course.get_classification(),
-                                       'school': course.school.get_name(), 'semester': course.get_semester(),
-                                       'rating': {
-                                           'average_rating': course.average_rating,
-                                           'normalized_rating': course.normalized_rating},
-                                       'like': {
-                                           'like': course.like_count,
-                                           'dislike': course.dislike_count
-                                       },
-                                       'review_count': course.review_count,
-                                       'latest_review_time': course.last_review_time} for course in
-                                      courses['results']]
-                page_info = {k: v for k, v in courses.items() if k != 'results'}
+                page_info, search_result_list = course_search(search_keyword)
             elif search_type == 'review':
-                try:
-                    reviews = Review.objects.search(serializer.validated_data['name'], page_size=page_size,
-                                                    select_related_fields=['course', 'semester', 'created_by'])
-                except SearchModuleErrorException:
-                    return return_response(errors={'module': get_err_msg('invalid_search_type')}, )
-                search_result_list = [{'course': review.course.get_name(),
-                                       'content': review.content,
-                                       'rating': review.rating,
-                                       'created_by': {
-                                           'id': review.created_by.id,
-                                           'nickname': review.created_by.nickname,
-                                           'avatar': review.created_by.avatar_uuid},
-                                       'modify_time': review.modify_time,
-                                       'like': {
-                                           'like': review.like_count,
-                                           'dislike': review.dislike_count,
-                                       },
-                                       'semester': review.semester.name,
-                                       } for review in reviews['results']]
-                page_info = {k: v for k, v in reviews.items() if k != 'results'}
+                page_info, search_result_list = review_search(search_keyword)
+            elif search_type == 'resource':
+                page_info, search_result_list = resources_search(search_keyword)
             else:
                 return return_response(errors=get_err_msg('invalid_type_field'),
                                        status_code=status.HTTP_400_BAD_REQUEST)
