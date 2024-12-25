@@ -32,6 +32,7 @@ class CaptchaView(APIView):
 
 
 class BulletinListView(APIView):
+    permission_classes = [AllowAny]
     def get(self, request):
         bulletins = Bulletin.objects.filter(enabled=True).order_by('-update_time')
 
