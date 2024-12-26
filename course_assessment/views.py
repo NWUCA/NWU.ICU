@@ -602,7 +602,8 @@ class CourseTeacherSearchView(APIView):
                                                 select_related_fields=['course', 'semester', 'created_by'])
             except SearchModuleErrorException:
                 return return_response(errors={'module': get_err_msg('invalid_search_type')}, )
-            search_result_list = [{'course': review.course.get_name(),
+            search_result_list = [{'id': review.id,
+                                   'course': {'id': review.course.id, 'name': review.course.get_name(), },
                                    'content': review.content,
                                    'rating': review.rating,
                                    'created_by': {
