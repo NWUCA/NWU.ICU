@@ -1,7 +1,5 @@
-import json
 import logging
 
-import requests
 from django.conf import settings
 from django.core.cache import cache
 from django.core.paginator import Paginator
@@ -12,13 +10,12 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.status import HTTP_404_NOT_FOUND
 from rest_framework.views import APIView
 
-from course_assessment.managers import SearchModuleErrorException
 from course_assessment.models import Course, Review, ReviewHistory, School, Teacher, Semeseter, ReviewReply, \
     ReviewAndReplyLike, CourseLike
 from course_assessment.permissions import CustomPermission
 from course_assessment.serializer import MyReviewSerializer, AddReviewSerializer, AddReviewReplySerializer, \
     DeleteReviewReplySerializer, ReviewAndReplyLikeSerializer, AddCourseSerializer, \
-    SearchSerializer, CourseLikeSerializer, AddTeacherSerializer, DeleteReviewSerializer
+    CourseLikeSerializer, AddTeacherSerializer, DeleteReviewSerializer
 from utils.custom_pagination import StandardResultsSetPagination
 from utils.utils import return_response, get_err_msg, get_msg_msg, userUtils
 
