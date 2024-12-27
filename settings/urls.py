@@ -27,7 +27,7 @@ from common.views import (
     index,
     AboutView,
     CaptchaView,
-    TosView, MessageBoxView, BulletinListView, MessageUnreadView,
+    TosView, MessageBoxView, BulletinListView, MessageUnreadView, CourseTeacherSearchView,
 )
 from course_assessment.views import (
     MyReviewView,
@@ -35,7 +35,7 @@ from course_assessment.views import (
     CourseView,
     TeacherView,
     ReviewReplyView,
-    ReviewAndReplyLikeView, MyReviewReplyView, CourseTeacherSearchView, CourseList, CourseLikeView, SchoolView,
+    ReviewAndReplyLikeView, MyReviewReplyView, CourseList, CourseLikeView, SchoolView,
     LatestReviewView, SemesterView,
 )
 from user.views import (
@@ -64,7 +64,6 @@ api_patterns = [
     path('assessment/reply/', ReviewReplyView.as_view(), name='add_reply'),
     path('assessment/reply/like/', ReviewAndReplyLikeView.as_view(), name='reply_like'),
     path('assessment/review/like/', ReviewAndReplyLikeView.as_view(), name='review_like'),
-    path('assessment/search/', CourseTeacherSearchView.as_view(), name='search'),
     path('assessment/school/', SchoolView.as_view(), name='school'),
     path('assessment/semester/', SemesterView.as_view(), name='semester'),
 
@@ -102,6 +101,9 @@ api_patterns = [
     path('download/<uuid:file_uuid>/', FileDownloadView.as_view(), name='file-download'),
     path('delete/<uuid:id>/', FileDeleteView.as_view(), name='file-delete'),
     # path('update/<uuid:id>/', FileUpdateView.as_view(), name='file-update'),
+
+    # 搜索
+    path('search/', CourseTeacherSearchView.as_view(), name='search'),
 ]
 urlpatterns = [
     path('admin/', admin.site.urls),
