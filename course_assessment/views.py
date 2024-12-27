@@ -663,7 +663,7 @@ class CourseTeacherSearchView(APIView):
             return page_info, file_list
 
         if serializer.is_valid():
-            search_type = request.data.get('type')
+            search_type = serializer.validated_data['type']
             page_size = serializer.validated_data['page_size']
             current_page = serializer.validated_data['current_page']
             search_keyword = serializer.validated_data['keyword']
