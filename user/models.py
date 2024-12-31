@@ -8,6 +8,7 @@ class User(AbstractUser):
     name = models.CharField(max_length=255, null=True)
     nickname = models.CharField(max_length=30)
     college_email = models.EmailField(max_length=255, null=True)
+    college_email_verified = models.BooleanField(default=False)
     avatar_uuid = models.UUIDField(default=uuid.uuid4, editable=False)
     bio = models.CharField(max_length=255, null=True)
     following = models.ManyToManyField('self', related_name='followers', symmetrical=False)

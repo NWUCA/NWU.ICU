@@ -287,6 +287,7 @@ class ProfileView(APIView):
             for key, value in serializer.validated_data.items():
                 setattr(user, key, value)
             user.save()
+            user.refresh_from_db()
             user_info = {
                 "id": user.id,
                 "username": user.username,
@@ -309,6 +310,7 @@ class BindCollegeEmailView(APIView):
             user = User.objects.get(id=user_info_dict.get('id'))
             if default_token_generator.check_token(user, token):
                 user.college_email = user_info_dict.get('email')
+                user.college_email_verified = True
                 user.save()
                 cache.delete(token)
                 return return_response(contents=user_info_dict)

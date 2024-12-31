@@ -175,7 +175,7 @@ class BindCollegeEmailSerializer(serializers.Serializer):
 class UpdateProfileSerializer(serializers.Serializer):
     username = serializers.CharField(required=False)
     nickname = serializers.CharField(required=False)
-    avatar = serializers.CharField(required=False)
+    avatar_uuid = serializers.CharField(required=False)
     bio = serializers.CharField(required=False, allow_null=True, max_length=255)
 
     def validate(self, data):
