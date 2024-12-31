@@ -147,17 +147,8 @@ class PasswordResetWhenLoginSerializer(serializers.Serializer):  # 点击邮箱�
     old_password = serializers.CharField(write_only=True)
     new_password = serializers.CharField(write_only=True)
     confirm_password = serializers.CharField(write_only=True)
-    captcha_key = serializers.CharField(required=True)
-    captcha_value = serializers.CharField(required=True)
 
     def validate(self, data):
-        captcha_serializer = CaptchaSerializer(data={
-            'captcha_key': data.get('captcha_key'),
-            'captcha_value': data.get('captcha_value'),
-        })
-
-        if not captcha_serializer.is_valid():
-            raise serializers.ValidationError('Invalid captcha')
         user = self.context['request'].user
         if not user.check_password(data.get('old_password')):
             raise serializers.ValidationError({'password': get_err_msg('password_old_not_true')})
