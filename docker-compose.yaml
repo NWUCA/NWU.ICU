@@ -1,7 +1,15 @@
 services:
   web:
     build: .
-    command: bash -c "poetry install && poetry run python manage.py migrate && poetry run python manage.py create_super_user -y && poetry run python manage.py runserver 0.0.0.0:8000"
+    command: bash -c "
+      poetry install && 
+      until pg_isready -h db -p 5432; do
+        echo 'Waiting for database...';
+        sleep 2;
+      done &&
+      poetry run python manage.py migrate &&
+      poetry run python manage.py create_super_user -y &&
+      poetry run python manage.py runserver 0.0.0.0:8000"
     volumes:
       - .:/app
     ports:
@@ -27,6 +35,8 @@ services:
       - WEBSITE_NAME=${WEBSITE_NAME}
     depends_on:
       - db
+    networks:
+      - app-network
 
   db:
     image: abcfy2/zhparser:latest
@@ -37,6 +47,12 @@ services:
       - POSTGRES_DB=${DB_NAME}
       - POSTGRES_USER=${DB_USER}
       - POSTGRES_PASSWORD=${DB_PASSWORD}
+    networks:
+      - app-network
 
 volumes:
   pgdata:
+
+networks:
+  app-network:
+    driver: bridge
