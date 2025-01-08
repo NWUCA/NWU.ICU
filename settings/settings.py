@@ -200,7 +200,9 @@ CAPTCHA_IMAGE_BEFORE_FIELD = False
 CAPTCHA_IMAGE_SIZE = (120, 50)
 
 # 文件上传设置
-FILE_UPLOAD_SIZE_LIMIT = 25 * 1024 * 1024  # 25 MB size limit
+FILE_UPLOAD_SIZE_LIMIT = {'avatar': 66 * 1024,
+                          'file': 25 * 1024 * 1024,
+                          'img ': 25 * 1024 * 1024}
 
 SESSION_COOKIE_HTTPONLY = False
 

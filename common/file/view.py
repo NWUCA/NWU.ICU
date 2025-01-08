@@ -4,8 +4,8 @@ from rest_framework import status, generics
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
-from utils.utils import get_err_msg
 
+from utils.utils import get_err_msg
 from utils.utils import return_response
 from .models import UploadedFile
 from .serializers import UploadedFileSerializer
@@ -37,15 +37,14 @@ class FileUploadView(generics.CreateAPIView):
     permission_classes = [IsAuthenticated]
 
     def create(self, request, *args, **kwargs):
-        file_obj = request.FILES['file']
-        if file_obj.size > settings.FILE_UPLOAD_SIZE_LIMIT:
-            return return_response(errors={"file": get_err_msg("file_over_size")},
-                                   status_code=status.HTTP_400_BAD_REQUEST)
-
         serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        serializer.save(created_by=request.user)
-        return return_response(contents={'uuid': serializer.instance.id}, status_code=status.HTTP_201_CREATED)
+        if serializer.is_valid():
+            file = serializer.validated_data['file']
+            serializer.validated_data['file_name'] = file.name
+            file_size = file.size
+            serializer.save(created_by=request.user, file_size=file_size)
+            return return_response(contents={'uuid': serializer.instance.id}, status_code=status.HTTP_201_CREATED)
+        return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
 
 
 class FileUpdateView(generics.UpdateAPIView):
