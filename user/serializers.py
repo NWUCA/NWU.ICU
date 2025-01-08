@@ -169,7 +169,7 @@ class BindCollegeEmailSerializer(serializers.Serializer):
         if email.endswith(settings.settings.UNIVERSITY_MAIL_SUFFIX):
             return data
         else:
-            raise serializers.ValidationError({'mail':get_err_msg('not_college_email')})
+            raise serializers.ValidationError({'mail': get_err_msg('not_college_email')})
 
 
 class UpdateProfileSerializer(serializers.Serializer):
@@ -180,7 +180,7 @@ class UpdateProfileSerializer(serializers.Serializer):
     def validate(self, data):
         if 'avatar' in data:
             try:
-                UploadedFile.objects.get(id=data['avatar'])
+                UploadedFile.objects.get(id=data['avatar'], file_type='avatar')
             except (UploadedFile.DoesNotExist, ValidationError):
                 raise serializers.ValidationError({'avatar': get_err_msg('avatar_uuid_error')})
         if 'nickname' in data:
