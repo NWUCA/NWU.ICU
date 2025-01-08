@@ -266,30 +266,27 @@ class ProfileView(APIView):
     permission_classes = [CustomPermission]
 
     def get(self, request, user_id=None):
+        if request.user.id is None and user_id is None:
+            return return_response(errors={'user': get_err_msg('not_login')}, status_code=status.HTTP_401_UNAUTHORIZED)
         try:
             profile_user = request.user if user_id is None else User.objects.get(pk=user_id)
         except User.DoesNotExist:
-            return return_response(errors={'user': get_err_msg('user_not_exist')})
-        if request.user.id is not None and user_id is None:
-            user_id = request.user.id
-        if request.user.id is not None:
-            is_me = (user_id == request.user.id)
-            user_info = {
-                "id": profile_user.id,
-                "bio": profile_user.bio,
-                "nickname": profile_user.nickname,
-                "avatar": profile_user.avatar_uuid,
-                'is_me': is_me
-            }
-            if is_me:
-                user_info.update({
-                    "username": profile_user.username,
-                    "email": profile_user.email,
-                    "date_joined": profile_user.date_joined,
-                    "college_email": profile_user.college_email
-                })
-        else:
-            return return_response(errors={'user': get_err_msg('not_login')}, status_code=status.HTTP_401_UNAUTHORIZED)
+            return return_response(errors={'user': get_err_msg('user_not_exist')}, status_code=HTTP_400_BAD_REQUEST)
+        is_me = (user_id == request.user.id) or (request.user.id is not None and user_id is None)
+        user_info = {
+            "id": profile_user.id,
+            "bio": profile_user.bio,
+            "nickname": profile_user.nickname,
+            "avatar": profile_user.avatar_uuid,
+            'is_me': is_me
+        }
+        if is_me:
+            user_info.update({
+                "username": profile_user.username,
+                "email": profile_user.email,
+                "date_joined": profile_user.date_joined,
+                "college_email": profile_user.college_email
+            })
         return return_response(contents=user_info)
 
     def post(self, request):
