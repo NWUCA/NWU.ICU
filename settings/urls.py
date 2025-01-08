@@ -69,7 +69,7 @@ api_patterns = [
 
     # 用户
     path('user/login/', Login.as_view(), name='login'),
-    path('user/profile/', ProfileView.as_view(), name='profile'),
+    path('user/profile/<int:user_id>/', ProfileView.as_view(), name='profile'),
     path('user/logout/', Logout.as_view(), name='logout'),
     path('user/register/', RegisterView.as_view(), name='register'),
     path('user/active/', ActiveUser.as_view(), name='active'),

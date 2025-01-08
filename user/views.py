@@ -15,6 +15,7 @@ from rest_framework.status import HTTP_200_OK, HTTP_400_BAD_REQUEST, HTTP_403_FO
 from rest_framework.views import APIView
 
 import utils.utils
+from course_assessment.permissions import CustomPermission
 from utils.utils import return_response, get_err_msg, get_msg_msg
 from .models import User
 from .serializers import LoginSerializer, PasswordResetMailRequestSerializer, UsernameDuplicationSerializer, \
@@ -262,20 +263,30 @@ class ActiveUser(APIView):
 
 
 class ProfileView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [CustomPermission]
 
-    def get(self, request):
-        User.objects.get(pk=request.user.id)
-        user_info = {
-            "id": request.user.id,
-            "username": request.user.username,
-            "bio": request.user.bio,
-            "email": request.user.email,
-            "date_joined": request.user.date_joined,
-            "nickname": request.user.nickname,
-            "avatar": request.user.avatar_uuid,
-            "college_email": request.user.college_email,
-        }
+    def get(self, request, user_id):
+        profile_user = User.objects.get(pk=user_id)
+        if user_id == request.user.id:
+            user_info = {
+                "id": profile_user.id,
+                "username": profile_user.username,
+                "bio": profile_user.bio,
+                "email": profile_user.email,
+                "date_joined": profile_user.date_joined,
+                "nickname": profile_user.nickname,
+                "avatar": profile_user.avatar_uuid,
+                "college_email": profile_user.college_email,
+                'is_me': True
+            }
+        else:
+            user_info = {
+                "id": profile_user.id,
+                "bio": profile_user.bio,
+                "nickname": profile_user.nickname,
+                "avatar": profile_user.avatar_uuid,
+                'is_me': False
+            }
         logger.error(f"{request.user.id}:{request.user.username}:{request.user.nickname} get profile")
         logger.info(f"{request.user.id}:{request.user.username}:{request.user.nickname} get profile")
         return return_response(contents=user_info)
@@ -290,7 +301,6 @@ class ProfileView(APIView):
             user.refresh_from_db()
             user_info = {
                 "id": user.id,
-                "username": user.username,
                 "nickname": user.nickname,
                 "avatar": user.avatar_uuid,
                 "bio": user.bio,
