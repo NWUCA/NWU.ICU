@@ -287,8 +287,6 @@ class ProfileView(APIView):
                 "avatar": profile_user.avatar_uuid,
                 'is_me': False
             }
-        logger.error(f"{request.user.id}:{request.user.username}:{request.user.nickname} get profile")
-        logger.info(f"{request.user.id}:{request.user.username}:{request.user.nickname} get profile")
         return return_response(contents=user_info)
 
     def post(self, request):
