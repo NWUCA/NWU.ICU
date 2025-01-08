@@ -271,7 +271,7 @@ class ProfileView(APIView):
         except User.DoesNotExist:
             return return_response(errors={'user': get_err_msg('user_not_exist')})
         if request.user.id is not None and user_id is None:
-            user_id=request.user.id
+            user_id = request.user.id
         if request.user.id is not None:
             is_me = (user_id == request.user.id)
             user_info = {
@@ -289,7 +289,7 @@ class ProfileView(APIView):
                     "college_email": profile_user.college_email
                 })
         else:
-            return return_response(errors={'user': get_err_msg('not_login')})
+            return return_response(errors={'user': get_err_msg('not_login')}, status_code=status.HTTP_401_UNAUTHORIZED)
         return return_response(contents=user_info)
 
     def post(self, request):
