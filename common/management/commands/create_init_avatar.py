@@ -10,6 +10,16 @@ from common.file.models import UploadedFile
 class Command(BaseCommand):
     help = 'Create init avatar'
 
+    def get_file_size(self, file_path):
+        try:
+            with open(file_path, 'rb') as file:
+                file.seek(0, os.SEEK_END)
+                file_size = file.tell()
+                return file_size
+        except OSError as e:
+            print(f"Error: {e}")
+            return None
+
     def handle(self, *args, **options):
         file_dir = Path(settings.MEDIA_ROOT) / 'default_file'
         file_name_dict = {settings.DEFAULT_USER_AVATAR_FILE_NAME: settings.DEFAULT_USER_AVATAR_UUID,
@@ -36,6 +46,10 @@ class Command(BaseCommand):
                 new_file = UploadedFile(
                     id=uuid,
                     file=os.path.basename(file_path),
+                    file_size=self.get_file_size(file_path),
+                    file_type='avatar',
+                    file_name=file_name,
+                    created_by=None
                 )
                 new_file.file.save(os.path.basename(file_path), file, save=True)
                 self.stdout.write(self.style.SUCCESS(
