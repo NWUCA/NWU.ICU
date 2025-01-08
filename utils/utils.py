@@ -40,7 +40,11 @@ def return_response(message: str = None, errors=None, contents=None, status_code
 
 
 def get_err_msg(err_code: str):
-    return {'err_code': err_code, 'err_msg': constants.errcode_dict[err_code]}
+    try:
+        err_msg_dict = {'err_code': err_code, 'err_msg': constants.errcode_dict[err_code]}
+    except KeyError:
+        err_msg_dict = {'err_code': err_code, 'err_msg': err_code}
+    return err_msg_dict
 
 
 def get_msg_msg(msg_code: str):

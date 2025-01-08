@@ -7,6 +7,7 @@ from django.db import transaction
 from rest_framework import status
 from rest_framework.generics import GenericAPIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.response import Response
 from rest_framework.status import HTTP_404_NOT_FOUND
 from rest_framework.views import APIView
 
@@ -16,6 +17,7 @@ from course_assessment.permissions import CustomPermission
 from course_assessment.serializer import MyReviewSerializer, AddReviewSerializer, AddReviewReplySerializer, \
     DeleteReviewReplySerializer, ReviewAndReplyLikeSerializer, AddCourseSerializer, \
     CourseLikeSerializer, AddTeacherSerializer, DeleteReviewSerializer
+from user.models import User
 from utils.custom_pagination import StandardResultsSetPagination
 from utils.utils import return_response, get_err_msg, get_msg_msg, userUtils
 
@@ -369,60 +371,64 @@ class TeacherView(APIView):
 
 class MyReviewView(GenericAPIView):
     permission_classes = [IsAuthenticated]
-    model = Review
     pagination_class = StandardResultsSetPagination
 
-    def get(self, request):
+    @staticmethod
+    def user_private(request, user_id=None, view_type='review'):
+        if user_id is None and request.user.id is None:
+            return return_response(errors={'user': get_err_msg('not_login')}, status_code=status.HTTP_401_UNAUTHORIZED)
+        lookup_user_id = request.user.id if (user_id is None and request.user.id is not None) else user_id
+        try:
+            user = User.objects.get(id=lookup_user_id)
+        except User.DoesNotExist:
+            return return_response(errors={'user': get_err_msg('user_not_exist')},
+                                   status_code=status.HTTP_400_BAD_REQUEST)
+        private_key = user.private_review if view_type == 'review' else user.private_reply
+        if private_key == '2':
+            return return_response(errors={'review': get_err_msg(f'{view_type}_private')},
+                                   status_code=status.HTTP_400_BAD_REQUEST)
+        if private_key == '1' and request.user.id is None:
+            return return_response(errors={'review': get_err_msg(f'{view_type}_private')},
+                                   status_code=status.HTTP_400_BAD_REQUEST)
+        return lookup_user_id
+
+    def get(self, request, user_id=None):
         desc = request.query_params.get('desc', '1')
-        review_set = (
-            self.model.objects.filter(created_by=self.request.user)
-            .order_by(('-' if desc == '1' else '') + 'modify_time')
-            .select_related('created_by', 'course', 'semester')
-            .prefetch_related('course__teachers')
-        )
-        page = self.paginate_queryset(review_set)
-        if page is not None:
-            my_review_list = self.build_my_review_list(page)
-            return self.get_paginated_response(my_review_list)
-        return return_response(errors={'review': get_err_msg('review_not_exist')})
+        view_type = request.query_params.get('view_type', 'review')
+        if view_type not in ['review', 'reply']:
+            return return_response(errors={'view_type': get_err_msg('view_type_error')},
+                                   status_code=status.HTTP_400_BAD_REQUEST)
+        lookup_user_id = self.user_private(request, user_id, view_type=view_type)
+        if type(lookup_user_id) == Response:
+            return lookup_user_id
+        else:
+            is_me = (user_id == request.user.id) or (request.user.id is not None and user_id is None)
+            if view_type == 'review':
+                query_set = (
+                    Review.objects.filter(created_by=lookup_user_id)
+                    .order_by(('-' if desc == '1' else '') + 'modify_time')
+                    .select_related('created_by', 'course', 'semester')
+                    .prefetch_related('course__teachers')
+                )
+            else:
+                query_set = (
+                    ReviewReply.objects.filter(created_by=lookup_user_id)
+                    .order_by(('-' if desc == '1' else '') + 'create_time')
+                    .select_related('created_by', 'review')
+                )
+            page = self.paginate_queryset(query_set)
+            if page is not None:
+                if view_type == 'review':
+                    my_review_list = self.build_my_review_list(page, is_me)
+                else:
+                    my_review_list = self.build_reply_list(page, is_me)
+                return self.get_paginated_response(my_review_list)
+            return return_response(errors={'review': get_err_msg(f'{view_type}_not_exist')})
 
-    def build_my_review_list(self, my_review_page):
-        my_review_list = []
-
-        for review in my_review_page:
-            content_history = MyReviewSerializer(review).data
-            my_review_list.append({
-                'id': review.id,
-                'anonymous': review.anonymous,
-                'datetime': review.modify_time,
-                'semester': review.semester.name,
-                'course': {"name": review.course.get_name(), "id": review.course.id,
-                           'semester': review.semester.name, },
-                'like': {'like': review.like_count, 'dislike': review.dislike_count},
-                'content': {"current_content": review.content,
-                            "content_history": [x['content'] for x in content_history['review_history']]},
-                "teachers": [{"name": teacher.name, "id": teacher.id} for teacher in
-                             review.course.teachers.all()],
-                'rating': {'rating': review.rating, 'difficulty': review.difficulty, 'grade': review.grade,
-                           'homework': review.homework, 'reward': review.reward},
-            })
-        return my_review_list
-
-
-class MyReviewReplyView(APIView):
-    permission_classes = [IsAuthenticated]
-    model = ReviewReply
-
-    def get(self, request):
-        desc = request.query_params.get('desc', '1')
-        review_reply_set = (
-            self.model.objects.filter(created_by=self.request.user)
-            .order_by(('-' if desc == '1' else '') + 'create_time')
-            .select_related('created_by', 'review')
-        )
-        my_review_reply_list = []
-        for review_reply in review_reply_set:
-            my_review_reply_list.append({
+    def build_reply_list(self, reply_page, is_me: bool):
+        my_reply_list = []
+        for review_reply in reply_page:
+            my_reply_list.append({
                 'id': review_reply.id,
                 'content': review_reply.review.content,
                 'datetime': review_reply.create_time,
@@ -431,7 +437,35 @@ class MyReviewReplyView(APIView):
                 'reply': {'id': review_reply.review.id, 'content': review_reply.content},
                 'like': {'like': review_reply.like_count, 'dislike': review_reply.dislike_count},
             })
-        return return_response(contents=my_review_reply_list)
+        return my_reply_list
+
+    def build_my_review_list(self, my_review_page, is_me: bool):
+        my_review_list = []
+
+        for review in my_review_page:
+            content_history = MyReviewSerializer(review).data
+            tmp_dict = {}
+            if not is_me and not review.anonymous:
+                tmp_dict.update({
+                    'id': review.id,
+                    'datetime': review.modify_time,
+                    'semester': review.semester.name,
+                    'course': {"name": review.course.get_name(), "id": review.course.id,
+                               'semester': review.semester.name, },
+                    'like': {'like': review.like_count, 'dislike': review.dislike_count},
+                    'content': {"current_content": review.content, },
+                    "teachers": [{"name": teacher.name, "id": teacher.id} for teacher in
+                                 review.course.teachers.all()],
+                    'rating': {'rating': review.rating, 'difficulty': review.difficulty, 'grade': review.grade,
+                               'homework': review.homework, 'reward': review.reward}, })
+            if is_me:
+                tmp_dict.update({
+                    'anonymous': review.anonymous,
+                    'content': {"current_content": review.content,
+                                "content_history": [x['content'] for x in content_history['review_history']]},
+                })
+            my_review_list.append(tmp_dict)
+        return my_review_list
 
 
 class ReviewReplyView(APIView):

@@ -13,6 +13,10 @@ class User(AbstractUser):
     bio = models.CharField(max_length=255, null=True)
     following = models.ManyToManyField('self', related_name='followers', symmetrical=False)
     followed_courses = models.ManyToManyField('course_assessment.Course', related_name='followCourse', blank=True)
+    private_review = models.CharField(choices=[('0', '允许所有人'), ('1', '允许登录用户'), ('2', '禁止所有人')],
+                                      default='false')
+    private_reply = models.CharField(choices=[('0', '允许所有人'), ('1', '允许登录用户'), ('2', '禁止所有人')],
+                                     default='false')
     REQUIRED_FIELDS = []
 
     @property
