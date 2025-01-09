@@ -370,7 +370,7 @@ class TeacherView(APIView):
 
 
 class MyReviewView(GenericAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [CustomPermission]
     pagination_class = StandardResultsSetPagination
 
     @staticmethod
@@ -394,7 +394,7 @@ class MyReviewView(GenericAPIView):
 
     def get(self, request, user_id=None):
         desc = request.query_params.get('desc', '1')
-        view_type = request.query_params.get('view_type', 'review')
+        view_type = request.query_params.get('type', 'review')
         if view_type not in ['review', 'reply']:
             return return_response(errors={'view_type': get_err_msg('view_type_error')},
                                    status_code=status.HTTP_400_BAD_REQUEST)
