@@ -16,7 +16,7 @@ from settings import settings
 from user.models import User
 from utils.custom_pagination import StandardResultsSetPagination
 from utils.throttle import CaptchaAnonRateThrottle, CaptchaUserRateThrottle
-from utils.utils import return_response, get_err_msg
+from utils.utils import return_response, get_err_msg, userUtils
 from .models import Bulletin, About, Chat, ChatMessage, ChatLike, ChatReply
 from .serializers import CaptchaSerializer, ChatMessageSerializer, ChatMessageGetSerializer, SearchSerializer
 
@@ -267,10 +267,7 @@ class CourseTeacherSearchView(APIView):
                                    'course': {'id': review.course.id, 'name': review.course.get_name(), },
                                    'content': review.content,
                                    'rating': review.rating,
-                                   'created_by': {
-                                       'id': review.created_by.id,
-                                       'nickname': review.created_by.nickname,
-                                       'avatar': review.created_by.avatar_uuid},
+                                   'created_by': userUtils.get_user_info_in_review(review),
                                    'modify_time': review.modify_time,
                                    'like': {
                                        'like': review.like_count,
