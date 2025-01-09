@@ -278,13 +278,14 @@ class ProfileView(APIView):
             "bio": profile_user.bio,
             "nickname": profile_user.nickname,
             "avatar": profile_user.avatar_uuid,
-            'is_me': is_me
+            'is_me': is_me,
+            'verified': True if profile_user.college_email is not None else False,
+            "date_joined": profile_user.date_joined,
         }
         if is_me:
             user_info.update({
                 "username": profile_user.username,
                 "email": profile_user.email,
-                "date_joined": profile_user.date_joined,
                 "college_email": profile_user.college_email
             })
         return return_response(contents=user_info)
