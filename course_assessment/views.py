@@ -354,12 +354,9 @@ class MyReviewView(GenericAPIView):
     pagination_class = StandardResultsSetPagination
 
     @staticmethod
-    def user_private(request, user_id=None, view_type='review'):
-        if user_id is None and request.user.id is None:
-            return return_response(errors={'user': get_err_msg('not_login')}, status_code=status.HTTP_401_UNAUTHORIZED)
-        lookup_user_id = request.user.id if (user_id is None and request.user.id is not None) else user_id
+    def user_private(request, user_id, view_type='review'):
         try:
-            user = User.objects.get(id=lookup_user_id)
+            user = User.objects.get(id=user_id)
         except User.DoesNotExist:
             return return_response(errors={'user': get_err_msg('user_not_exist')},
                                    status_code=status.HTTP_400_BAD_REQUEST)
@@ -370,19 +367,16 @@ class MyReviewView(GenericAPIView):
         if private_key == '1' and request.user.id is None:
             return return_response(errors={'review': get_err_msg(f'{view_type}_private')},
                                    status_code=status.HTTP_400_BAD_REQUEST)
-        return lookup_user_id
+        return user_id
 
-    def get(self, request, user_id=None):
+    def get(self, request, user_id):
         desc = request.query_params.get('desc', '1')
-        view_type = request.query_params.get('type', 'review')
-        if view_type not in ['review', 'reply']:
-            return return_response(errors={'view_type': get_err_msg('view_type_error')},
-                                   status_code=status.HTTP_400_BAD_REQUEST)
+        view_type = {'user_review': 'review', 'user_reply': 'reply'}.get(request.resolver_match.url_name, 'user_review')
         lookup_user_id = self.user_private(request, user_id, view_type=view_type)
         if type(lookup_user_id) == Response:
             return lookup_user_id
         else:
-            is_me = (user_id == request.user.id) or (request.user.id is not None and user_id is None)
+            is_me = (user_id == request.user.id)
             if view_type == 'review':
                 query_set = (
                     Review.objects.filter(created_by=lookup_user_id)
