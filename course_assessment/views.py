@@ -395,11 +395,11 @@ class MyReviewView(GenericAPIView):
                 if view_type == 'review':
                     my_review_list = self.build_my_review_list(page, is_me)
                 else:
-                    my_review_list = self.build_reply_list(page, is_me)
+                    my_review_list = self.build_reply_list(page)
                 return self.get_paginated_response(my_review_list)
             return return_response(errors={'review': get_err_msg(f'{view_type}_not_exist')})
 
-    def build_reply_list(self, reply_page, is_me: bool):
+    def build_reply_list(self, reply_page):
         my_reply_list = []
         for review_reply in reply_page:
             my_reply_list.append({
