@@ -6,7 +6,7 @@ from django.core.paginator import Paginator
 from django.db import transaction
 from rest_framework import status
 from rest_framework.generics import GenericAPIView
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.status import HTTP_404_NOT_FOUND
 from rest_framework.views import APIView
@@ -441,29 +441,38 @@ class MyReviewView(GenericAPIView):
 
     def build_my_review_list(self, my_review_page, is_me: bool):
         my_review_list = []
-
         for review in my_review_page:
             content_history = MyReviewSerializer(review).data
-            tmp_dict = {}
-            if not is_me and not review.anonymous:
-                tmp_dict.update({
-                    'id': review.id,
-                    'datetime': review.modify_time,
+            tmp_dict = {
+                'id': review.id,
+                'datetime': review.modify_time,
+                'semester': review.semester.name,
+                'course': {
+                    "name": review.course.get_name(),
+                    "id": review.course.id,
                     'semester': review.semester.name,
-                    'course': {"name": review.course.get_name(), "id": review.course.id,
-                               'semester': review.semester.name, },
-                    'like': {'like': review.like_count, 'dislike': review.dislike_count},
-                    'content': {"current_content": review.content, },
-                    "teachers": [{"name": teacher.name, "id": teacher.id} for teacher in
-                                 review.course.teachers.all()],
-                    'rating': {'rating': review.rating, 'difficulty': review.difficulty, 'grade': review.grade,
-                               'homework': review.homework, 'reward': review.reward}, })
+                },
+                'like': {'like': review.like_count, 'dislike': review.dislike_count},
+                'content': {"current_content": review.content},
+                "teachers": [
+                    {"name": teacher.name, "id": teacher.id}
+                    for teacher in review.course.teachers.all()
+                ],
+                'rating': {
+                    'rating': review.rating,
+                    'difficulty': review.difficulty,
+                    'grade': review.grade,
+                    'homework': review.homework,
+                    'reward': review.reward
+                }
+            }
             if is_me:
-                tmp_dict.update({
-                    'anonymous': review.anonymous,
-                    'content': {"current_content": review.content,
-                                "content_history": [x['content'] for x in content_history['review_history']]},
-                })
+                tmp_dict['anonymous'] = review.anonymous
+                tmp_dict['content']['content_history'] = [
+                    x['content'] for x in content_history['review_history']
+                ]
+            elif review.anonymous:
+                tmp_dict = {}
             my_review_list.append(tmp_dict)
         return my_review_list
 
