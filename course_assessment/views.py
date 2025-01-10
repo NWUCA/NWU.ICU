@@ -473,6 +473,7 @@ class MyReviewView(GenericAPIView):
                 ]
             elif review.anonymous:
                 tmp_dict = {}
+            tmp_dict.update({'is_me': is_me})
             my_review_list.append(tmp_dict)
         return my_review_list
 
