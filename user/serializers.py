@@ -191,3 +191,14 @@ class UpdateProfileSerializer(serializers.Serializer):
                     {'nickname': get_err_msg('nickname_invalid_char')})
             return data
         return data
+
+
+class PrivateSerializer(serializers.Serializer):
+    private_reply = serializers.IntegerField(required=False)
+    private_review = serializers.IntegerField(required=False)
+
+    def validate(self, data):
+        for key in ['private_reply', 'private_review']:
+            if key in data and data[key] not in [0, 1, 2]:
+                raise serializers.ValidationError({key: get_err_msg(f'{key}_error')})
+        return data

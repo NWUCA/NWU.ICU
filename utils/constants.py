@@ -52,6 +52,8 @@ errcode_dict = {
     'wrong_parent_id': '错误的父评论ID',
     'review_private': '课程评价私密',
     'send_reset_password_email_error': '发送重置密码邮件错误',
+    'private_review_error': '评价隐私错误',
+    'private_reply_error': '回复隐私错误',
 }
 
 message_dict = {
@@ -66,7 +68,7 @@ message_dict = {
     'logout_success': '成功登出',
     'reset_password_logout': '已成功重置密码, 即将登出',
     'reset_password_success': '已成功重置密码',
-    'password_reset_email_sent':'密码重置链接已经发送',
+    'password_reset_email_sent': '密码重置链接已经发送',
 }
 cache_key_dict = {
     'total_review_count': 'total_review_count',

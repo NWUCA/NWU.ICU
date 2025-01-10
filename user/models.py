@@ -5,6 +5,11 @@ from django.db import models
 
 
 class User(AbstractUser):
+    PRIVATE_CHOICES = [
+        (0, '允许所有人'),
+        (1, '允许登录用户'),
+        (2, '禁止所有人'),
+    ]
     name = models.CharField(max_length=255, null=True)
     nickname = models.CharField(max_length=30)
     college_email = models.EmailField(max_length=255, null=True)
@@ -13,10 +18,8 @@ class User(AbstractUser):
     bio = models.CharField(max_length=255, null=True)
     following = models.ManyToManyField('self', related_name='followers', symmetrical=False)
     followed_courses = models.ManyToManyField('course_assessment.Course', related_name='followCourse', blank=True)
-    private_review = models.CharField(choices=[('0', '允许所有人'), ('1', '允许登录用户'), ('2', '禁止所有人')],
-                                      default='false')
-    private_reply = models.CharField(choices=[('0', '允许所有人'), ('1', '允许登录用户'), ('2', '禁止所有人')],
-                                     default='false')
+    private_review = models.IntegerField(choices=PRIVATE_CHOICES, default=0)
+    private_reply = models.IntegerField(choices=PRIVATE_CHOICES, default=0)
     REQUIRED_FIELDS = []
 
     @property

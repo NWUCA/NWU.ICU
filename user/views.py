@@ -19,7 +19,7 @@ from course_assessment.permissions import CustomPermission
 from utils.utils import return_response, get_err_msg, get_msg_msg
 from .models import User
 from .serializers import LoginSerializer, PasswordResetMailRequestSerializer, UsernameDuplicationSerializer, \
-    PasswordResetWhenLoginSerializer, BindCollegeEmailSerializer, UpdateProfileSerializer
+    PasswordResetWhenLoginSerializer, BindCollegeEmailSerializer, UpdateProfileSerializer, PrivateSerializer
 from .serializers import PasswordResetRequestSerializer
 from .serializers import RegisterSerializer
 
@@ -352,6 +352,33 @@ class BindCollegeEmailView(APIView):
                     html_message=html_message,
                 )
             return return_response(message=get_msg_msg('has_sent_email'), status_code=HTTP_200_OK)
+        else:
+            return return_response(errors=serializer.errors, status_code=HTTP_400_BAD_REQUEST)
+
+
+class PrivateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_explain(self, private):
+        return {'setting': private, 'explain': {key: value for key, value in User.PRIVATE_CHOICES}.get(private)}
+
+    def get(self, request):
+        user = request.user
+        return return_response(
+            contents={'review': self.get_explain(user.private_review),
+                      'reply': self.get_explain(user.private_reply), })
+
+    def post(self, request):
+        serializer = PrivateSerializer(data=request.data)
+        if serializer.is_valid():
+            user = request.user
+            for key, value in serializer.validated_data.items():
+                setattr(user, key, value)
+            user.save()
+            user.refresh_from_db()
+            return return_response(message=get_msg_msg('setting_success'),
+                                   contents={'review': self.get_explain(user.private_review),
+                                             'reply': self.get_explain(user.private_reply), })
         else:
             return return_response(errors=serializer.errors, status_code=HTTP_400_BAD_REQUEST)
 

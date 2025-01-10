@@ -44,7 +44,7 @@ from user.views import (
     UsernameDuplicationView,
     RegisterView,
     PasswordResetView,
-    PasswordMailResetView, ProfileView, PasswordResetWhenLoginView, BindCollegeEmailView, ActiveUser,
+    PasswordMailResetView, ProfileView, PasswordResetWhenLoginView, BindCollegeEmailView, ActiveUser, PrivateView,
 )
 
 api_patterns = [
@@ -82,6 +82,7 @@ api_patterns = [
          name='bind-college-email-verify'),
     path('user/bind-college-email/bind/', BindCollegeEmailView.as_view(),
          name='bind-college-email-bind'),
+    path('user/private/', PrivateView.as_view(), name='user-private'),
 
     # 站内信
     path('message/', MessageBoxView.as_view(), name='send_message'),
