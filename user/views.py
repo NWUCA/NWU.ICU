@@ -317,7 +317,6 @@ class BindCollegeEmailView(APIView):
             user_info_dict = cache.get(token)
             user = User.objects.get(id=user_info_dict.get('id'))
             if default_token_generator.check_token(user, token):
-                user.college_email = user_info_dict.get('email')
                 user.college_email_verified = True
                 user.save()
                 cache.delete(token)
@@ -331,10 +330,13 @@ class BindCollegeEmailView(APIView):
         serializer = BindCollegeEmailSerializer(data=request.data)
         if serializer.is_valid():
             user = request.user
-            email = serializer.validated_data['college_email']
+            college_email = serializer.validated_data['college_email']
+            user.college_email = college_email
+            user.college_email_verified = False
+            user.save()
             mail_subject = f'[{settings.WEBSITE_NAME}] 绑定{settings.UNIVERSITY_CHINESE_NAME}邮箱'
             token = default_token_generator.make_token(user)
-            cache.set(token, {"id": user.id, 'email': email}, timeout=24 * 60 * 60)
+            cache.set(token, {"id": user.id, 'email': college_email}, timeout=24 * 60 * 60)
             bind_link = request.build_absolute_uri(f'/user/bind-college-email/?token={token}/')
             html_message = render_to_string('password_reset_email.html', {
                 'nickname': user.nickname,
@@ -342,13 +344,13 @@ class BindCollegeEmailView(APIView):
             })
             if settings.DEBUG:
                 return return_response(message="You are in debug mode, so do not send email",
-                                       contents={"email": email, 'token': token, 'link': bind_link})
+                                       contents={"email": college_email, 'token': token, 'link': bind_link})
             else:
                 send_mail(
                     subject=mail_subject,
                     message=f'Hello {user.nickname}, 请访问以下页面来完成邮箱绑定: {bind_link}',
                     from_email=settings.EMAIL_HOST_USER,
-                    recipient_list=[email],
+                    recipient_list=[college_email],
                     html_message=html_message,
                 )
             return return_response(message=get_msg_msg('has_sent_email'), status_code=HTTP_200_OK)
