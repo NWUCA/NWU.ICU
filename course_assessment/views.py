@@ -361,7 +361,7 @@ class MyReviewView(GenericAPIView):
             return return_response(errors={'user': get_err_msg('user_not_exist')},
                                    status_code=status.HTTP_400_BAD_REQUEST)
         private_key = user.private_review if view_type == 'review' else user.private_reply
-        if private_key == 2:
+        if private_key == 2 and request.user.id != user_id:
             return return_response(errors={'review': get_err_msg(f'{view_type}_private')},
                                    status_code=status.HTTP_400_BAD_REQUEST)
         if private_key == 1 and request.user.id is None:
@@ -404,7 +404,8 @@ class MyReviewView(GenericAPIView):
         for review_reply in reply_page:
             my_reply_list.append({
                 'id': review_reply.id,
-                'content': review_reply.review.content,
+                'review': {'author': userUtils.get_user_info_in_review(review_reply.review),
+                           'content': review_reply.review.content},
                 'datetime': review_reply.create_time,
                 'course': {"name": review_reply.review.course.get_name(), "id": review_reply.review.course.id,
                            'semester': review_reply.review.semester.name, },

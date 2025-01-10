@@ -51,6 +51,7 @@ errcode_dict = {
     'cannot_send_message_to_self': '不能给自己发送站内信',
     'wrong_parent_id': '错误的父评论ID',
     'review_private': '课程评价私密',
+    'reply_private': '课程评价私密',
     'send_reset_password_email_error': '发送重置密码邮件错误',
     'private_review_error': '评价隐私错误',
     'private_reply_error': '回复隐私错误',
