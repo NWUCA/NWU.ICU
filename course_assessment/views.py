@@ -2,7 +2,6 @@ import logging
 
 from django.conf import settings
 from django.core.cache import cache
-from django.core.paginator import Paginator
 from django.db import transaction
 from rest_framework import status
 from rest_framework.generics import GenericAPIView
@@ -24,37 +23,26 @@ from utils.utils import return_response, get_err_msg, get_msg_msg, userUtils
 logger = logging.getLogger(__name__)
 
 
-class CourseList(APIView):
+class CourseList(GenericAPIView):
     permission_classes = [CustomPermission]
+    pagination_class = StandardResultsSetPagination
 
     def get(self, request):
-        page_size = 10
-        page = request.query_params.get('page', 1)
         course_type = request.query_params.get('course_type', 'all')
-        if course_type not in {choice[0] for choice in Course.classification_choices} and course_type != 'all':
-            course_type = 'all'
         order_by = request.query_params.get('order_by', 'rating')
-        order_by_dict = {
-            'rating': '-average_rating',
-            'popular': '-review_count'
-        }
-        order_by = order_by_dict.get(order_by, 'average_rating')
+        course_type = course_type if course_type in {choice[0] for choice in Course.classification_choices} else 'all'
+        order_by = {'rating': '-average_rating', 'popular': '-review_count'}.get(order_by, 'average_rating')
         total_key = 'total_courses_count' + course_type
         total = cache.get(total_key)
         if total is None:
-            if course_type == 'all':
-                total = Course.objects.count()
-            else:
-                total = Course.objects.filter(classification=course_type).count()
+            total = Course.objects.count() if course_type == 'all' else Course.objects.filter(
+                classification=course_type).count()
             cache.set(total_key, total, timeout=None)
-        if course_type == 'all':
-            courses = Course.objects.select_related('school').prefetch_related('semester').order_by(order_by,
-                                                                                                    'like_count')
-        else:
-            courses = Course.objects.select_related('school').prefetch_related('semester').filter(
-                classification=course_type).order_by(order_by, 'like_count')
-        paginator = Paginator(courses, page_size)
-        course_page = paginator.get_page(page)
+        courses = Course.objects.select_related('school').prefetch_related('semester', 'teachers')
+        if course_type != 'all':
+            courses = courses.filter(classification=course_type)
+        courses = courses.order_by(order_by, 'like_count')
+        course_page = self.paginate_queryset(courses)
         courses_list = [{'id': course.id,
                          'name': course.get_name(),
                          'classification': course.get_classification(),
@@ -63,16 +51,8 @@ class CourseList(APIView):
                          'review_count': course.review_count,
                          'average_rating': course.average_rating,
                          'normalized_rating': course.normalized_rating,
-                         } for course in course_page.object_list]
-
-        return return_response(contents={
-            'total': total,
-            'courses': courses_list,
-            'has_next': course_page.has_next(),
-            'has_previous': course_page.has_previous(),
-            'current_page': course_page.number,
-            'num_pages': paginator.num_pages,
-        })
+                         } for course in course_page]
+        return self.get_paginated_response(courses_list)
 
 
 class CourseView(APIView):
