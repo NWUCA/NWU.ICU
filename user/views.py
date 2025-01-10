@@ -138,8 +138,8 @@ class PasswordResetView(APIView):
                     recipient_list=[user.email],
                     html_message=html_message,
                 )
-                return return_response(message='密码重置链接已经发送')
-        logger.error("发送重置密码邮件错误" + str(serializer.errors))
+                return return_response(message=get_msg_msg('password_reset_email_sent'))
+        logger.error(get_err_msg('send_reset_password_email_error') + str(serializer.errors))
         return return_response(errors=serializer.errors, status_code=HTTP_400_BAD_REQUEST)
 
 
@@ -167,12 +167,11 @@ class PasswordMailResetView(APIView):  # 点击邮件重置密码链接后
                 user = User.objects.get(id=user_info_dict.get('id'))
                 token_check = default_token_generator.check_token(user, token)
                 if token_check:
-                    # 更新用户密码
                     new_password = serializer.validated_data['new_password']
                     user.password = make_password(new_password)
                     user.save()
                     cache.delete(token)
-                    return return_response(message="已成功重置密码!")
+                    return return_response(message=get_msg_msg('reset_password_success'))
                 else:
                     return return_response(errors={'token': get_err_msg('invalid_token')},
                                            status_code=status.HTTP_401_UNAUTHORIZED)
@@ -192,7 +191,7 @@ class PasswordResetWhenLoginView(APIView):
             new_password = serializer.validated_data['new_password']
             user.password = make_password(new_password)
             user.save()
-            response = return_response(message='已成功重置密码, 即将登出')
+            response = return_response(message=get_msg_msg('reset_password_logout'))
             response.delete_cookie('sessionid')
             return response
         else:
@@ -204,7 +203,7 @@ class Login(APIView):
 
     def post(self, request):
         if request.user.is_authenticated:
-            return return_response(message="你已经登录", errors={"login": get_err_msg('have_login')},
+            return return_response(message=get_msg_msg('have_login'), errors={"login": get_err_msg('have_login')},
                                    status_code=status.HTTP_400_BAD_REQUEST)
         serializer = LoginSerializer(data=request.data)
         if serializer.is_valid():
@@ -361,6 +360,6 @@ class Logout(APIView):
     def post(self, request):
         current_url = request.data.get('currentUrl', "/")
         logout(request)
-        response = return_response(message='成功登出', contents={'redirectUrl': current_url})
+        response = return_response(message=get_msg_msg('logout_success'), contents={'redirectUrl': current_url})
         response.delete_cookie('sessionid')
         return response
