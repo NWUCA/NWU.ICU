@@ -83,10 +83,10 @@ class Chat(models.Model):
         return cls.objects.get_or_create(sender=sender, receiver=receiver, classify=classify)
 
     @staticmethod
-    def get_chat_object(sender: User, receiver: User):
+    def get_chat_object(sender: User, receiver: User, classify='user'):
         if sender.id > receiver.id:
             sender, receiver = receiver, sender
-        return Chat.objects.get(sender=sender, receiver=receiver)
+        return Chat.objects.get(sender=sender, receiver=receiver, classify=classify)
 
 
 class ChatMessage(models.Model):
