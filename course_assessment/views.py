@@ -3,6 +3,8 @@ import logging
 from django.conf import settings
 from django.core.cache import cache
 from django.db import transaction
+from django.db.models import Count
+from django.db.models.functions import TruncDate, Greatest
 from rest_framework import status
 from rest_framework.generics import GenericAPIView
 from rest_framework.permissions import AllowAny
@@ -595,3 +597,22 @@ class SemesterView(APIView):
         for semester in semesters:
             semester_dict[semester.id] = semester.name
         return return_response(contents=semester_dict)
+
+
+class ReviewAnalysisView(APIView):
+    permission_classes = [CustomPermission]
+
+    def get(self, request):
+        review_all = Review.objects.all()
+        review_count = review_all.count()
+        daily_review_counts = (
+            review_all
+            .annotate(date=TruncDate(Greatest('create_time', 'modify_time')))
+            .values('date')
+            .annotate(count=Count('id'))
+            .order_by('date')
+        )
+        return_dict = {}
+        for daily_count in daily_review_counts:
+            return_dict.update({daily_count['date'].isoformat(): daily_count['count']})
+        return return_response(contents={'total': review_count, 'daily_review_counts': return_dict})
