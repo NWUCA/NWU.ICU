@@ -113,6 +113,8 @@ class MessageBoxView(GenericAPIView):
                 message.save()
             message_list.append({
                 'id': message.id,
+                'chatter': {'id': message.created_by.id, 'nickname': message.created_by.nickname,
+                            'avatar': message.created_by.avatar_uuid},
                 'content': message.content,
                 'datetime': message.create_time,
             })
