@@ -2,6 +2,7 @@ services:
   web:
     build: .
     command: bash -c "
+      apt-get update && apt-get install -y postgresql-client &&
       poetry install && 
       until pg_isready -h db -p 5432; do
         echo 'Waiting for database...';
