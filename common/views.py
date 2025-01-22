@@ -106,7 +106,7 @@ class MessageBoxView(GenericAPIView):
     def get_particular_user_message(self, request, chat_object: Chat, last_message_id, order='before'):
         if order not in ['before', 'after']:
             order = 'before'
-        if last_message_id is None:
+        if last_message_id is None or last_message_id == '':
             chat_message = ChatMessage.objects.filter(chat_item=chat_object).order_by('-create_time')
         else:
             if order == 'before':
