@@ -11,6 +11,7 @@ def chat_message_handler(sender, instance, **kwargs):
     chat_item = instance.chat_item
     chat_item.last_message_content = instance.content
     chat_item.last_message_datetime = instance.create_time
+    chat_item.last_message_id = instance.id
     if chat_item.sender == instance.created_by:
         chat_item.receiver_unread_count = ChatMessage.objects.filter(chat_item=chat_item, read=False,
                                                                      created_by=chat_item.sender).count()

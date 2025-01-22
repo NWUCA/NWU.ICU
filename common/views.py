@@ -95,22 +95,31 @@ class MessageBoxView(GenericAPIView):
         for chat in chats_page:
             chatter = chat.sender if chat.receiver == request.user else chat.receiver
             temp_dict = {
-                'id': chat.id,
                 'chatter': {'id': chatter.id, 'nickname': chatter.nickname, 'avatar': chatter.avatar_uuid},
-                'last_message': {'content': chat.last_message_content, 'datetime': chat.last_message_datetime},
+                'last_message': {'id': chat.last_message_id, 'content': chat.last_message_content,
+                                 'datetime': chat.last_message_datetime},
                 'unread_count': chat.sender_unread_count if chat.receiver == request.user else chat.receiver_unread_count,
             }
             chat_list.append(temp_dict)
         return self.get_paginated_response(chat_list)
 
-    def get_particular_user_message(self, request, chat_object: Chat):
-        chat_message = ChatMessage.objects.filter(chat_item=chat_object).order_by('-create_time')
+    def get_particular_user_message(self, request, chat_object: Chat, last_message_id, order='before'):
+        if order not in ['before', 'after']:
+            order = 'before'
+        if last_message_id is None:
+            chat_message = ChatMessage.objects.filter(chat_item=chat_object).order_by('-create_time')
+        else:
+            if order == 'before':
+                chat_message = ChatMessage.objects.filter(chat_item=chat_object, id__gt=last_message_id).order_by(
+                    '-create_time')
+            else:
+                chat_message = ChatMessage.objects.filter(chat_item=chat_object, id__lt=last_message_id).order_by(
+                    '-create_time')
         message_page = self.paginate_queryset(chat_message)
         message_list = []
         for message in message_page:
-            if message.created_by != request.user:
-                message.read = True
-                message.save()
+            unread_message_list = [message for message in message_page if message.created_by != request.user]
+            ChatMessage.objects.filter(id__in=[message.id for message in unread_message_list]).update(read=True)
             message_list.append({
                 'id': message.id,
                 'chatter': {'id': message.created_by.id, 'nickname': message.created_by.nickname,
@@ -193,7 +202,9 @@ class MessageBoxView(GenericAPIView):
                 except Chat.DoesNotExist:
                     return return_response(errors={'chat': get_err_msg('chat_not_exist')},
                                            status_code=status.HTTP_400_BAD_REQUEST)
-                return self.get_particular_user_message(request, chat)
+                last_message_id = request.query_params.get('last_message_id', None)
+                order = request.query_params.get('order', None)
+                return self.get_particular_user_message(request, chat, last_message_id, order)
         else:
             return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
 

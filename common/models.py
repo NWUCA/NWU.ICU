@@ -54,6 +54,7 @@ class Chat(models.Model):
     sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='messages_sender', null=True)
     receiver = models.ForeignKey(User, on_delete=models.CASCADE, related_name='messages_receiver')
     classify = models.CharField(choices=classify_MESSAGE, default='system')
+    last_message_id = models.IntegerField(null=True)
     last_message_content = models.TextField(null=True, blank=True)
     last_message_datetime = models.DateTimeField(null=True)
     receiver_unread_count = models.IntegerField(default=0)
