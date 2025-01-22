@@ -70,6 +70,7 @@ message_dict = {
     'reset_password_logout': '已成功重置密码, 即将登出',
     'reset_password_success': '已成功重置密码',
     'password_reset_email_sent': '密码重置链接已经发送',
+    'have_login': '已经登录',
 }
 cache_key_dict = {
     'total_review_count': 'total_review_count',
