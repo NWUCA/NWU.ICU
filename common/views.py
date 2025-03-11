@@ -98,7 +98,7 @@ class MessageBoxView(GenericAPIView):
                 'chatter': {'id': chatter.id, 'nickname': chatter.nickname, 'avatar': chatter.avatar_uuid},
                 'last_message': {'id': chat.last_message_id, 'content': chat.last_message_content,
                                  'datetime': chat.last_message_datetime},
-                'unread_count': chat.sender_unread_count if chat.sender == request.user else chat.receiver_unread_count,
+                'unread_count': chat.sender_unread_count if chat.sender != request.user else chat.receiver_unread_count,
             }
             chat_list.append(temp_dict)
         return self.get_paginated_response(chat_list)
