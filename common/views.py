@@ -98,7 +98,7 @@ class MessageBoxView(GenericAPIView):
                 'chatter': {'id': chatter.id, 'nickname': chatter.nickname, 'avatar': chatter.avatar_uuid},
                 'last_message': {'id': chat.last_message_id, 'content': chat.last_message_content,
                                  'datetime': chat.last_message_datetime},
-                'unread_count': chat.sender_unread_count if chat.sender != request.user else chat.receiver_unread_count,
+                'unread_count': chat.sender_unread_count if chat.sender == request.user else chat.receiver_unread_count,
             }
             chat_list.append(temp_dict)
         return self.get_paginated_response(chat_list)
@@ -117,12 +117,19 @@ class MessageBoxView(GenericAPIView):
                 chat_message = ChatMessage.objects.filter(chat_item=chat_object, id__gt=last_message_id).order_by(
                     '-create_time')
         message_page = self.paginate_queryset(chat_message)
+        unread_message_list = [
+            message for message in message_page if message.created_by != request.user]
+        ChatMessage.objects.filter(
+            id__in=[message.id for message in unread_message_list]).update(read=True)
+        if chat_object.sender == request.user:
+            chat_object.receiver_unread_count = ChatMessage.objects.filter(chat_item=chat_object, read=False,
+                                                                           created_by=chat_object.sender).count()
+        else:
+            chat_object.sender_unread_count = ChatMessage.objects.filter(chat_item=chat_object, read=False,
+                                                                         created_by=chat_object.receiver).count()
+        chat_object.save()
         message_list = []
         for message in message_page:
-            unread_message_list = [
-                message for message in message_page if message.created_by != request.user]
-            ChatMessage.objects.filter(
-                id__in=[message.id for message in unread_message_list]).update(read=True)
             message_list.append({
                 'id': message.id,
                 'chatter': {'id': message.created_by.id, 'nickname': message.created_by.nickname,
