@@ -121,7 +121,7 @@ class MessageBoxView(GenericAPIView):
             message for message in message_page if message.created_by != request.user]
         ChatMessage.objects.filter(
             id__in=[message.id for message in unread_message_list]).update(read=True)
-        if chat_object.sender == request.user:
+        if chat_object.sender != request.user:
             chat_object.receiver_unread_count = ChatMessage.objects.filter(chat_item=chat_object, read=False,
                                                                            created_by=chat_object.sender).count()
         else:
