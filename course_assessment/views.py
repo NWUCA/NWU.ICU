@@ -294,46 +294,64 @@ class ReviewView(APIView):
             return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
 
 
-class TeacherView(APIView):
+class TeacherView(GenericAPIView):
     model = Teacher
     permission_classes = [CustomPermission]
+    pagination_class = StandardResultsSetPagination
 
-    def get(self, request, teacher_id):
-        try:
-            teacher = Teacher.objects.get(id=teacher_id)
-        except Teacher.DoesNotExist:
-            return return_response(errors={'teacher': get_err_msg('teacher_not_exist')},
-                                   status_code=status.HTTP_404_NOT_FOUND)
-        teacher_info = {
-            'id': teacher.id,
-            'name': teacher.name,
-            'avatar_uuid': teacher.avatar_uuid,
-            'school': teacher.school.get_name() if teacher.school else None,
-        }
+    def get_teacher_list(self, school=None):
+        if school is None:
+            teacher_page = self.paginate_queryset(Teacher.objects.all().select_related('school'))
+        else:
+            teacher_page = self.paginate_queryset(
+                Teacher.objects.filter(school__name__icontains=school).select_related('school'))
+        teacher_list = []
+        for teacher in teacher_page:
+            teacher_list.append(
+                {"id": teacher.id, "name": teacher.name, "avatar": teacher.avatar_uuid,
+                 "school": teacher.school.get_name()})
+        return self.get_paginated_response(teacher_list)
 
-        courses = Course.objects.filter(teachers__id=teacher_id)
-        teacher_course_list = []
-        for course in courses:
-            reviews = Review.objects.filter(course=course)
-            rating_avg = course.average_rating
-            normalized_avg_rating = course.normalized_rating
-            review_count = reviews.count()
-            teacher_course_list.append({
-                'course': {
-                    'id': course.id,
-                    'semester': ",".join([semester.name for semester in course.semester.all()]),
-                    'code': course.course_code,
-                    'name': course.get_name(),
-                },
-                'rating_avg': rating_avg,
-                'normalized_rating_avg': normalized_avg_rating,
-                'review_count': review_count,
-            })
-        teacher_course_info = {
-            'teacher_info': teacher_info,
-            "course_list": teacher_course_list
-        }
-        return return_response(contents=teacher_course_info)
+    def get(self, request, teacher_id=None):
+        if teacher_id is None:
+            school = request.query_params.get('school', None)
+            return self.get_teacher_list(school)
+        else:
+            try:
+                teacher = Teacher.objects.get(id=teacher_id)
+            except Teacher.DoesNotExist:
+                return return_response(errors={'teacher': get_err_msg('teacher_not_exist')},
+                                       status_code=status.HTTP_404_NOT_FOUND)
+            teacher_info = {
+                'id': teacher.id,
+                'name': teacher.name,
+                'avatar_uuid': teacher.avatar_uuid,
+                'school': teacher.school.get_name() if teacher.school else None,
+            }
+
+            courses = Course.objects.filter(teachers__id=teacher_id)
+            teacher_course_list = []
+            for course in courses:
+                reviews = Review.objects.filter(course=course)
+                rating_avg = course.average_rating
+                normalized_avg_rating = course.normalized_rating
+                review_count = reviews.count()
+                teacher_course_list.append({
+                    'course': {
+                        'id': course.id,
+                        'semester': ",".join([semester.name for semester in course.semester.all()]),
+                        'code': course.course_code,
+                        'name': course.get_name(),
+                    },
+                    'rating_avg': rating_avg,
+                    'normalized_rating_avg': normalized_avg_rating,
+                    'review_count': review_count,
+                })
+            teacher_course_info = {
+                'teacher_info': teacher_info,
+                "course_list": teacher_course_list
+            }
+            return return_response(contents=teacher_course_info)
 
     def post(self, request):
         serializer = AddTeacherSerializer(data=request.data)
