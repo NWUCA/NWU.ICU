@@ -4,7 +4,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.db import transaction
 from django.db.models import Count
-from django.db.models.functions import TruncDate, Greatest
+from django.db.models.functions import TruncDate
 from rest_framework import status
 from rest_framework.generics import GenericAPIView
 from rest_framework.permissions import AllowAny
@@ -620,17 +620,33 @@ class SemesterView(APIView):
 class ReviewAnalysisView(APIView):
     permission_classes = [CustomPermission]
 
-    def get(self, request):
-        review_all = Review.objects.all()
-        review_count = review_all.count()
-        daily_review_counts = (
-            review_all
-            .annotate(date=TruncDate(Greatest('create_time', 'modify_time')))
+    def get_daily_counts(self, queryset, date_field):
+        return (
+            queryset
+            .annotate(date=TruncDate(date_field))
             .values('date')
             .annotate(count=Count('id'))
             .order_by('date')
         )
-        return_dict = {}
-        for daily_count in daily_review_counts:
-            return_dict.update({daily_count['date'].isoformat(): daily_count['count']})
-        return return_response(contents={'total': review_count, 'daily_review_counts': return_dict})
+
+    def accumulate_counts(self, daily_counts, date_statistics):
+        total = 0
+        for entry in daily_counts:
+            date_str = entry['date'].strftime('%Y-%m-%d')
+            date_statistics[date_str] = date_statistics.get(date_str, 0) + entry['count']
+            total += entry['count']
+        return total
+
+    def get(self, request):
+        date_statistics = {}
+        total = 0
+
+        review_not_edit_daily_counts = self.get_daily_counts(Review.objects.all(), 'create_time')
+        review_edited_daily_counts = self.get_daily_counts(Review.objects.filter(edited=True), 'modify_time')
+        reply_daily_counts = self.get_daily_counts(ReviewReply.objects.all(), 'create_time')
+
+        total += self.accumulate_counts(review_not_edit_daily_counts, date_statistics)
+        total += self.accumulate_counts(review_edited_daily_counts, date_statistics)
+        total += self.accumulate_counts(reply_daily_counts, date_statistics)
+
+        return return_response(contents={'total': total, 'contribute': date_statistics})
