@@ -638,15 +638,17 @@ class ReviewAnalysisView(APIView):
         return total
 
     def get(self, request):
-        date_statistics = {}
-        total = 0
-
-        review_not_edit_daily_counts = self.get_daily_counts(Review.objects.all(), 'create_time')
-        review_edited_daily_counts = self.get_daily_counts(Review.objects.filter(edited=True), 'modify_time')
-        reply_daily_counts = self.get_daily_counts(ReviewReply.objects.all(), 'create_time')
-
-        total += self.accumulate_counts(review_not_edit_daily_counts, date_statistics)
-        total += self.accumulate_counts(review_edited_daily_counts, date_statistics)
-        total += self.accumulate_counts(reply_daily_counts, date_statistics)
-
-        return return_response(contents={'total': total, 'contribute': date_statistics})
+        contribute = cache.get('contribute')
+        if contribute is None:
+            date_statistics = {}
+            total = 0
+            review_not_edit_daily_counts = self.get_daily_counts(Review.objects.all(), 'create_time')
+            review_edited_daily_counts = self.get_daily_counts(Review.objects.filter(edited=True), 'modify_time')
+            reply_daily_counts = self.get_daily_counts(ReviewReply.objects.all(), 'create_time')
+            total += self.accumulate_counts(review_not_edit_daily_counts, date_statistics)
+            total += self.accumulate_counts(review_edited_daily_counts, date_statistics)
+            total += self.accumulate_counts(reply_daily_counts, date_statistics)
+            cache.set('contribute', {'total': total, 'contribute': date_statistics}, timeout=60 * 60)
+            return return_response(contents={'total': total, 'contribute': date_statistics})
+        else:
+            return return_response(contents=contribute)
