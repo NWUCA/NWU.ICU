@@ -1,4 +1,5 @@
 import logging
+from typing import List
 
 from django.conf import settings
 from django.core.cache import cache
@@ -98,8 +99,9 @@ class CourseView(APIView):
             request_user_review_id = None
         reviews_data = []
         for review in reviews:
-            reviewReplies = ReviewReply.objects.filter(review=review).select_related('created_by').order_by(
-                '-create_time')
+            reviewReplies: List[ReviewReply] = ReviewReply.all_objects.filter(review=review).select_related(
+                'created_by').order_by(
+                'create_time')
             reviews_data.append({
                 'id': review.id,
                 'content': review.content,
@@ -123,17 +125,20 @@ class CourseView(APIView):
                            'anonymous': review.anonymous},
                 'reply': [{'id': reviewReply.id,
                            'floor_number': index + 1,
-                           'content': reviewReply.content,
+                           'content': reviewReply.content if not reviewReply.is_deleted else "内容已删除",
                            'created_time': reviewReply.create_time,
                            'parent': 0 if (reviewReply.parent is None) else reviewReply.parent.id,
-                           'created_by': {'id': reviewReply.created_by.id, 'name': reviewReply.created_by.nickname,
-                                          'avatar': reviewReply.created_by.avatar_uuid},
+                           'created_by': {'id': reviewReply.created_by.id if not reviewReply.is_deleted else 0,
+                                          'name': reviewReply.created_by.nickname if not reviewReply.is_deleted else "未知用户",
+                                          'avatar': reviewReply.created_by.avatar_uuid if not reviewReply.is_deleted else ""},
                            'like': {'like': reviewReply.like_count,
                                     'dislike': reviewReply.dislike_count,
                                     'user_option': self.get_user_option(review=review, user=request.user,
-                                                                        reply=reviewReply)}, }
+                                                                        reply=reviewReply)},
+                           'is_deleted': reviewReply.is_deleted, }
                           for index, reviewReply in enumerate(reviewReplies)]
             })
+            reviews_data.sort(key=lambda x: x['created_time'])
         teachers_data = []
         for teacher in course.teachers.all():
             teachers_data.append({
