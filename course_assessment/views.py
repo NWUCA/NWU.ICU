@@ -61,6 +61,24 @@ class CourseList(GenericAPIView):
 class CourseView(APIView):
     permission_classes = [CustomPermission]
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.user_likes_cache = {}
+
+    def preload_user_likes(self, user, reviews=None, replies=None):
+        if user.id is None:
+            return
+        if reviews:
+            likes_query = ReviewAndReplyLike.objects.filter(
+                created_by=user,
+                review__in=reviews
+            )
+            if replies:
+                likes_query = likes_query.filter(review_reply__in=replies)
+            for like in likes_query:
+                key = (like.review_id, like.review_reply_id)
+                self.user_likes_cache[key] = like.like
+
     def get_user_option(self, review, user, reply=None, course=None):
         if user.id is None:
             return 0
@@ -70,12 +88,8 @@ class CourseView(APIView):
             except (CourseLike.DoesNotExist, AttributeError):
                 user_review_option = 0
             return user_review_option
-        try:
-            user_review_option = ReviewAndReplyLike.objects.get(review=review, created_by=user,
-                                                                review_reply=reply).like
-        except (ReviewAndReplyLike.DoesNotExist, AttributeError):
-            user_review_option = 0
-        return user_review_option
+        key = (review.id, reply.id if reply else None)
+        return self.user_likes_cache.get(key, 0)
 
     def get(self, request, course_id):
         try:
@@ -89,6 +103,8 @@ class CourseView(APIView):
         reviews = (Review.objects.filter(course_id=course_id)
                    .select_related('created_by', 'semester')
                    .order_by('-create_time'))
+        all_replies = ReviewReply.all_objects.filter(review__in=reviews).select_related('created_by', 'parent')
+        self.preload_user_likes(request.user, reviews=reviews, replies=all_replies)
         try:
             if not request.user.is_anonymous:
                 request_user_review = Review.objects.get(course_id=course_id, created_by=request.user)
@@ -99,8 +115,8 @@ class CourseView(APIView):
             request_user_review_id = None
         reviews_data = []
         for review in reviews:
-            reviewReplies: List[ReviewReply] = ReviewReply.all_objects.filter(review=review).select_related(
-                'created_by').order_by(
+            review_replies: List[ReviewReply] = ReviewReply.all_objects.filter(review=review).select_related(
+                'created_by', 'parent').order_by(
                 'create_time')
             reviews_data.append({
                 'id': review.id,
@@ -136,7 +152,7 @@ class CourseView(APIView):
                                     'user_option': self.get_user_option(review=review, user=request.user,
                                                                         reply=reviewReply)},
                            'is_deleted': reviewReply.is_deleted, }
-                          for index, reviewReply in enumerate(reviewReplies)]
+                          for index, reviewReply in enumerate(review_replies)]
             })
             reviews_data.sort(key=lambda x: x['created_time'])
         teachers_data = []
