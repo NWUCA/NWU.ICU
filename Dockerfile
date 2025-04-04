@@ -18,7 +18,7 @@ RUN apt-get update && apt-get install -y wget \
     && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml poetry.lock ./
-RUN poetry install
+RUN poetry install --no-root
 
 COPY . .
 

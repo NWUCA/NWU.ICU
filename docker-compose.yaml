@@ -2,7 +2,7 @@ services:
   web:
     build: .
     command: bash -c "
-      poetry install &&
+      poetry install --no-root &&
       poetry run python manage.py migrate &&
       poetry run python manage.py create_super_user &&
       poetry run python manage.py create_init_avatar &&
@@ -53,7 +53,7 @@ services:
   cron:
     build: .
     command: bash -c "
-      poetry install &&
+      poetry install --no-root &&
       echo '0 0 * * * cd /app && poetry run python manage.py update_semester' > /app/crontab &&
       supercronic /app/crontab"
     volumes:
