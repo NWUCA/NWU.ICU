@@ -4,8 +4,8 @@ services:
     command: bash -c "
       poetry install &&
       poetry run python manage.py migrate &&
-      poetry run python manage.py create_super_user -n &&
-      poetry run python manage.py create_init_avatar -n &&
+      poetry run python manage.py create_super_user &&
+      poetry run python manage.py create_init_avatar &&
       poetry run python manage.py createcachetable &&
       poetry run python manage.py runserver 0.0.0.0:8000"
     volumes:
