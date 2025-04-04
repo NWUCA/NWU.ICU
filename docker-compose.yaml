@@ -8,6 +8,7 @@ services:
       poetry run python manage.py create_init_avatar &&
       poetry run python manage.py createcachetable &&
       poetry run python manage.py init_school &&
+      poetry run python manage.py update_semester &&
       poetry run python manage.py runserver 0.0.0.0:8000"
     volumes:
       - .:/app
@@ -46,6 +47,27 @@ services:
       - POSTGRES_DB=${DB_NAME}
       - POSTGRES_USER=${DB_USER}
       - POSTGRES_PASSWORD=${DB_PASSWORD}
+    networks:
+      - app-network
+
+  cron:
+    build: .
+    command: bash -c "
+      poetry install &&
+      echo '0 0 * * * cd /app && poetry run python manage.py update_semester' > /app/crontab &&
+      supercronic /app/crontab"
+    volumes:
+      - .:/app
+    environment:
+      - DJANGO_SETTINGS_MODULE=settings.settings
+      - SECRET_KEY=${SECRET_KEY}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_HOST=db
+      - DB_PORT=5432
+    depends_on:
+      - db
     networks:
       - app-network
 
