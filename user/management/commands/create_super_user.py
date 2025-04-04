@@ -27,5 +27,6 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.WARNING('Operation cancelled.'))
                 return
         super_user = User.objects.create_superuser(id=super_user_id, username=username, email=email, password=password,
-                                                   is_active=True, is_staff=True, is_superuser=True)
+                                                   is_active=True, is_staff=True, is_superuser=True,
+                                                   avatar_uuid=settings.DEFAULT_USER_AVATAR_UUID)
         self.stdout.write(self.style.SUCCESS(f'Successfully created user "{username}", ID is {super_user.id}'))
