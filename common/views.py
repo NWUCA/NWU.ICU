@@ -56,8 +56,11 @@ class BulletinListView(APIView):
         return return_response(contents={"bulletin_list": bulletin_list})
 
 
-def index(request):
-    return render(request, 'index.html')
+class IndexView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        return return_response(contents="you shouldn't be here", status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class TosView(APIView):

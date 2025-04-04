@@ -24,10 +24,9 @@ from common.file.view import (
     FileDeleteView,
 )
 from common.views import (
-    index,
     AboutView,
     CaptchaView,
-    TosView, MessageBoxView, BulletinListView, MessageUnreadView, CourseTeacherSearchView,
+    TosView, MessageBoxView, BulletinListView, MessageUnreadView, CourseTeacherSearchView, IndexView,
 )
 from course_assessment.views import (
     MyReviewView,
@@ -112,7 +111,7 @@ api_patterns = [
 urlpatterns = [
     path('admin/', admin.site.urls),
     # path('silk/', include('silk.urls', namespace='silk')),
-    path('', index, name='homepage'),
+    path('', IndexView.as_view(), name='homepage'),
     path('api/captcha/', include('captcha.urls')),
 
     path('api/', include((api_patterns, 'api'))),
