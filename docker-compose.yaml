@@ -11,7 +11,7 @@ services:
     ports:
       - "127.0.0.1:8000:8000"
     environment:
-      - DJANGO_SETTINGS_MODULE=settings.development
+      - DJANGO_SETTINGS_MODULE=settings.settings
       - SECRET_KEY=${SECRET_KEY}
       - EMAIL_HOST=${EMAIL_HOST}
       - EMAIL_PORT=${EMAIL_PORT}
