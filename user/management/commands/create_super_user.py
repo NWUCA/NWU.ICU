@@ -17,7 +17,7 @@ class Command(BaseCommand):
         email = settings.DEFAULT_SUPER_USER_PASSWORD
         password = settings.DEFAULT_SUPER_USER_PASSWORD
         if User.objects.filter(id=super_user_id).exists():
-            if options['yes']:
+            if not options['yes']:
                 self.stdout.write(self.style.WARNING(f'User with id={super_user_id} already exists, ignore operation'))
                 return
             else:

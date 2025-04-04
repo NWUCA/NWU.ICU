@@ -20,6 +20,9 @@ class Command(BaseCommand):
             print(f"Error: {e}")
             return None
 
+    def add_arguments(self, parser):
+        parser.add_argument('-y', '--yes', action='store_true', help='Automatically confirm overwriting existing user')
+
     def handle(self, *args, **options):
         file_dir = Path(settings.MEDIA_ROOT) / 'default_file'
         file_name_dict = {settings.DEFAULT_USER_AVATAR_FILE_NAME: settings.DEFAULT_USER_AVATAR_UUID,
@@ -33,9 +36,14 @@ class Command(BaseCommand):
                 return
             is_file_exist = UploadedFile.objects.filter(id=uuid).exists()
             if is_file_exist:
-                confirm = input(
-                    f'File {file_name} with uuid={settings.DEFAULT_USER_AVATAR_UUID} already exists, are you '
-                    f'sure you want to overwrite it? (Y/n): ')
+                if not options['yes']:
+                    self.stdout.write(
+                        self.style.WARNING(f'init avatar file already exists, ignore operation'))
+                    return
+                else:
+                    confirm = input(
+                        f'File {file_name} with uuid={settings.DEFAULT_USER_AVATAR_UUID} already exists, are you '
+                        f'sure you want to overwrite it? (Y/n): ')
                 if confirm.lower() == 'n':
                     self.stdout.write(self.style.WARNING('Operation cancelled.'))
                     return
