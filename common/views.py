@@ -4,7 +4,6 @@ import requests
 from captcha.helpers import captcha_image_url
 from captcha.models import CaptchaStore
 from django.db.models import Q
-from django.shortcuts import render
 from rest_framework import status
 from rest_framework.generics import GenericAPIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -63,15 +62,23 @@ class IndexView(APIView):
         return return_response(contents="you shouldn't be here", status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-class TosView(APIView):
+class TextContentView(GenericAPIView):
     permission_classes = [AllowAny]
+    pagination_class = StandardResultsSetPagination
 
-    def get(self, request):
+    def get(self, request, blog_id=None):
         try:
-            tos_content_database = About.objects.order_by('-update_time').get(type="tos")
+            if blog_id is None:
+                blog_items = About.objects.order_by('weight', '-update_time').filter(type="blogs")
+            else:
+                blog_items = About.objects.filter(id=blog_id, type='blogs').order_by('weight', '-update_time')
         except About.DoesNotExist:
-            return return_response(contents={"tos": ""})
-        return return_response(contents={"tos": tos_content_database.content})
+            return return_response(contents={"blogs": []})
+        blogs_page = self.paginate_queryset(blog_items)
+        blog_dict = {'blogs': [
+            {'id': blog.id, 'title': blog.title, 'content': blog.content, 'create_time': blog.create_time,
+             'modify_time': blog.update_time} for blog in blogs_page]}
+        return self.get_paginated_response(blog_dict)
 
 
 class AboutView(APIView):

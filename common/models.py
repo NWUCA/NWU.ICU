@@ -36,11 +36,13 @@ class WebPushSubscription(models.Model):
 class About(models.Model):
     TYPE_CHOICES = [
         ('about', '关于'),
-        ('tos', '服务条款'),
+        ('blogs', '博文'),
     ]
+    title = models.TextField(default='')
     content = models.TextField()
     create_time = models.DateTimeField(auto_now_add=True)
     update_time = models.DateTimeField(auto_now=True)
+    weight = models.IntegerField(default=0)
     type = models.TextField(choices=TYPE_CHOICES, default='about')
 
 
