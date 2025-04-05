@@ -265,8 +265,6 @@ class ProfileView(APIView):
     permission_classes = [CustomPermission]
 
     def get(self, request, user_id=None):
-        if request.user.id is None and user_id is None:
-            return return_response(errors={'user': get_err_msg('not_login')}, status_code=status.HTTP_401_UNAUTHORIZED)
         try:
             profile_user = request.user if user_id is None else User.objects.get(pk=user_id)
         except User.DoesNotExist:
