@@ -26,7 +26,7 @@ from common.file.view import (
 from common.views import (
     AboutView,
     CaptchaView,
-    TosView, MessageBoxView, BulletinListView, MessageUnreadView, CourseTeacherSearchView, IndexView,
+    TextContentView, MessageBoxView, BulletinListView, MessageUnreadView, CourseTeacherSearchView, IndexView,
 )
 from course_assessment.views import (
     MyReviewView,
@@ -95,7 +95,8 @@ api_patterns = [
     path('captcha/', CaptchaView.as_view(), name='captcha'),
 
     # tos
-    path('tos/', TosView.as_view(), name='captcha'),
+    path('blogs/', TextContentView.as_view(), name='blogs'),
+    path('blogs/<int:blog_id>', TextContentView.as_view(), name='blog'),
     path('about/', AboutView.as_view(), name='about'),
     path('bulletins/', BulletinListView.as_view(), name='bulletins'),
 
