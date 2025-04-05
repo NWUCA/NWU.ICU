@@ -203,6 +203,8 @@ class MessageBoxView(GenericAPIView):
                     },
                     'datetime': notice.reply_content.create_time,
                 })
+                notice.read = True
+                notice.save()
         return self.get_paginated_response(notice_list)
 
     def get(self, request, classify, chatter_id=None):

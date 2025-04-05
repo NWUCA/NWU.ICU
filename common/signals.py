@@ -1,7 +1,7 @@
 from django.db.models.signals import post_save
 from django.dispatch import Signal, receiver
 
-from common.models import ChatMessage, ChatLike
+from common.models import ChatMessage, ChatLike, ChatReply
 
 soft_delete_signal = Signal()
 
@@ -28,4 +28,13 @@ def chat_like_handler(sender, instance, **kwargs):
     if chat_item is None:
         return
     chat_item.receiver_unread_count = ChatLike.objects.filter(receiver=chat_item.sender, read=False).count()
+    chat_item.save()
+
+
+@receiver(post_save, sender='common.ChatReply')
+def chat_reply_handler(sender, instance, **kwargs):
+    chat_item = instance.chat_item
+    if chat_item is None:
+        return
+    chat_item.receiver_unread_count = ChatReply.objects.filter(receiver=chat_item.sender, read=False).count()
     chat_item.save()
