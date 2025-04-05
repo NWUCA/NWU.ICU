@@ -72,7 +72,7 @@ class CourseView(APIView):
             likes_query = ReviewAndReplyLike.objects.filter(
                 created_by=user,
                 review__in=reviews
-            ).select_related('review','review_reply')
+            ).select_related('review', 'review_reply')
             for like in likes_query:
                 key = (like.review_id, like.review_reply_id)
                 self.user_likes_cache[key] = like.like
@@ -93,7 +93,7 @@ class CourseView(APIView):
         try:
             course = (Course.objects
                       .select_related('school', 'created_by')
-                      .prefetch_related('teachers', 'semester','teachers__school')
+                      .prefetch_related('teachers', 'semester', 'teachers__school')
                       .get(id=course_id))
         except Course.DoesNotExist:
             return return_response(errors={'course': get_err_msg('course_not_exist')},
@@ -397,10 +397,10 @@ class MyReviewView(GenericAPIView):
         private_key = user.private_review if view_type == 'review' else user.private_reply
         if private_key == 2 and request.user.id != user_id:
             return return_response(errors={'review': get_err_msg(f'{view_type}_private')},
-                                   status_code=status.HTTP_400_BAD_REQUEST)
+                                   status_code=status.HTTP_403_FORBIDDEN)
         if private_key == 1 and request.user.id is None:
-            return return_response(errors={'review': get_err_msg(f'{view_type}_private')},
-                                   status_code=status.HTTP_400_BAD_REQUEST)
+            return return_response(errors={'review': get_err_msg(f'{view_type}_login_private')},
+                                   status_code=status.HTTP_403_FORBIDDEN)
         return user_id
 
     def get(self, request, user_id):
@@ -451,39 +451,37 @@ class MyReviewView(GenericAPIView):
     def build_my_review_list(self, my_review_page, is_me: bool):
         my_review_list = []
         for review in my_review_page:
-            content_history = MyReviewSerializer(review).data
-            tmp_dict = {
-                'id': review.id,
-                'datetime': review.modify_time,
-                'semester': review.semester.name,
-                'course': {
-                    "name": review.course.get_name(),
-                    "id": review.course.id,
+            if is_me or not review.anonymous:
+                content_history = MyReviewSerializer(review).data
+                tmp_dict = {
+                    'id': review.id,
+                    'datetime': review.modify_time,
                     'semester': review.semester.name,
-                },
-                'like': {'like': review.like_count, 'dislike': review.dislike_count},
-                'content': {"current_content": review.content},
-                "teachers": [
-                    {"name": teacher.name, "id": teacher.id}
-                    for teacher in review.course.teachers.all()
-                ],
-                'rating': {
-                    'rating': review.rating,
-                    'difficulty': review.difficulty,
-                    'grade': review.grade,
-                    'homework': review.homework,
-                    'reward': review.reward
+                    'course': {
+                        "name": review.course.get_name(),
+                        "id": review.course.id,
+                        'semester': review.semester.name,
+                    },
+                    'like': {'like': review.like_count, 'dislike': review.dislike_count},
+                    'content': {"current_content": review.content},
+                    "teachers": [
+                        {"name": teacher.name, "id": teacher.id}
+                        for teacher in review.course.teachers.all()
+                    ],
+                    'rating': {
+                        'rating': review.rating,
+                        'difficulty': review.difficulty,
+                        'grade': review.grade,
+                        'homework': review.homework,
+                        'reward': review.reward
+                    }
                 }
-            }
-            if is_me:
-                tmp_dict['anonymous'] = review.anonymous
-                tmp_dict['content']['content_history'] = [
-                    x['content'] for x in content_history['review_history']
-                ]
-            elif review.anonymous:
-                tmp_dict = {}
-            tmp_dict.update({'is_me': is_me})
-            my_review_list.append(tmp_dict)
+                if is_me:
+                    tmp_dict['anonymous'] = review.anonymous
+                    tmp_dict['content']['content_history'] = [
+                        x['content'] for x in content_history['review_history']
+                    ]
+                my_review_list.append(tmp_dict)
         return my_review_list
 
 
