@@ -65,16 +65,14 @@ class CourseView(APIView):
         super().__init__(*args, **kwargs)
         self.user_likes_cache = {}
 
-    def preload_user_likes(self, user, reviews=None, replies=None):
+    def preload_user_likes(self, user, reviews):
         if user.id is None:
             return
         if reviews:
             likes_query = ReviewAndReplyLike.objects.filter(
                 created_by=user,
                 review__in=reviews
-            )
-            if replies:
-                likes_query = likes_query.filter(review_reply__in=replies)
+            ).select_related('review','review_reply')
             for like in likes_query:
                 key = (like.review_id, like.review_reply_id)
                 self.user_likes_cache[key] = like.like
@@ -95,7 +93,7 @@ class CourseView(APIView):
         try:
             course = (Course.objects
                       .select_related('school', 'created_by')
-                      .prefetch_related('teachers', 'semester')
+                      .prefetch_related('teachers', 'semester','teachers__school')
                       .get(id=course_id))
         except Course.DoesNotExist:
             return return_response(errors={'course': get_err_msg('course_not_exist')},
@@ -103,8 +101,7 @@ class CourseView(APIView):
         reviews = (Review.objects.filter(course_id=course_id)
                    .select_related('created_by', 'semester')
                    .order_by('-create_time'))
-        all_replies = ReviewReply.all_objects.filter(review__in=reviews).select_related('created_by', 'parent')
-        self.preload_user_likes(request.user, reviews=reviews, replies=all_replies)
+        self.preload_user_likes(request.user, reviews=reviews)
         try:
             if not request.user.is_anonymous:
                 request_user_review = Review.objects.get(course_id=course_id, created_by=request.user)
@@ -147,10 +144,6 @@ class CourseView(APIView):
                            'created_by': {'id': reviewReply.created_by.id if not reviewReply.is_deleted else 0,
                                           'name': reviewReply.created_by.nickname if not reviewReply.is_deleted else "未知用户",
                                           'avatar': reviewReply.created_by.avatar_uuid if not reviewReply.is_deleted else ""},
-                           'like': {'like': reviewReply.like_count,
-                                    'dislike': reviewReply.dislike_count,
-                                    'user_option': self.get_user_option(review=review, user=request.user,
-                                                                        reply=reviewReply)},
                            'is_deleted': reviewReply.is_deleted, }
                           for index, reviewReply in enumerate(review_replies)]
             })
