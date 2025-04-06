@@ -50,7 +50,7 @@ class RegisterView(APIView):
             logger.info(f'send activation email to {user.id}:{user.email}')
             send_mail(
                 subject=mail_subject,
-                message=f'Hello {user.nickname}, 请访问以下页面来完成账号激活: {active_link}',
+                message=f'Hello {user.username}, 请访问以下页面来完成账号激活: {active_link}',
                 from_email=settings.EMAIL_HOST_USER,
                 recipient_list=[email],
                 html_message=html_message,
