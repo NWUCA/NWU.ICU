@@ -1,9 +1,0 @@
-{% extends "base_course.html" %}
-
-{% block course_content %}
-    <p class="block">目前共有 {{ review_count }} 条评价.
-    共 {{ course.count }} 门课程 </p>
-
-    {% include "review_snippet.html" with reviews=page_obj display_course=True latest_review=True display_name=True %}
-
-{% endblock %}
