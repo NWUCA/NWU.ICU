@@ -14,7 +14,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         super_user_id = int(settings.DEFAULT_SUPER_USER_ID)
         username = settings.DEFAULT_SUPER_USER_USERNAME
-        email = settings.DEFAULT_SUPER_USER_PASSWORD
+        email = settings.DEFAULT_SUPER_USER_EMAIL
         password = settings.DEFAULT_SUPER_USER_PASSWORD
         if User.objects.filter(id=super_user_id).exists():
             if not options['yes']:
