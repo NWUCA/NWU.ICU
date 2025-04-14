@@ -21,6 +21,7 @@ from course_assessment.serializer import MyReviewSerializer, AddReviewSerializer
     CourseLikeSerializer, AddTeacherSerializer, DeleteReviewSerializer
 from user.models import User
 from utils.custom_pagination import StandardResultsSetPagination
+from utils.throttle import CaptchaAnonRateThrottle, CaptchaUserRateThrottle
 from utils.utils import return_response, get_err_msg, get_msg_msg, userUtils
 
 logger = logging.getLogger(__name__)
@@ -60,6 +61,11 @@ class CourseList(GenericAPIView):
 
 class CourseView(APIView):
     permission_classes = [CustomPermission]
+
+    def get_throttles(self):
+        if self.request.method == 'POST':
+            return [CaptchaAnonRateThrottle(), CaptchaUserRateThrottle()]
+        return []
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -237,6 +243,11 @@ class ReviewView(APIView):
     review_history_model = ReviewHistory
     permission_classes = [CustomPermission]
 
+    def get_throttles(self):
+        if self.request.method == 'POST':
+            return [CaptchaAnonRateThrottle(), CaptchaUserRateThrottle()]
+        return []
+
     def put(self, request):
         serializer = AddReviewSerializer(data=request.data)
         if serializer.is_valid():
@@ -312,6 +323,11 @@ class TeacherView(GenericAPIView):
     model = Teacher
     permission_classes = [CustomPermission]
     pagination_class = StandardResultsSetPagination
+
+    def get_throttles(self):
+        if self.request.method == 'POST':
+            return [CaptchaAnonRateThrottle(), CaptchaUserRateThrottle()]
+        return []
 
     def get_teacher_list(self, school=None):
         if school is None:
@@ -488,6 +504,11 @@ class MyReviewView(GenericAPIView):
 class ReviewReplyView(APIView):
     permission_classes = [CustomPermission]
 
+    def get_throttles(self):
+        if self.request.method == 'POST':
+            return [CaptchaAnonRateThrottle(), CaptchaUserRateThrottle()]
+        return []
+
     def get_reply_info(self, reply):
         return {
             "id": reply.id,
@@ -554,6 +575,11 @@ class ReviewReplyView(APIView):
 class ReviewAndReplyLikeView(APIView):
     permission_classes = [CustomPermission]
 
+    def get_throttles(self):
+        if self.request.method == 'POST':
+            return [CaptchaAnonRateThrottle(), CaptchaUserRateThrottle()]
+        return []
+
     def like_dislike_count(self, review_object, review_reply_object):
         if review_reply_object:
             review_reply_object.refresh_from_db()
@@ -596,6 +622,11 @@ class ReviewAndReplyLikeView(APIView):
 
 class CourseLikeView(APIView):
     permission_classes = [CustomPermission]
+
+    def get_throttles(self):
+        if self.request.method == 'POST':
+            return [CaptchaAnonRateThrottle(), CaptchaUserRateThrottle()]
+        return []
 
     @transaction.atomic
     def post(self, request):

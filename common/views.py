@@ -22,7 +22,11 @@ from .serializers import CaptchaSerializer, ChatMessageSerializer, ChatMessageGe
 
 class CaptchaView(APIView):
     permission_classes = [AllowAny]
-    throttle_classes = [CaptchaAnonRateThrottle, CaptchaUserRateThrottle]
+
+    def get_throttles(self):
+        if self.request.method == 'POST':
+            return [CaptchaAnonRateThrottle(), CaptchaUserRateThrottle()]
+        return []
 
     def get(self, request):
         new_key = CaptchaStore.generate_key()
@@ -268,6 +272,11 @@ class MessageUnreadView(APIView):
 
 class CourseTeacherSearchView(APIView):
     permission_classes = [AllowAny]
+
+    def get_throttles(self):
+        if self.request.method == 'POST':
+            return [CaptchaAnonRateThrottle(), CaptchaUserRateThrottle()]
+        return []
 
     def post(self, request):
         serializer = SearchSerializer(data=request.data)

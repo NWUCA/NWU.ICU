@@ -2,8 +2,16 @@ from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 
 
 class CaptchaAnonRateThrottle(AnonRateThrottle):
-    rate = '30/minute'  # 匿名用户每分钟最多请求5次
+    rate = '30/minute'
 
 
 class CaptchaUserRateThrottle(UserRateThrottle):
-    rate = '60/minute'  # 登录用户每分钟最多请求10次
+    rate = '30/minute'
+
+
+class EmailAnonRateThrottle(AnonRateThrottle):
+    rate = '4/minute'
+
+
+class EmailUserRateThrottle(UserRateThrottle):
+    rate = '4/minute'

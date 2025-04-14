@@ -16,6 +16,8 @@ from rest_framework.views import APIView
 
 import utils.utils
 from course_assessment.permissions import CustomPermission
+from utils.throttle import CaptchaAnonRateThrottle, CaptchaUserRateThrottle, EmailAnonRateThrottle, \
+    EmailUserRateThrottle
 from utils.utils import return_response, get_err_msg, get_msg_msg
 from .models import User
 from .serializers import LoginSerializer, PasswordResetMailRequestSerializer, UsernameDuplicationSerializer, \
@@ -28,6 +30,11 @@ logger = logging.getLogger(__name__)
 
 class RegisterView(APIView):
     permission_classes = [AllowAny]
+
+    def get_throttles(self):
+        if self.request.method == 'POST':
+            return [CaptchaAnonRateThrottle(), CaptchaUserRateThrottle()]
+        return []
 
     @staticmethod
     def send_active_email(user: User, request):
@@ -309,6 +316,11 @@ class ProfileView(APIView):
 class BindCollegeEmailView(APIView):
     permission_classes = [IsAuthenticated]
 
+    def get_throttles(self):
+        if self.request.method == 'POST':
+            return [EmailAnonRateThrottle(), EmailUserRateThrottle()]
+        return []
+
     def get(self, request):
         token = request.GET.get('token')
         try:
@@ -337,7 +349,7 @@ class BindCollegeEmailView(APIView):
             cache.set(token, {"id": user.id, 'email': college_email}, timeout=24 * 60 * 60)
             bind_link = request.build_absolute_uri(f'/user/bind-college-email/?token={token}/')
             html_message = render_to_string('password_reset_email.html', {
-                'nickname': user.nickname,
+                'username': user.username,
                 'bind_link': bind_link,
             })
             if settings.DEBUG:
@@ -346,7 +358,7 @@ class BindCollegeEmailView(APIView):
             else:
                 send_mail(
                     subject=mail_subject,
-                    message=f'Hello {user.nickname}, 请访问以下页面来完成邮箱绑定: {bind_link}',
+                    message=f'Hello {user.username}, 请访问以下页面来完成邮箱绑定: {bind_link}',
                     from_email=settings.EMAIL_HOST_USER,
                     recipient_list=[college_email],
                     html_message=html_message,
