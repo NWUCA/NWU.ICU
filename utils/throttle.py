@@ -1,17 +1,20 @@
+import environ
 from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
+
+env = environ.Env()
 
 
 class CaptchaAnonRateThrottle(AnonRateThrottle):
-    rate = '30/minute'
+    rate = env('NORMAL_THROTTLE_NOT_LOGIN', default='30/minute')
 
 
 class CaptchaUserRateThrottle(UserRateThrottle):
-    rate = '30/minute'
+    rate = env('NORMAL_THROTTLE_LOGIN', default='30/minute')
 
 
 class EmailAnonRateThrottle(AnonRateThrottle):
-    rate = '4/minute'
+    rate = env('EMAIL_THROTTLE_NOT_LOGIN', default='2/minute')
 
 
 class EmailUserRateThrottle(UserRateThrottle):
-    rate = '4/minute'
+    rate = env('EMAIL_THROTTLE_LOGIN', default='2/minute')
