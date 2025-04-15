@@ -283,7 +283,7 @@ class ProfileView(APIView):
             "nickname": profile_user.nickname,
             "avatar": profile_user.avatar_uuid,
             'is_me': is_me,
-            'verified': True if profile_user.college_email is not None else False,
+            'verified': profile_user.college_email_verified,
             "date_joined": profile_user.date_joined,
         }
         if is_me:
