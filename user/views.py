@@ -348,7 +348,7 @@ class BindCollegeEmailView(APIView):
             token = default_token_generator.make_token(user)
             cache.set(token, {"id": user.id, 'email': college_email}, timeout=24 * 60 * 60)
             bind_link = request.build_absolute_uri(f'/user/bind-college-email/?token={token}/')
-            html_message = render_to_string('password_reset_email.html', {
+            html_message = render_to_string('bind_nwu_email.html', {
                 'username': user.username,
                 'bind_link': bind_link,
             })
