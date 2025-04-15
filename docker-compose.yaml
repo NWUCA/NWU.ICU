@@ -4,6 +4,7 @@ services:
     command: bash -c "
       poetry install --no-root &&
       poetry run python manage.py migrate &&
+      poetry run python manage.py python manage.py collectstatic &&
       poetry run python manage.py create_super_user &&
       poetry run python manage.py create_init_avatar &&
       poetry run python manage.py createcachetable &&
