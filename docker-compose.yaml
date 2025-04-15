@@ -4,12 +4,12 @@ services:
     command: bash -c "
       poetry install --no-root &&
       poetry run python manage.py migrate &&
-      poetry run python manage.py python manage.py collectstatic &&
       poetry run python manage.py create_super_user &&
       poetry run python manage.py create_init_avatar &&
       poetry run python manage.py createcachetable &&
       poetry run python manage.py init_school &&
       poetry run python manage.py update_semester &&
+      poetry run python manage.py collectstatic &&
       poetry run python manage.py runserver 0.0.0.0:8000"
     volumes:
       - .:/app
