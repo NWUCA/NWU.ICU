@@ -166,7 +166,8 @@ class BindCollegeEmailSerializer(serializers.Serializer):
 
     def validate(self, data):
         email = data.get('college_email')
-        if email.endswith(settings.settings.UNIVERSITY_MAIL_SUFFIX):
+        if email.endswith('@' + settings.settings.UNIVERSITY_TEACHER_MAIL_SUFFIX) or email.endswith(
+                '@' + settings.settings.UNIVERSITY_STUDENT_MAIL_SUFFIX):
             return data
         else:
             raise serializers.ValidationError({'mail': get_err_msg('not_college_email')})
