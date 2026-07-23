@@ -57,6 +57,15 @@ errcode_dict = {
     'send_reset_password_email_error': '发送重置密码邮件错误',
     'private_review_error': '评价隐私错误',
     'private_reply_error': '回复隐私错误',
+    'resource_service_unavailable': '资料服务器暂时无法访问',
+    'resource_service_error': '资料服务器返回异常',
+    'resource_upload_files_required': '请至少上传一个文件',
+    'resource_upload_too_many_files': '一次最多上传20个文件',
+    'resource_upload_path_count_mismatch': '文件路径数量与文件数量不一致',
+    'resource_upload_file_too_large': '单个文件不能超过100MB',
+    'resource_upload_file_type_not_allowed': '包含不支持的文件格式',
+    'resource_upload_invalid_relative_path': '文件相对路径不合法',
+    'resource_upload_duplicate_path': '存在重复的文件相对路径',
 }
 
 message_dict = {

@@ -6,3 +6,5 @@ development.py
 logs/
 *.backup
 .env
+*.zip
+*.md

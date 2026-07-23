@@ -17,11 +17,14 @@ from django.conf import settings
 from django.contrib import admin
 from django.urls import include
 from django.urls import path
+from django.views.generic import RedirectView
 
 from common.file.view import (
     FileDownloadView,
     FileUploadView,
     FileDeleteView,
+    ResourceDirectoryView,
+    ResourceUploadRequestView,
 )
 from common.views import (
     AboutView,
@@ -102,6 +105,8 @@ api_patterns = [
 
     # 文件操作
     path('upload/', FileUploadView.as_view(), name='file-upload'),
+    path('upload/request/', ResourceUploadRequestView.as_view(), name='resource-upload-request'),
+    path('upload/directories/', ResourceDirectoryView.as_view(), name='resource-upload-directories'),
     path('download/<uuid:file_uuid>/', FileDownloadView.as_view(), name='file-download'),
     path('delete/<uuid:id>/', FileDeleteView.as_view(), name='file-delete'),
     # path('update/<uuid:id>/', FileUpdateView.as_view(), name='file-update'),
@@ -110,6 +115,11 @@ api_patterns = [
     path('search/', CourseTeacherSearchView.as_view(), name='search'),
 ]
 urlpatterns = [
+    path(
+        'admin/upload/',
+        RedirectView.as_view(pattern_name='admin:common_resourceuploadrequest_changelist', permanent=False),
+        name='admin-resource-upload',
+    ),
     path('admin/', admin.site.urls),
     # path('silk/', include('silk.urls', namespace='silk')),
     path('', IndexView.as_view(), name='homepage'),
