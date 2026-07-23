@@ -237,6 +237,14 @@ ANONYMOUS_USER_AVATAR_UUID = env('ANONYMOUS_USER_AVATAR_UUID')
 
 # 站外链接
 RESOURCES_WEBSITE_URL = env('RESOURCES_WEBSITE_URL')
+RESOURCE_DIRECTORY_CACHE_FILE = Path(env(
+    'RESOURCE_DIRECTORY_CACHE_FILE',
+    default=str(BASE_DIR / 'data' / 'resource_directories.json'),
+))
+
+# Telegram 通知
+TELEGRAM_BOT_API_TOKEN = env('TELEGRAM_BOT_API_TOKEN', default='')
+TELEGRAM_CHAT_ID = env('TELEGRAM_CHAT_ID', default='')
 
 # 邮箱设置
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'

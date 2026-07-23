@@ -29,6 +29,7 @@ class ResourceUploadRequest(models.Model):
 
     uploaded_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='resource_upload_requests')
     target_path = models.TextField()
+    creates_new_folder = models.BooleanField(default=False)
     status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=STATUS_PENDING, db_index=True)
     total_size = models.BigIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)

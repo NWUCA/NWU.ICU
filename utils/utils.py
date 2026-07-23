@@ -12,6 +12,15 @@ from settings.settings import BASE_DIR
 from utils import constants
 
 
+def format_file_size(size):
+    value = float(size or 0)
+    for unit in ('B', 'KB', 'MB', 'GB', 'TB'):
+        if value < 1024 or unit == 'TB':
+            precision = 0 if unit == 'B' else 2
+            return f'{value:.{precision}f} {unit}'
+        value /= 1024
+
+
 def return_response(message: str = None, errors=None, contents=None, status_code=status.HTTP_200_OK):
     if contents is None:
         contents = {}

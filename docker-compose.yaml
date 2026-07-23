@@ -55,7 +55,7 @@ services:
     build: .
     command: bash -c "
       uv sync --frozen &&
-      echo '0 0 * * * cd /app && uv run --frozen python manage.py update_semester' > /app/crontab &&
+      printf '0 0 * * * cd /app && uv run --frozen python manage.py update_semester\n' > /app/crontab &&
       supercronic /app/crontab"
     volumes:
       - .:/app

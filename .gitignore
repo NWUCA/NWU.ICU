@@ -13,3 +13,10 @@ logs/
 media/uploads/1.webp
 media/uploads/annoymous_avatar_ejQV9py.jpg
 media/uploads/default_avatar_6L9CaNq.jpg
+/media/
+/backup/
+/staticfiles/
+/crontab
+/data/resource_directories.json
+/data/resource_directories.json.lock
+/data/resource_directories.json.*.tmp

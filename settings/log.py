@@ -8,8 +8,9 @@ from django.views.debug import ExceptionReporter
 
 
 class TelegramBotHandler(logging.Handler):
-    def __init__(self):
+    def __init__(self, send_timeout=None):
         super().__init__()
+        self.send_timeout = send_timeout
         self.bot = telebot.TeleBot(settings.TELEGRAM_BOT_API_TOKEN)
         telebot.apihelper.RETRY_ON_ERROR = True
 
@@ -22,7 +23,7 @@ class TelegramBotHandler(logging.Handler):
         # Telegram 限制单条消息的长度, 有必要进行切片发送
         MAX_LENGTH = 4000
         for s in [msg[i : i + MAX_LENGTH] for i in range(0, len(msg), MAX_LENGTH)]:
-            self.bot.send_message(settings.TELEGRAM_CHAT_ID, s)
+            self.bot.send_message(settings.TELEGRAM_CHAT_ID, s, timeout=self.send_timeout)
 
 
 def upload_pastebin_and_send_to_tg(msg):

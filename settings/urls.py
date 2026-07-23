@@ -24,6 +24,7 @@ from common.file.view import (
     FileUploadView,
     FileDeleteView,
     ResourceDirectoryView,
+    ResourceUploadFileDownloadView,
     ResourceUploadRequestView,
 )
 from common.views import (
@@ -106,6 +107,11 @@ api_patterns = [
     # 文件操作
     path('upload/', FileUploadView.as_view(), name='file-upload'),
     path('upload/request/', ResourceUploadRequestView.as_view(), name='resource-upload-request'),
+    path(
+        'upload/request/file/<int:file_id>/download/',
+        ResourceUploadFileDownloadView.as_view(),
+        name='resource-upload-file-download',
+    ),
     path('upload/directories/', ResourceDirectoryView.as_view(), name='resource-upload-directories'),
     path('download/<uuid:file_uuid>/', FileDownloadView.as_view(), name='file-download'),
     path('delete/<uuid:id>/', FileDeleteView.as_view(), name='file-delete'),
