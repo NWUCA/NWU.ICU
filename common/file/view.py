@@ -5,6 +5,7 @@ from pathlib import PurePosixPath
 
 from django.conf import settings
 from django.db import transaction
+from django.db.models import Case, IntegerField, Value, When
 from django.http import Http404, FileResponse
 from rest_framework import status, generics
 from rest_framework.parsers import MultiPartParser, FormParser
@@ -41,13 +42,14 @@ RESOURCE_UPLOAD_ALLOWED_EXTENSIONS = {
 }
 
 
-def build_resource_upload_telegram_message(upload_request):
+def build_resource_upload_telegram_message(upload_request, event='created'):
     file_lines = '\n'.join(
         f'- {item.relative_path} ({format_file_size(item.size)})'
         for item in upload_request.files.all()
     )
+    title = '收到新的资料上传请求' if event == 'created' else '资料上传请求已被用户更新'
     return (
-        f'收到新的资料上传请求 #{upload_request.pk}\n'
+        f'{title} #{upload_request.pk}\n'
         f'用户: {upload_request.uploaded_by.username} (ID: {upload_request.uploaded_by_id})\n'
         f'目标路径: {upload_request.target_path}\n'
         f'总大小: {format_file_size(upload_request.total_size)}\n'
@@ -71,13 +73,48 @@ def send_resource_upload_telegram_notification(upload_request_id, message):
         logger.exception('Failed to send Telegram notification for resource upload request %s', upload_request_id)
 
 
-def enqueue_resource_upload_telegram_notification(upload_request):
-    message = build_resource_upload_telegram_message(upload_request)
+def enqueue_resource_upload_telegram_notification(upload_request, event='created'):
+    message = build_resource_upload_telegram_message(upload_request, event=event)
     resource_upload_notification_executor.submit(
         send_resource_upload_telegram_notification,
         upload_request.pk,
         message,
     )
+
+
+def validate_resource_upload_files(files, relative_paths, reserved_relative_paths=()):
+    if relative_paths and len(relative_paths) != len(files):
+        return None, {'relative_paths': get_err_msg('resource_upload_path_count_mismatch')}
+
+    normalized_paths = []
+    for index, uploaded_file in enumerate(files):
+        if uploaded_file.size > RESOURCE_UPLOAD_MAX_FILE_SIZE:
+            return None, {'files': get_err_msg('resource_upload_file_too_large')}
+        if PurePosixPath(uploaded_file.name).suffix.lower() not in RESOURCE_UPLOAD_ALLOWED_EXTENSIONS:
+            return None, {'files': get_err_msg('resource_upload_file_type_not_allowed')}
+
+        relative_path = relative_paths[index] if relative_paths else uploaded_file.name
+        relative_path = relative_path.strip().replace('\\', '/')
+        normalized_path = posixpath.normpath(relative_path)
+        if normalized_path.startswith('/') or normalized_path in {'.', '..'} or any(
+                part == '..' for part in normalized_path.split('/')):
+            return None, {'relative_paths': get_err_msg('resource_upload_invalid_relative_path')}
+        normalized_paths.append(normalized_path)
+
+    all_relative_paths = [*reserved_relative_paths, *normalized_paths]
+    if len(set(all_relative_paths)) != len(all_relative_paths):
+        return None, {'relative_paths': get_err_msg('resource_upload_duplicate_path')}
+    return normalized_paths, None
+
+
+def delete_resource_upload_files_from_storage(files):
+    for upload_file in files:
+        if not upload_file.file:
+            continue
+        try:
+            upload_file.file.storage.delete(upload_file.file.name)
+        except Exception:
+            logger.exception('Failed to delete resource upload file %s from storage', upload_file.pk)
 
 
 class FileDeleteView(generics.DestroyAPIView):
@@ -171,7 +208,20 @@ class ResourceUploadRequestView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        upload_requests = ResourceUploadRequest.objects.filter(uploaded_by=request.user).prefetch_related('files')
+        upload_requests = (
+            ResourceUploadRequest.objects
+            .filter(uploaded_by=request.user)
+            .annotate(
+                status_order=Case(
+                    When(status=ResourceUploadRequest.STATUS_REJECTED, then=Value(0)),
+                    When(status=ResourceUploadRequest.STATUS_PENDING, then=Value(1)),
+                    default=Value(2),
+                    output_field=IntegerField(),
+                ),
+            )
+            .prefetch_related('files')
+            .order_by('status_order', '-created_at')
+        )
         return return_response(contents={'upload_requests': ResourceUploadRequestSerializer(upload_requests, many=True).data})
 
     def post(self, request):
@@ -190,36 +240,10 @@ class ResourceUploadRequestView(APIView):
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
         relative_paths = request.data.getlist('relative_paths') if hasattr(request.data, 'getlist') else []
-        if relative_paths and len(relative_paths) != len(files):
+        normalized_paths, validation_errors = validate_resource_upload_files(files, relative_paths)
+        if validation_errors:
             return return_response(
-                errors={'relative_paths': get_err_msg('resource_upload_path_count_mismatch')},
-                status_code=status.HTTP_400_BAD_REQUEST,
-            )
-        normalized_paths = []
-        for index, uploaded_file in enumerate(files):
-            if uploaded_file.size > RESOURCE_UPLOAD_MAX_FILE_SIZE:
-                return return_response(
-                    errors={'files': get_err_msg('resource_upload_file_too_large')},
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                )
-            if PurePosixPath(uploaded_file.name).suffix.lower() not in RESOURCE_UPLOAD_ALLOWED_EXTENSIONS:
-                return return_response(
-                    errors={'files': get_err_msg('resource_upload_file_type_not_allowed')},
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                )
-            relative_path = relative_paths[index] if relative_paths else uploaded_file.name
-            relative_path = relative_path.strip().replace('\\', '/')
-            normalized_path = posixpath.normpath(relative_path)
-            if normalized_path.startswith('/') or normalized_path in {'.', '..'} or any(
-                    part == '..' for part in normalized_path.split('/')):
-                return return_response(
-                    errors={'relative_paths': get_err_msg('resource_upload_invalid_relative_path')},
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                )
-            normalized_paths.append(normalized_path)
-        if len(set(normalized_paths)) != len(normalized_paths):
-            return return_response(
-                errors={'relative_paths': get_err_msg('resource_upload_duplicate_path')},
+                errors=validation_errors,
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
         with transaction.atomic():
@@ -245,6 +269,133 @@ class ResourceUploadRequestView(APIView):
         return return_response(
             contents={'upload_request': ResourceUploadRequestSerializer(upload_request).data},
             status_code=status.HTTP_201_CREATED,
+        )
+
+
+class ResourceUploadRequestDetailView(APIView):
+    parser_classes = (MultiPartParser, FormParser)
+    permission_classes = [IsAuthenticated]
+
+    def put(self, request, request_id):
+        path_serializer = ResourceUploadCreateSerializer(data=request.data)
+        if not path_serializer.is_valid():
+            return return_response(errors=path_serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
+
+        files = request.FILES.getlist('files')
+        relative_paths = request.data.getlist('relative_paths') if hasattr(request.data, 'getlist') else []
+        raw_remove_file_ids = request.data.getlist('remove_file_ids') if hasattr(request.data, 'getlist') else []
+        try:
+            remove_file_ids = {int(file_id) for file_id in raw_remove_file_ids}
+        except (TypeError, ValueError):
+            return return_response(
+                errors={'remove_file_ids': get_err_msg('resource_upload_invalid_file_ids')},
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        with transaction.atomic():
+            upload_request = (
+                ResourceUploadRequest.objects
+                .select_for_update()
+                .filter(pk=request_id, uploaded_by=request.user)
+                .first()
+            )
+            if upload_request is None:
+                return return_response(
+                    errors={'upload_request': get_err_msg('resource_upload_not_found')},
+                    status_code=status.HTTP_404_NOT_FOUND,
+                )
+            if upload_request.status not in {
+                ResourceUploadRequest.STATUS_PENDING,
+                ResourceUploadRequest.STATUS_REJECTED,
+            }:
+                return return_response(
+                    errors={'upload_request': get_err_msg('resource_upload_not_editable')},
+                    status_code=status.HTTP_409_CONFLICT,
+                )
+
+            existing_files = list(upload_request.files.select_for_update().all())
+            existing_file_ids = {upload_file.pk for upload_file in existing_files}
+            if not remove_file_ids.issubset(existing_file_ids):
+                return return_response(
+                    errors={'remove_file_ids': get_err_msg('resource_upload_invalid_file_ids')},
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
+
+            removed_files = [
+                upload_file for upload_file in existing_files
+                if upload_file.pk in remove_file_ids
+            ]
+            kept_files = [
+                upload_file for upload_file in existing_files
+                if upload_file.pk not in remove_file_ids
+            ]
+            final_file_count = len(kept_files) + len(files)
+            if final_file_count == 0:
+                return return_response(
+                    errors={'files': get_err_msg('resource_upload_files_required')},
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
+            if final_file_count > RESOURCE_UPLOAD_MAX_FILE_COUNT:
+                return return_response(
+                    errors={'files': get_err_msg('resource_upload_too_many_files')},
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
+
+            normalized_paths, validation_errors = validate_resource_upload_files(
+                files,
+                relative_paths,
+                reserved_relative_paths=[upload_file.relative_path for upload_file in kept_files],
+            )
+            if validation_errors:
+                return return_response(
+                    errors=validation_errors,
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if remove_file_ids:
+                ResourceUploadFile.objects.filter(
+                    upload_request=upload_request,
+                    pk__in=remove_file_ids,
+                ).delete()
+                transaction.on_commit(
+                    lambda deleted_files=removed_files: delete_resource_upload_files_from_storage(deleted_files)
+                )
+
+            ResourceUploadFile.objects.bulk_create([
+                ResourceUploadFile(
+                    upload_request=upload_request,
+                    file=uploaded_file,
+                    original_name=uploaded_file.name,
+                    relative_path=normalized_paths[index],
+                    size=uploaded_file.size,
+                )
+                for index, uploaded_file in enumerate(files)
+            ])
+
+            upload_request.target_path = path_serializer.validated_data['target_path']
+            upload_request.creates_new_folder = bool(path_serializer.validated_data.get('new_folder_name'))
+            upload_request.total_size = (
+                sum(upload_file.size for upload_file in kept_files)
+                + sum(uploaded_file.size for uploaded_file in files)
+            )
+            upload_request.status = ResourceUploadRequest.STATUS_PENDING
+            upload_request.reviewed_at = None
+            upload_request.reviewed_by = None
+            upload_request.rejection_reason = ''
+            upload_request.save(update_fields=(
+                'target_path',
+                'creates_new_folder',
+                'total_size',
+                'status',
+                'reviewed_at',
+                'reviewed_by',
+                'rejection_reason',
+            ))
+
+        upload_request = ResourceUploadRequest.objects.prefetch_related('files').get(pk=upload_request.pk)
+        enqueue_resource_upload_telegram_notification(upload_request, event='updated')
+        return return_response(
+            contents={'upload_request': ResourceUploadRequestSerializer(upload_request).data},
         )
 
 

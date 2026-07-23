@@ -66,6 +66,9 @@ errcode_dict = {
     'resource_upload_file_type_not_allowed': '包含不支持的文件格式',
     'resource_upload_invalid_relative_path': '文件相对路径不合法',
     'resource_upload_duplicate_path': '存在重复的文件相对路径',
+    'resource_upload_not_found': '投稿记录不存在',
+    'resource_upload_not_editable': '只有待审核或已退回的投稿可以编辑',
+    'resource_upload_invalid_file_ids': '要删除的文件不属于该投稿',
 }
 
 message_dict = {
