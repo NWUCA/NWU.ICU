@@ -22,6 +22,7 @@ class CourseTests(APITestCase):
         self.add_course_url = reverse('api:add_course')
         self.course_like_url = reverse('api:course_like')
         self.course_list_url = reverse('api:course_list')
+        self.school_list_url = reverse('api:school')
 
     def test_update_semester(self):
         def season_generator():
@@ -96,4 +97,18 @@ class CourseTests(APITestCase):
         self.assertEqual(course_list_response.data['contents']['total'], 1)
         course_list_response = self.client.get(self.course_list_url + '?course_type=pe')
         self.assertEqual(len(course_list_response.data['contents']['courses']), 0)
+
+    def test_school_list_preserves_fixture_name_and_order(self):
+        response = self.client.get(self.school_list_url)
+        schools = response.data['contents']['schools']
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(schools[0], {
+            'id': 1,
+            'name': '117信息科学与技术学院 (软件学院)',
+        })
+        self.assertEqual(
+            [school['id'] for school in schools],
+            sorted(school['id'] for school in schools),
+        )
         self.assertEqual(course_list_response.data['contents']['total'], 0)

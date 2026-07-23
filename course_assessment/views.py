@@ -198,9 +198,15 @@ class SchoolView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        schools = School.objects.all()
+        schools = School.objects.order_by('id')
         return return_response(
-            contents={'schools': [{'id': school.id, 'name': school.get_name()} for school in schools]}, )
+            contents={
+                'schools': [
+                    {'id': school.id, 'name': school.name}
+                    for school in schools
+                ]
+            },
+        )
 
 
 class LatestReviewView(GenericAPIView):
