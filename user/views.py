@@ -6,8 +6,6 @@ from django.contrib.auth import authenticate, login
 from django.contrib.auth import logout
 from django.contrib.auth.hashers import make_password
 from django.contrib.auth.models import User
-from django.contrib.auth.tokens import default_token_generator
-from django.core.cache import cache
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
 from rest_framework import status
@@ -25,6 +23,7 @@ from .serializers import LoginSerializer, PasswordResetMailRequestSerializer, Us
     PasswordResetWhenLoginSerializer, BindCollegeEmailSerializer, UpdateProfileSerializer, PrivateSerializer
 from .serializers import PasswordResetRequestSerializer
 from .serializers import RegisterSerializer
+from .tokens import UserTokenPurpose, check_user_token, consume_user_token, get_user_token_data, issue_user_token
 
 logger = logging.getLogger(__name__)
 
@@ -41,8 +40,11 @@ class RegisterView(APIView):
     def send_active_email(user: User, request):
         email = user.email
         mail_subject = f'[{settings.WEBSITE_NAME}] 激活邮箱'
-        token = default_token_generator.make_token(user)
-        cache.set(token, {'email': email, 'id': user.id}, timeout=None)
+        token = issue_user_token(
+            user,
+            UserTokenPurpose.ACCOUNT_ACTIVATION,
+            email=email,
+        )
         active_link = request.build_absolute_uri(
             f'/user/activate?token={token}')
         html_message = render_to_string('active_email.html', {
@@ -69,16 +71,21 @@ class RegisterView(APIView):
         token = request.query_params.get('token')
         if token:
             try:
-                user_register_info = cache.get(token)
-                uid = user_register_info['id']
+                user_register_info = get_user_token_data(
+                    token,
+                    UserTokenPurpose.ACCOUNT_ACTIVATION,
+                )
+                uid = user_register_info['user_id']
                 email = user_register_info['email']
                 user = User.objects.get(pk=uid)
 
-                if default_token_generator.check_token(user, token):
+                if not user.is_active and check_user_token(
+                        user, token, UserTokenPurpose.ACCOUNT_ACTIVATION):
                     user.email = email
                     user.is_active = True
                     user.save()
-                    cache.delete(token)
+                    consume_user_token(
+                        user, token, UserTokenPurpose.ACCOUNT_ACTIVATION)
                     return return_response(message=email)
                 else:
                     return return_response(errors={'token': get_err_msg('invalid_token')},
@@ -125,8 +132,11 @@ class PasswordResetView(APIView):
                 return return_response(errors={"email": get_err_msg('user_not_exist')},
                                        status_code=status.HTTP_400_BAD_REQUEST)
 
-            token = default_token_generator.make_token(user)
-            cache.set(token, {'email': email, 'id': user.id}, timeout=60 * 60 * 24)
+            token = issue_user_token(
+                user,
+                UserTokenPurpose.PASSWORD_RESET,
+                email=email,
+            )
             reset_link = (
                 f"{settings.FRONTEND_URL.rstrip('/')}/user/forget-password?"
                 f"{urlencode({'token': token})}"
@@ -160,30 +170,41 @@ class PasswordMailResetView(APIView):  # 点击邮件重置密码链接后
     permission_classes = [AllowAny]
 
     def get(self, request, token):
-        user_info_dict = cache.get(token)
+        user_info_dict = get_user_token_data(
+            token,
+            UserTokenPurpose.PASSWORD_RESET,
+        )
         if user_info_dict is None:
             return return_response(message='no', status_code=HTTP_400_BAD_REQUEST)
-        user = User.objects.get(id=user_info_dict.get('id'))
-        if default_token_generator.check_token(user, token):
-            return return_response(message='ok', status_code=HTTP_200_OK)
-        else:
+        try:
+            user = User.objects.get(id=user_info_dict.get('user_id'))
+        except User.DoesNotExist:
             return return_response(message='no', status_code=HTTP_400_BAD_REQUEST)
+        if user.is_active and check_user_token(
+                user, token, UserTokenPurpose.PASSWORD_RESET):
+            return return_response(message='ok', status_code=HTTP_200_OK)
+        return return_response(message='no', status_code=HTTP_400_BAD_REQUEST)
 
     def post(self, request, token: str):
         serializer = PasswordResetMailRequestSerializer(data=request.data)
         if serializer.is_valid():
             try:
-                user_info_dict = cache.get(token)
+                user_info_dict = get_user_token_data(
+                    token,
+                    UserTokenPurpose.PASSWORD_RESET,
+                )
                 if user_info_dict is None:
                     return return_response(errors={'token': get_err_msg('invalid_token')},
                                            status_code=status.HTTP_401_UNAUTHORIZED)
-                user = User.objects.get(id=user_info_dict.get('id'))
-                token_check = default_token_generator.check_token(user, token)
+                user = User.objects.get(id=user_info_dict.get('user_id'))
+                token_check = user.is_active and check_user_token(
+                    user, token, UserTokenPurpose.PASSWORD_RESET)
                 if token_check:
                     new_password = serializer.validated_data['new_password']
                     user.password = make_password(new_password)
                     user.save()
-                    cache.delete(token)
+                    consume_user_token(
+                        user, token, UserTokenPurpose.PASSWORD_RESET)
                     return return_response(message=get_msg_msg('reset_password_success'))
                 else:
                     return return_response(errors={'token': get_err_msg('invalid_token')},
@@ -330,12 +351,22 @@ class BindCollegeEmailView(APIView):
     def get(self, request):
         token = request.GET.get('token')
         try:
-            user_info_dict = cache.get(token)
-            user = User.objects.get(id=user_info_dict.get('id'))
-            if default_token_generator.check_token(user, token):
+            user_info_dict = get_user_token_data(
+                token,
+                UserTokenPurpose.COLLEGE_EMAIL_BIND,
+            )
+            user = User.objects.get(id=user_info_dict.get('user_id'))
+            token_email = user_info_dict.get('email')
+            if (
+                    user.id == request.user.id
+                    and user.college_email == token_email
+                    and check_user_token(
+                        user, token, UserTokenPurpose.COLLEGE_EMAIL_BIND)
+            ):
                 user.college_email_verified = True
                 user.save()
-                cache.delete(token)
+                consume_user_token(
+                    user, token, UserTokenPurpose.COLLEGE_EMAIL_BIND)
                 return return_response(contents=user_info_dict)
             else:
                 return return_response(message='无效的 token', status_code=HTTP_400_BAD_REQUEST)
@@ -351,9 +382,14 @@ class BindCollegeEmailView(APIView):
             user.college_email_verified = False
             user.save()
             mail_subject = f'[{settings.WEBSITE_NAME}] 绑定{settings.UNIVERSITY_CHINESE_NAME}邮箱'
-            token = default_token_generator.make_token(user)
-            cache.set(token, {"id": user.id, 'email': college_email}, timeout=24 * 60 * 60)
-            bind_link = request.build_absolute_uri(f'/user/bind-college-email/?token={token}/')
+            token = issue_user_token(
+                user,
+                UserTokenPurpose.COLLEGE_EMAIL_BIND,
+                email=college_email,
+            )
+            bind_link = request.build_absolute_uri(
+                f'/user/bind-college-email/?{urlencode({"token": token})}'
+            )
             html_message = render_to_string('bind_nwu_email.html', {
                 'username': user.username,
                 'bind_link': bind_link,

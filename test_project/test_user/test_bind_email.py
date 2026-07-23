@@ -1,3 +1,5 @@
+from urllib.parse import parse_qs, urlparse
+
 from django.conf import settings
 from django.test import override_settings
 from django.urls import reverse
@@ -19,6 +21,11 @@ class BindCollegeEmailTest(APITestCase):
         login_user(self.client)
         response = self.client.post(self.bind_email, self.bind_college_email, format='json')
         self.assertEqual(response.status_code, 200)
+        token = response.data['contents']['token']
+        link_token = parse_qs(
+            urlparse(response.data['contents']['link']).query
+        )['token'][0]
+        self.assertEqual(link_token, token)
 
     def test_bind_college_email_with_invalid_email_suffix(self):
         login_user(self.client)
@@ -39,3 +46,17 @@ class BindCollegeEmailTest(APITestCase):
         token = response.data['contents']['token']
         response = self.client.get(reverse('api:bind-college-email-verify') + f'?token={token}')
         self.assertEqual(response.status_code, 200)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.college_email_verified)
+
+        response = self.client.get(reverse('api:bind-college-email-verify') + f'?token={token}')
+        self.assertEqual(response.status_code, 400)
+
+    def test_bind_token_cannot_reset_password(self):
+        login_user(self.client)
+        response = self.client.post(self.bind_email, self.bind_college_email, format='json')
+        token = response.data['contents']['token']
+
+        response = self.client.get(reverse('api:mail-reset', args=[token]))
+
+        self.assertEqual(response.status_code, 400)

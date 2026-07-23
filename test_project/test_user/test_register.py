@@ -4,6 +4,8 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from test_project.common import create_user
+from user.tokens import UserTokenPurpose, issue_user_token
 from utils.utils import get_msg_msg
 
 
@@ -115,3 +117,21 @@ class ActiveTests(APITestCase):
         token = self.create_account_with_correct_info()
         response = self.client.get(self.url + "?token=" + token)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_password_reset_token_cannot_activate_account(self):
+        user = create_user(
+            username='inactive_user',
+            email='inactive@example.com',
+            is_active=False,
+        )
+        token = issue_user_token(
+            user,
+            UserTokenPurpose.PASSWORD_RESET,
+            email=user.email,
+        )
+
+        response = self.client.get(self.url + '?token=' + token)
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        user.refresh_from_db()
+        self.assertFalse(user.is_active)

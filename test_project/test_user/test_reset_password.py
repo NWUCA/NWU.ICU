@@ -3,6 +3,7 @@ from django.urls import reverse
 from rest_framework.test import APIClient, APITestCase
 
 from test_project.common import user_info, create_user, login_user, check_login_status
+from user.tokens import UserTokenPurpose, issue_user_token
 from utils.constants import errcode_dict
 
 
@@ -49,6 +50,22 @@ class PasswordResetViewTests(APITestCase):
         response = self.client.get(reverse('api:mail-reset', args=[token[::-1]]))
         self.assertEqual(response.status_code, 400)
 
+    def test_activation_token_cannot_reset_password(self):
+        inactive_user = create_user(
+            username='inactive_user',
+            email='inactive@example.com',
+            is_active=False,
+        )
+        token = issue_user_token(
+            inactive_user,
+            UserTokenPurpose.ACCOUNT_ACTIVATION,
+            email=inactive_user.email,
+        )
+
+        response = self.client.get(reverse('api:mail-reset', args=[token]))
+
+        self.assertEqual(response.status_code, 400)
+
     def test_password_reset_success(self):
         token = self.client.post(self.reset_url, self.reset_password_data, format='json').data['contents']['token']
         new_password = "123345aaaA"
@@ -60,6 +77,9 @@ class PasswordResetViewTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.user.refresh_from_db()
         self.assertTrue(self.user.check_password(new_password))
+
+        response = self.client.get(reverse('api:mail-reset', args=[token]))
+        self.assertEqual(response.status_code, 400)
 
     def test_reset_password_via_old_password_when_not_login(self):
         self.assertFalse(check_login_status(self.client))  # 强制登出
