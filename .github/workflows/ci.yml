@@ -19,14 +19,13 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v4
         with:
-          # FIXME:
-          # we are not using setup-python's built-in poetry cache
-          # because of https://github.com/actions/setup-python/issues/374
-          # so for now, we are not cache anything
           python-version: '3.10'
-      - name: Install poetry
-        run: python -m pip install poetry
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version: "0.10.12"
+          enable-cache: true
       - name: create dev settings
         run: cp settings/development.py.sample settings/development.py
-      - run: poetry install
-      - run: poetry run pytest
+      - run: uv sync --frozen
+      - run: uv run --frozen pytest

@@ -1,4 +1,6 @@
 .idea
+.venv/
+.uv-cache/
 *.sqlite3
 *.pyc
 production.py
@@ -8,3 +10,6 @@ logs/
 .env
 *.zip
 *.md
+media/uploads/1.webp
+media/uploads/annoymous_avatar_ejQV9py.jpg
+media/uploads/default_avatar_6L9CaNq.jpg

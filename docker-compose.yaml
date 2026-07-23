@@ -2,15 +2,15 @@ services:
   web:
     build: .
     command: bash -c "
-      poetry install --no-root &&
-      poetry run python manage.py migrate &&
-      poetry run python manage.py create_super_user &&
-      poetry run python manage.py create_init_avatar &&
-      poetry run python manage.py createcachetable &&
-      poetry run python manage.py init_school &&
-      poetry run python manage.py update_semester &&
-      poetry run python manage.py collectstatic --noinput &&
-      poetry run python manage.py runserver 0.0.0.0:8000"
+      uv sync --frozen &&
+      uv run --frozen python manage.py migrate &&
+      uv run --frozen python manage.py create_super_user &&
+      uv run --frozen python manage.py create_init_avatar &&
+      uv run --frozen python manage.py createcachetable &&
+      uv run --frozen python manage.py init_school &&
+      uv run --frozen python manage.py update_semester &&
+      uv run --frozen python manage.py collectstatic --noinput &&
+      uv run --frozen python manage.py runserver 0.0.0.0:8000"
     volumes:
       - .:/app
     ports:
@@ -54,8 +54,8 @@ services:
   cron:
     build: .
     command: bash -c "
-      poetry install --no-root &&
-      echo '0 0 * * * cd /app && poetry run python manage.py update_semester' > /app/crontab &&
+      uv sync --frozen &&
+      echo '0 0 * * * cd /app && uv run --frozen python manage.py update_semester' > /app/crontab &&
       supercronic /app/crontab"
     volumes:
       - .:/app

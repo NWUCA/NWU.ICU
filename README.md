@@ -4,15 +4,15 @@
 
 ## 起步
 
-本项目使用 Django Rest Framework开发, 并使用 poetry 来管理依赖.
+本项目使用 Django Rest Framework开发, 并使用 uv 来管理依赖.
 
 - 安装依赖:
     ```
-    poetry install
+    uv sync
     ```
-- 进入虚拟环境:
+- 在虚拟环境中执行命令:
     ```
-    poetry shell
+    uv run python manage.py <command>
     ```
 - 更改 `settings.py`文件下的DATABASES, 填写PostgreSQL连接信息
 - PostgreSQL需要安装pg_trgm和zhparser插件, 来实现基于拼音的模糊搜索,
@@ -20,11 +20,11 @@
 - 根据 `development.py.sample` 建立 `development.py` 配置文件.
 - 建立数据库:
     ```
-    python manage.py migrate
+    uv run python manage.py migrate
     ```
 - 运行开发服务器:
     ```
-    python manage.py runserver
+    uv run python manage.py runserver
     ```
 
 ## 部署
