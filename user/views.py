@@ -1,4 +1,5 @@
 import logging
+from urllib.parse import urlencode
 
 from django.conf import settings
 from django.contrib.auth import authenticate, login
@@ -126,8 +127,10 @@ class PasswordResetView(APIView):
 
             token = default_token_generator.make_token(user)
             cache.set(token, {'email': email, 'id': user.id}, timeout=60 * 60 * 24)
-            reset_link = request.build_absolute_uri(
-                f'/user/activate?token={token}')
+            reset_link = (
+                f"{settings.FRONTEND_URL.rstrip('/')}/user/forget-password?"
+                f"{urlencode({'token': token})}"
+            )
             mail_subject = f'[{settings.WEBSITE_NAME}] Reset Password / 重置密码'
             html_message = render_to_string('password_reset_email.html', {
                 'user': user,
@@ -135,7 +138,10 @@ class PasswordResetView(APIView):
             })
             if settings.DEBUG:
                 logger.info(f"debug mode not send activation email to {user.id}:{user.email}")
-                return return_response(message='You are in debug mode, so do not send email', contents={"token": token})
+                return return_response(
+                    message='You are in debug mode, so do not send email',
+                    contents={'token': token, 'link': reset_link},
+                )
             else:
                 logger.info(f"send reset password email to {user.id}:{user.email}")
                 send_mail(

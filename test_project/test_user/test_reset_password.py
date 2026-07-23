@@ -6,7 +6,7 @@ from test_project.common import user_info, create_user, login_user, check_login_
 from utils.constants import errcode_dict
 
 
-@override_settings(DEBUG=True)
+@override_settings(DEBUG=True, FRONTEND_URL='https://frontend.example')
 class PasswordResetViewTests(APITestCase):
 
     def setUp(self):
@@ -27,6 +27,12 @@ class PasswordResetViewTests(APITestCase):
     def test_password_reset_via_username_email_success(self):
         response = self.client.post(self.reset_url, self.reset_password_data, format='json')
         self.assertEqual(response.status_code, 200)
+        self.assertTrue(
+            response.data['contents']['link'].startswith(
+                'https://frontend.example/user/forget-password?token='
+            )
+        )
+        self.assertNotIn('/user/activate', response.data['contents']['link'])
 
     def test_password_reset_via_username_email_not_exist(self):
         self.reset_password_data['email'] = 'another@example.com'

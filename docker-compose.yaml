@@ -40,7 +40,7 @@ services:
       - app-network
 
   db:
-    image: abcfy2/zhparser:latest
+    image: abcfy2/zhparser:17
     container_name: pgsql
     volumes:
       - pgdata:/var/lib/postgresql/data
