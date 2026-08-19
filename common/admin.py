@@ -3,17 +3,21 @@ import logging
 from django import forms
 from django.contrib import admin, messages
 from django.contrib.admin.helpers import ActionForm
-from django.core.mail import send_mail
 from django.db.models import Sum
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.html import format_html, format_html_join
 
 from common.file.models import ResourceUploadFile, ResourceUploadRequest
+from common.file.resource_notifications import (
+    RESULT_APPROVED,
+    RESULT_PUBLISH_FAILED,
+    RESULT_REJECTED,
+    notify_resource_upload_result,
+)
 from common.file.resource_publish import ResourcePublishError, publish_resource_upload
-from settings import settings
 from utils.utils import format_file_size
-from .models import Announcement, Bulletin, About, Chat, ChatMessage
+from .models import Announcement, Bulletin, About
 
 
 logger = logging.getLogger(__name__)
@@ -104,7 +108,9 @@ class ResourceUploadRequestAdmin(admin.ModelAdmin):
     @admin.action(description='通过所选的未审核请求')
     def approve_requests(self, request, queryset):
         pending_requests = list(
-            queryset.filter(status=ResourceUploadRequest.STATUS_PENDING).prefetch_related('files')
+            queryset.filter(status=ResourceUploadRequest.STATUS_PENDING)
+            .select_related('uploaded_by')
+            .prefetch_related('files')
         )
         approved_count = 0
         failed_count = 0
@@ -114,9 +120,21 @@ class ResourceUploadRequestAdmin(admin.ModelAdmin):
             except ResourcePublishError as error:
                 failed_count += 1
                 logger.exception('Failed to publish resource upload request %s', upload_request.pk)
+                upload_request.status = ResourceUploadRequest.STATUS_REJECTED
+                upload_request.reviewed_by = request.user
+                upload_request.reviewed_at = timezone.now()
+                upload_request.rejection_reason = f'系统发布时发生错误：{error}'
+                upload_request.save(update_fields=(
+                    'status', 'reviewed_by', 'reviewed_at', 'rejection_reason',
+                ))
+                notify_resource_upload_result(
+                    request.user,
+                    upload_request,
+                    RESULT_PUBLISH_FAILED,
+                )
                 self.message_user(
                     request,
-                    f'请求 #{upload_request.pk} 发布失败，仍保持待审核：{error}',
+                    f'请求 #{upload_request.pk} 发布失败，已退回并通知投稿用户：{error}',
                     messages.ERROR,
                 )
                 continue
@@ -128,6 +146,7 @@ class ResourceUploadRequestAdmin(admin.ModelAdmin):
             upload_request.save(update_fields=(
                 'status', 'reviewed_by', 'reviewed_at', 'rejection_reason',
             ))
+            notify_resource_upload_result(request.user, upload_request, RESULT_APPROVED)
             approved_count += 1
             logger.info(
                 'Published resource upload request %s (%s files)',
@@ -144,7 +163,7 @@ class ResourceUploadRequestAdmin(admin.ModelAdmin):
         if failed_count:
             self.message_user(
                 request,
-                f'{failed_count} 个请求发布失败，均未通过审核。',
+                f'{failed_count} 个请求发布失败，均已退回并通知投稿用户。',
                 messages.WARNING,
             )
 
@@ -164,29 +183,8 @@ class ResourceUploadRequestAdmin(admin.ModelAdmin):
             upload_request.reviewed_at = now
             upload_request.rejection_reason = reason
             upload_request.save(update_fields=('status', 'reviewed_by', 'reviewed_at', 'rejection_reason'))
-            self.notify_rejection(request.user, upload_request)
+            notify_resource_upload_result(request.user, upload_request, RESULT_REJECTED)
         self.message_user(request, f'已拒绝 {len(upload_requests)} 个上传请求。', messages.SUCCESS)
-
-    @staticmethod
-    def notify_rejection(reviewer, upload_request):
-        content = f'你的资料上传请求 #{upload_request.pk} 已被拒绝。理由：{upload_request.rejection_reason}'
-        if reviewer != upload_request.uploaded_by:
-            chat, unused = Chat.get_or_create_chat(
-                sender=reviewer, receiver=upload_request.uploaded_by, classify='user'
-            )
-            ChatMessage.objects.create(content=content, chat_item=chat, created_by=reviewer)
-        recipient = upload_request.uploaded_by.email or upload_request.uploaded_by.college_email
-        if recipient:
-            try:
-                send_mail(
-                    f'{settings.WEBSITE_NAME} 资料上传请求审核结果',
-                    content,
-                    settings.EMAIL_HOST_USER,
-                    [recipient],
-                    fail_silently=False,
-                )
-            except Exception:
-                logger.exception('Failed to send resource upload rejection email to user %s', upload_request.uploaded_by_id)
 
 
 @admin.register(Announcement)

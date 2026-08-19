@@ -3,6 +3,7 @@ import posixpath
 from rest_framework import serializers
 
 from utils.utils import format_file_size
+from .resource_notifications import get_resource_public_url
 from .models import ResourceUploadFile, ResourceUploadRequest, UploadedFile
 
 
@@ -29,12 +30,14 @@ class ResourceUploadRequestSerializer(serializers.ModelSerializer):
     uploaded_by = serializers.SerializerMethodField()
     reviewed_by = serializers.SerializerMethodField()
     total_size_display = serializers.SerializerMethodField()
+    resource_url = serializers.SerializerMethodField()
 
     class Meta:
         model = ResourceUploadRequest
         fields = (
             'id', 'uploaded_by', 'target_path', 'creates_new_folder', 'status', 'total_size', 'total_size_display',
             'files', 'created_at', 'reviewed_at', 'reviewed_by', 'rejection_reason', 'files_deleted_at',
+            'resource_url',
         )
 
     def get_uploaded_by(self, obj):
@@ -47,6 +50,11 @@ class ResourceUploadRequestSerializer(serializers.ModelSerializer):
 
     def get_total_size_display(self, obj):
         return format_file_size(obj.total_size)
+
+    def get_resource_url(self, obj):
+        if obj.status != ResourceUploadRequest.STATUS_APPROVED:
+            return None
+        return get_resource_public_url(obj.target_path)
 
 
 class ResourceUploadCreateSerializer(serializers.Serializer):
