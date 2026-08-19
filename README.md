@@ -44,9 +44,13 @@
 
 1. git clone 本项目
 2. 按照.env.sample新建一个.env文件, 将环境变量值填写
+   - `RESOURCE_STORAGE_HOST_PATH` 必须填写 AList `Local` 存储驱动对应的宿主机物理根目录。审核通过时后端会直接复制投稿文件到该目录；它应当与 AList 中的虚拟根目录 `/` 一一对应。
+   - 非 Docker 启动时，将 `RESOURCE_STORAGE_ROOT` 直接填写为同一物理目录。Docker Compose 会把宿主机目录挂载为容器内的 `/resource-storage`。
 3. cd到项目目录
 4. 执行docker-compose up, 构建并启动容器
 5. 访问http:ip:8000, 看到NWU.ICU界面, 代表启动成功
+
+资源投稿审核采用“先发布、后通过”流程：所有文件复制成功且本地文件树缓存更新成功后才会标记通过；已有同名文件不会被覆盖。投稿暂存原件会保留 30 天，Docker 定时任务每天 03:15 清理到期原件；每天 03:00 会从 AList 物理存储重新导出完整文件树。
 
 ### 注意事项
 

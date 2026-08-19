@@ -10,10 +10,7 @@ from django.utils import timezone
 from django.utils.html import format_html, format_html_join
 
 from common.file.models import ResourceUploadFile, ResourceUploadRequest
-from common.file.resource_directories import (
-    ResourceDirectoryCacheError,
-    add_resource_directory_paths,
-)
+from common.file.resource_publish import ResourcePublishError, publish_resource_upload
 from settings import settings
 from utils.utils import format_file_size
 from .models import Announcement, Bulletin, About, Chat, ChatMessage
@@ -106,31 +103,50 @@ class ResourceUploadRequestAdmin(admin.ModelAdmin):
 
     @admin.action(description='通过所选的未审核请求')
     def approve_requests(self, request, queryset):
-        pending_requests = list(queryset.filter(status=ResourceUploadRequest.STATUS_PENDING))
-        updated = ResourceUploadRequest.objects.filter(
-            pk__in=[upload_request.pk for upload_request in pending_requests]
-        ).update(
-            status=ResourceUploadRequest.STATUS_APPROVED,
-            reviewed_by=request.user,
-            reviewed_at=timezone.now(),
-            rejection_reason='',
+        pending_requests = list(
+            queryset.filter(status=ResourceUploadRequest.STATUS_PENDING).prefetch_related('files')
         )
-        new_directory_paths = [
-            upload_request.target_path
-            for upload_request in pending_requests
-            if upload_request.creates_new_folder
-        ]
-        if new_directory_paths:
+        approved_count = 0
+        failed_count = 0
+        for upload_request in pending_requests:
             try:
-                add_resource_directory_paths(new_directory_paths)
-            except ResourceDirectoryCacheError:
-                logger.exception('Failed to add approved resource upload paths to directory cache')
+                published_entries = publish_resource_upload(upload_request)
+            except ResourcePublishError as error:
+                failed_count += 1
+                logger.exception('Failed to publish resource upload request %s', upload_request.pk)
                 self.message_user(
                     request,
-                    '审核已通过，但本地资源树缓存更新失败，请重新运行资源树导出脚本。',
-                    messages.WARNING,
+                    f'请求 #{upload_request.pk} 发布失败，仍保持待审核：{error}',
+                    messages.ERROR,
                 )
-        self.message_user(request, f'已通过 {updated} 个上传请求。', messages.SUCCESS)
+                continue
+
+            upload_request.status = ResourceUploadRequest.STATUS_APPROVED
+            upload_request.reviewed_by = request.user
+            upload_request.reviewed_at = timezone.now()
+            upload_request.rejection_reason = ''
+            upload_request.save(update_fields=(
+                'status', 'reviewed_by', 'reviewed_at', 'rejection_reason',
+            ))
+            approved_count += 1
+            logger.info(
+                'Published resource upload request %s (%s files)',
+                upload_request.pk,
+                len(published_entries),
+            )
+
+        if approved_count:
+            self.message_user(
+                request,
+                f'已复制文件并通过 {approved_count} 个上传请求。原投稿文件将在 30 天后清理。',
+                messages.SUCCESS,
+            )
+        if failed_count:
+            self.message_user(
+                request,
+                f'{failed_count} 个请求发布失败，均未通过审核。',
+                messages.WARNING,
+            )
 
     @admin.action(description='拒绝所选的未审核请求')
     def reject_requests(self, request, queryset):

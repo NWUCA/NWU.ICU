@@ -193,6 +193,88 @@ def add_resource_directory_paths(paths):
         )
 
 
+def add_resource_file_entries(file_entries, directory_paths=(), storage_root=None):
+    """Atomically merge newly published files and their parent directories into the cache."""
+    normalized_files = []
+    requested_directories = {
+        normalize_directory_path(path)
+        for path in directory_paths
+    }
+    for entry in file_entries:
+        if not isinstance(entry, dict):
+            raise ValueError('文件树条目格式错误')
+        file_path = normalize_directory_path(entry.get('path', ''))
+        if file_path == '/' or entry.get('type') != 'file':
+            raise ValueError('文件树条目路径或类型不合法')
+        normalized_entry = dict(entry)
+        normalized_entry['path'] = file_path
+        normalized_entry['name'] = posixpath.basename(file_path)
+        normalized_files.append(normalized_entry)
+        requested_directories.add(posixpath.dirname(file_path) or '/')
+
+    if not normalized_files:
+        return None
+
+    with resource_directory_cache_lock():
+        try:
+            payload = read_resource_directory_cache()
+            cached_paths = set(payload['paths'])
+            source = payload.get('source')
+            cached_entries = list(payload.get('entries') or [])
+            cached_storage_root = payload.get('storage_root')
+        except ResourceDirectoryCacheError:
+            cached_paths = {'/'}
+            source = settings.RESOURCES_WEBSITE_URL.rstrip('/')
+            cached_entries = []
+            cached_storage_root = None
+
+        for requested_path in requested_directories:
+            current_path = requested_path
+            while current_path != '/':
+                cached_paths.add(current_path)
+                current_path = posixpath.dirname(current_path) or '/'
+        cached_paths.add('/')
+
+        entries_by_path = {
+            entry.get('path'): entry
+            for entry in cached_entries
+            if isinstance(entry, dict) and entry.get('path')
+        }
+        for directory_path in sorted(cached_paths):
+            existing_entry = entries_by_path.get(directory_path)
+            if existing_entry and existing_entry.get('type') != 'directory':
+                raise ResourceDirectoryCacheError(
+                    f'资源树路径与已有文件冲突：{directory_path}'
+                )
+            entries_by_path[directory_path] = existing_entry or {
+                'path': directory_path,
+                'name': '/' if directory_path == '/' else posixpath.basename(directory_path),
+                'type': 'directory',
+                'size': None,
+                'size_display': None,
+                'modified_at': None,
+            }
+
+        for entry in normalized_files:
+            existing_entry = entries_by_path.get(entry['path'])
+            if existing_entry and existing_entry.get('type') == 'directory':
+                raise ResourceDirectoryCacheError(
+                    f'资源树路径与已有目录冲突：{entry["path"]}'
+                )
+            entries_by_path[entry['path']] = entry
+
+        entries = sorted(
+            entries_by_path.values(),
+            key=lambda entry: (entry.get('path', '').casefold(), entry.get('type') != 'directory'),
+        )
+        return write_resource_directory_cache(
+            cached_paths,
+            source=source,
+            entries=entries,
+            storage_root=str(storage_root) if storage_root else cached_storage_root,
+        )
+
+
 def get_cached_child_directories(parent_path):
     parent_path = normalize_directory_path(parent_path)
     payload = read_resource_directory_cache()

@@ -241,6 +241,8 @@ RESOURCE_DIRECTORY_CACHE_FILE = Path(env(
     'RESOURCE_DIRECTORY_CACHE_FILE',
     default=str(BASE_DIR / 'data' / 'resource_directories.json'),
 ))
+_resource_storage_root = env('RESOURCE_STORAGE_ROOT', default='').strip()
+RESOURCE_STORAGE_ROOT = Path(_resource_storage_root) if _resource_storage_root else None
 
 # Telegram 通知
 TELEGRAM_BOT_API_TOKEN = env('TELEGRAM_BOT_API_TOKEN', default='')

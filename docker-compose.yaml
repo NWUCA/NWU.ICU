@@ -13,6 +13,7 @@ services:
       uv run --frozen python manage.py runserver 0.0.0.0:8000"
     volumes:
       - .:/app
+      - ${RESOURCE_STORAGE_HOST_PATH:?请在.env中配置AList本地存储物理目录}:/resource-storage
     ports:
       - "127.0.0.1:8000:8000"
     environment:
@@ -34,6 +35,7 @@ services:
       - UNIVERSITY_ENGLISH_NAME=${UNIVERSITY_ENGLISH_NAME}
       - UNIVERSITY_ENGLISH_ABBREVIATION_NAME=${UNIVERSITY_ENGLISH_ABBREVIATION_NAME}
       - WEBSITE_NAME=${WEBSITE_NAME}
+      - RESOURCE_STORAGE_ROOT=/resource-storage
     depends_on:
       - db
     networks:
@@ -55,10 +57,11 @@ services:
     build: .
     command: bash -c "
       uv sync --frozen &&
-      printf '0 0 * * * cd /app && uv run --frozen python manage.py update_semester\n' > /app/crontab &&
+      printf '0 0 * * * cd /app && uv run --frozen python manage.py update_semester\n0 3 * * * cd /app && uv run --frozen python scripts/export_resource_tree.py --root /resource-storage --output /app/data/resource_directories.json --source https://resour.nwu.icu\n15 3 * * * cd /app && uv run --frozen python manage.py clean_approved_resource_uploads\n' > /app/crontab &&
       supercronic /app/crontab"
     volumes:
       - .:/app
+      - ${RESOURCE_STORAGE_HOST_PATH:?请在.env中配置AList本地存储物理目录}:/resource-storage:ro
     environment:
       - DJANGO_SETTINGS_MODULE=settings.settings
       - SECRET_KEY=${SECRET_KEY}
@@ -67,6 +70,7 @@ services:
       - DB_PASSWORD=${DB_PASSWORD}
       - DB_HOST=db
       - DB_PORT=5432
+      - RESOURCE_STORAGE_ROOT=/resource-storage
     depends_on:
       - db
     networks:
