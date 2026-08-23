@@ -13,7 +13,7 @@ class CaptchaSerializer(serializers.Serializer):
     def validate(self, data):
         captcha_key = data.get('captcha_key')
         captcha_value = data.get('captcha_value')
-        if settings.DEBUG:
+        if settings.CAPTCHA_TEST_MODE:
             return data
         try:
             captcha = CaptchaStore.objects.get(hashkey=captcha_key)
@@ -38,32 +38,25 @@ class AboutSerializer(serializers.Serializer):
 
 class ChatMessageSerializer(serializers.Serializer):
     receiver = serializers.IntegerField()
-    content = serializers.CharField()
-    classify = serializers.CharField(default='user')
-
-    def validate(self, data):
-        classify_list = [message[0] for message in Chat.classify_MESSAGE]
-        if data['classify'] not in classify_list:
-            raise serializers.ValidationError({'classify': get_err_msg('out of range')})
-        if data['classify'] == 'system':
-            raise serializers.ValidationError({'classify': get_err_msg('auth error')})
-        return data
+    content = serializers.CharField(max_length=5000)
+    classify = serializers.ChoiceField(choices=('user',), default='user')
 
 
 class ChatMessageGetSerializer(serializers.Serializer):
-    classify = serializers.CharField()
+    classify = serializers.ChoiceField(choices=tuple(message[0] for message in Chat.classify_MESSAGE))
+    last_message_id = serializers.IntegerField(required=False, min_value=1)
+    order = serializers.ChoiceField(choices=('before', 'after'), required=False, default='before')
 
     def validate(self, data):
-        classify_list = [message[0] for message in Chat.classify_MESSAGE]
-        if data['classify'] not in classify_list:
-            raise serializers.ValidationError({'classify': get_err_msg('out of range')})
+        if data['classify'] != 'user' and ('last_message_id' in data or 'order' in self.initial_data):
+            raise serializers.ValidationError({'classify': get_err_msg('operation_error')})
         return data
 
 
 class SearchSerializer(serializers.Serializer):
-    keyword = serializers.CharField(required=True)
-    page_size = serializers.IntegerField(required=False, default=10)
-    current_page = serializers.IntegerField(required=False, default=1)
+    keyword = serializers.CharField(required=True, max_length=200)
+    page_size = serializers.IntegerField(required=False, default=10, min_value=1, max_value=100)
+    current_page = serializers.IntegerField(required=False, default=1, min_value=1)
     type = serializers.CharField(required=True)
 
     def validate(self, data):

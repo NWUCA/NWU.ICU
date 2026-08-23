@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db import models
+from django.db.models import Q
 from django.db.models import CharField
 
 from user.models import User
@@ -71,6 +72,11 @@ class Chat(models.Model):
             models.UniqueConstraint(
                 fields=['receiver', 'sender', 'classify'],
                 name='unique_chat_pair_reverse',
+            ),
+            models.UniqueConstraint(
+                fields=['receiver', 'classify'],
+                condition=Q(sender__isnull=True),
+                name='unique_system_chat_receiver_classify',
             ),
         ]
 

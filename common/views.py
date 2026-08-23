@@ -1,4 +1,4 @@
-import json
+import logging
 
 import requests
 from captcha.helpers import captcha_image_url
@@ -18,6 +18,8 @@ from utils.throttle import CaptchaAnonRateThrottle, CaptchaUserRateThrottle
 from utils.utils import return_response, get_err_msg, userUtils
 from .models import Bulletin, About, Chat, ChatMessage, ChatLike, ChatReply
 from .serializers import CaptchaSerializer, ChatMessageSerializer, ChatMessageGetSerializer, SearchSerializer
+
+logger = logging.getLogger(__name__)
 
 
 class CaptchaView(APIView):
@@ -100,6 +102,11 @@ class MessageBoxView(GenericAPIView):
     permission_classes = [IsAuthenticated]
     pagination_class = StandardResultsSetPagination
 
+    def get_throttles(self):
+        if self.request.method == 'POST':
+            return [CaptchaUserRateThrottle()]
+        return []
+
     def get_user_message_list(self, request, classify):
         chats = Chat.objects.filter((Q(receiver=request.user) | Q(sender=request.user)) & Q(classify=classify)) \
             .select_related('sender', 'receiver') \
@@ -154,7 +161,11 @@ class MessageBoxView(GenericAPIView):
         return self.get_paginated_response(message_list)
 
     def get_like_notice(self, request):
-        like_notices = ChatLike.objects.filter(receiver=request.user).select_related('raw_post_course')
+        like_notices = (
+            ChatLike.objects.filter(receiver=request.user)
+            .select_related('raw_post_course')
+            .order_by('-latest_like_datetime', '-pk')
+        )
         notice_page = self.paginate_queryset(like_notices)
         notice_list = []
         for notice in notice_page:
@@ -178,9 +189,11 @@ class MessageBoxView(GenericAPIView):
         return self.get_paginated_response(notice_list)
 
     def get_reply_notice(self, request):
-        reply_notices = ChatReply.objects.filter(receiver=request.user).select_related('reply_content',
-                                                                                       'raw_post_course',
-                                                                                       'reply_content__created_by')
+        reply_notices = (
+            ChatReply.objects.filter(receiver=request.user)
+            .select_related('reply_content', 'raw_post_course', 'reply_content__created_by')
+            .order_by('-reply_content__create_time', '-pk')
+        )
         notice_page = self.paginate_queryset(reply_notices)
         notice_list = []
         for notice in notice_page:
@@ -212,7 +225,12 @@ class MessageBoxView(GenericAPIView):
         return self.get_paginated_response(notice_list)
 
     def get(self, request, classify, chatter_id=None):
-        serializer = ChatMessageGetSerializer(data={'classify': classify})
+        serializer_data = {'classify': classify}
+        if request.query_params.get('last_message_id') not in (None, ''):
+            serializer_data['last_message_id'] = request.query_params.get('last_message_id')
+        if request.query_params.get('order') not in (None, ''):
+            serializer_data['order'] = request.query_params.get('order')
+        serializer = ChatMessageGetSerializer(data=serializer_data)
         if serializer.is_valid():
             if chatter_id is None:
                 if classify == 'user':
@@ -225,11 +243,11 @@ class MessageBoxView(GenericAPIView):
             else:
                 try:
                     chat = Chat.get_chat_object(sender=request.user, receiver=User.objects.get(id=chatter_id))
-                except Chat.DoesNotExist:
+                except (Chat.DoesNotExist, User.DoesNotExist):
                     return return_response(errors={'chat': get_err_msg('chat_not_exist')},
                                            status_code=status.HTTP_400_BAD_REQUEST)
-                last_message_id = request.query_params.get('last_message_id', None)
-                order = request.query_params.get('order', None)
+                last_message_id = serializer.validated_data.get('last_message_id')
+                order = serializer.validated_data['order']
                 return self.get_particular_user_message(request, chat, last_message_id, order)
         else:
             return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
@@ -341,13 +359,33 @@ class CourseTeacherSearchView(APIView):
                 'per_page': page_size,
                 'password': '',
             }
-            response = requests.post(base_url + '/api/fs/search', json=json_data)
-            search_result_json = json.loads(response.text)
-            if search_result_json['code'] != 200:
-                return []
+            empty_page = {
+                'total_pages': 0,
+                'current_page': current_page,
+                'has_next': False,
+                'has_previous': current_page > 1,
+                'total_count': 0,
+            }
+            try:
+                response = requests.post(base_url + '/api/fs/search', json=json_data, timeout=5)
+                response.raise_for_status()
+                search_result_json = response.json()
+            except (requests.RequestException, ValueError):
+                logger.exception('Resource search upstream request failed')
+                return empty_page, []
+            result_data = search_result_json.get('data')
+            if search_result_json.get('code') != 200 or not isinstance(result_data, dict):
+                return empty_page, []
+            total = result_data.get('total')
+            content = result_data.get('content')
+            if not isinstance(total, int) or total < 0 or not isinstance(content, list):
+                return empty_page, []
             file_list = []
-            total = search_result_json['data']['total']
-            for file in search_result_json['data']['content']:
+            for file in content:
+                if not isinstance(file, dict) or not {
+                    'name', 'size', 'parent', 'is_dir'
+                }.issubset(file):
+                    continue
                 file_list.append({
                     'name': file['name'],
                     'size': file['size'],

@@ -136,7 +136,9 @@ class Command(BaseCommand):
                 "queryModel.showCount": "500",
                 "queryModel.currentPage": f"{cur_page}",
             }
-            r = requests.post(url, data=data, cookies=cookies).json()
+            response = requests.post(url, data=data, cookies=cookies, timeout=30)
+            response.raise_for_status()
+            r = response.json()
 
             logger.info("Processing courses...")
             pbar = tqdm(r['items'], ncols=100)

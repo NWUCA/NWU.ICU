@@ -1,9 +1,26 @@
-from django.db.models.signals import post_save
+from django.db.models.signals import post_delete, post_save
 from django.dispatch import Signal, receiver
 
-from common.models import ChatMessage, ChatLike, ChatReply
+from common.models import Chat, ChatMessage, ChatLike, ChatReply
 
 soft_delete_signal = Signal()
+
+
+def update_notice_unread_count(instance, notice_model):
+    chat_item = Chat.objects.filter(pk=instance.chat_item_id).first()
+    if chat_item is None:
+        return
+    unread_count = notice_model.objects.filter(
+        chat_item=chat_item,
+        receiver_id=instance.receiver_id,
+        read=False,
+    ).count()
+    if chat_item.sender_id == instance.receiver_id:
+        chat_item.sender_unread_count = unread_count
+        chat_item.save(update_fields=('sender_unread_count',))
+    elif chat_item.receiver_id == instance.receiver_id:
+        chat_item.receiver_unread_count = unread_count
+        chat_item.save(update_fields=('receiver_unread_count',))
 
 
 @receiver(post_save, sender='common.ChatMessage')
@@ -22,19 +39,11 @@ def chat_message_handler(sender, instance, **kwargs):
     chat_item.save()
 
 
-@receiver(post_save, sender='common.ChatLike')
+@receiver([post_save, post_delete], sender='common.ChatLike')
 def chat_like_handler(sender, instance, **kwargs):
-    chat_item = instance.chat_item
-    if chat_item is None:
-        return
-    chat_item.receiver_unread_count = ChatLike.objects.filter(receiver=chat_item.sender, read=False).count()
-    chat_item.save()
+    update_notice_unread_count(instance, ChatLike)
 
 
-@receiver(post_save, sender='common.ChatReply')
+@receiver([post_save, post_delete], sender='common.ChatReply')
 def chat_reply_handler(sender, instance, **kwargs):
-    chat_item = instance.chat_item
-    if chat_item is None:
-        return
-    chat_item.receiver_unread_count = ChatReply.objects.filter(receiver=chat_item.sender, read=False).count()
-    chat_item.save()
+    update_notice_unread_count(instance, ChatReply)

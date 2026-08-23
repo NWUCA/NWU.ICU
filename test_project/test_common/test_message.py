@@ -25,9 +25,9 @@ class MessageTests(APITestCase):
         }
         self.register_url = reverse('api:register')
         self.login_url = reverse('api:login')
-        self.active_url = reverse('api:register')
+        self.active_url = reverse('api:register-activate')
         self.send_message_url = reverse('api:send_message')
-        self.user_profile_url = reverse('api:profile')
+        self.user_profile_url = reverse('api:my_profile')
         self.unread_count_url = reverse('api:unread_message')
         self.client_A = APIClient()
         self.client_B = APIClient()
@@ -35,8 +35,8 @@ class MessageTests(APITestCase):
             'token']
         token_B = self.client_B.post(self.register_url, self.register_userB_data, format='json').data['contents'][
             'token']
-        self.client_A.get(self.active_url + "?token=" + token_A)
-        self.client_B.get(self.active_url + "?token=" + token_B)
+        self.client_A.post(self.active_url, {'token': token_A}, format='json')
+        self.client_B.post(self.active_url, {'token': token_B}, format='json')
         self.client_A.post(self.login_url, self.register_userA_data, format='json')
         self.client_B.post(self.login_url, self.register_userB_data, format='json')
         self.user_A_id = self.client_A.get(self.user_profile_url).data['contents']['id']

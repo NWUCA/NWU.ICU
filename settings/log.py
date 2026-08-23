@@ -27,7 +27,8 @@ class TelegramBotHandler(logging.Handler):
 
 
 def upload_pastebin_and_send_to_tg(msg):
-    r = requests.post('https://paste.coherence.space/api/', data={'content': msg})
+    r = requests.post('https://paste.coherence.space/api/', data={'content': msg}, timeout=5)
+    r.raise_for_status()
     bot = telebot.TeleBot(settings.TELEGRAM_BOT_API_TOKEN)
     bot.send_message(settings.TELEGRAM_CHAT_ID, r.text.strip())
 
