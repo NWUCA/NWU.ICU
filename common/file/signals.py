@@ -65,11 +65,12 @@ def file_handler(sender, instance: UploadedFile, **kwargs):
     if hasattr(instance, '_processed'):
         return
     file_type = instance.file_type
-    if instance.file_size > get_max_file_size(file_type):
+    if file_type in {'avatar', 'img'} and instance.file_size > get_max_file_size(file_type):
         instance.file = compress_image_with_resize(instance.file, get_max_file_size(file_type))
         instance.file_name = instance.file.name
         instance.file_size = instance.file.size
     file_hash = calculate_file_hash(instance.file)
+    instance.file.seek(0)
     instance.file_hash = file_hash
     exist_file = compare_file_hash(file_hash)
     if exist_file is not None:

@@ -170,7 +170,11 @@ class FileUpdateView(generics.UpdateAPIView):
 
             if 'file' in request.FILES:
                 file_obj = request.FILES['file']
-                if file_obj.size > settings.FILE_UPLOAD_SIZE_LIMIT:
+                file_type = request.data.get('file_type', instance.file_type)
+                limit = settings.FILE_UPLOAD_SIZE_LIMIT.get(file_type, 25 * 1024 * 1024)
+                if file_type in {'avatar', 'img'}:
+                    limit = 25 * 1024 * 1024
+                if file_obj.size > limit:
                     return return_response(errors={"file": get_err_msg('file_over_size')},
                                            status_code=status.HTTP_400_BAD_REQUEST)
 

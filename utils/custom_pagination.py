@@ -13,9 +13,9 @@ class StandardResultsSetPagination(PageNumberPagination):
         if page_size is None:
             page_size = request.query_params.get('page_size', self.page_size)
         try:
-            return min(int(page_size), self.max_page_size)
+            return max(1, min(int(page_size), self.max_page_size))
         except (TypeError, ValueError):
-            pass
+            return self.page_size
 
     def get_paginated_response(self, data):
         return return_response(contents={

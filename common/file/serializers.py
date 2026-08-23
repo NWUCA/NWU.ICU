@@ -1,5 +1,8 @@
 import posixpath
+import warnings
 
+from PIL import Image, UnidentifiedImageError
+from django.conf import settings
 from rest_framework import serializers
 
 from utils.utils import format_file_size
@@ -12,6 +15,43 @@ class UploadedFileSerializer(serializers.ModelSerializer):
         model = UploadedFile
         fields = ('id', 'file', 'uploaded_at', 'created_by', 'file_type')
         read_only_fields = ('created_by',)
+
+    def validate(self, attrs):
+        uploaded_file = attrs.get('file')
+        file_type = attrs.get('file_type', getattr(self.instance, 'file_type', 'file'))
+        if uploaded_file is None:
+            return attrs
+
+        final_limit = settings.FILE_UPLOAD_SIZE_LIMIT.get(file_type, 25 * 1024 * 1024)
+        source_limit = 25 * 1024 * 1024 if file_type in {'avatar', 'img'} else final_limit
+        if uploaded_file.size > source_limit:
+            raise serializers.ValidationError({'file': '上传文件超过大小限制'})
+
+        if file_type in {'avatar', 'img'}:
+            if not str(getattr(uploaded_file, 'content_type', '')).startswith('image/'):
+                raise serializers.ValidationError({'file': '上传内容不是有效图片'})
+            try:
+                with warnings.catch_warnings():
+                    warnings.simplefilter('error', Image.DecompressionBombWarning)
+                    image = Image.open(uploaded_file)
+                    image.verify()
+            except (
+                    UnidentifiedImageError,
+                    OSError,
+                    Image.DecompressionBombError,
+                    Image.DecompressionBombWarning,
+            ):
+                raise serializers.ValidationError({'file': '上传内容不是有效图片'})
+            finally:
+                uploaded_file.seek(0)
+        return attrs
+
+    def update(self, instance, validated_data):
+        uploaded_file = validated_data.get('file')
+        if uploaded_file is not None:
+            instance.file_name = uploaded_file.name
+            instance.file_size = uploaded_file.size
+        return super().update(instance, validated_data)
 
 
 class ResourceUploadFileSerializer(serializers.ModelSerializer):

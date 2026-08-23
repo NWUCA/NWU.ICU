@@ -135,7 +135,9 @@ class ResourceUploadRequestTests(APITestCase):
             response['Content-Disposition'],
             'attachment; filename="notes.txt"',
         )
-        response.close()
+        for closer in response._resource_closers:
+            closer()
+        response._resource_closers.clear()
 
     @patch('common.file.view.enqueue_resource_upload_telegram_notification')
     def test_rejected_request_can_remove_add_and_move_files(self, enqueue_notification):
