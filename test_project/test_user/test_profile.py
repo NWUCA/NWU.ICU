@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.test import override_settings
 from django.urls import reverse
 from rest_framework.test import APIClient, APITestCase
@@ -22,6 +23,29 @@ class PasswordResetViewTests(APITestCase):
         self.assertEqual(response.data['contents']['username'], self.user_info_dict['username'])
         self.assertEqual(response.data['contents']['email'], self.user_info_dict['email'])
         self.assertEqual(response.data['contents']['nickname'], self.user_info_dict['nickname'])
+        self.assertEqual(response.data['contents']['uuid'], self.user.uuid)
+        self.assertTrue(response.data['contents']['has_avatar'])
+
+    def test_default_avatar_uses_identicon_metadata(self):
+        self.user.avatar_uuid = settings.DEFAULT_USER_AVATAR_UUID
+        self.user.save(update_fields=('avatar_uuid',))
+        login_user(self.client, self.user_info_dict)
+
+        response = self.client.get(self.profile_url)
+
+        self.assertEqual(response.data['contents']['avatar'], settings.DEFAULT_USER_AVATAR_UUID)
+        self.assertFalse(response.data['contents']['has_avatar'])
+        self.assertEqual(response.data['contents']['uuid'], self.user.uuid)
+
+    def test_users_have_unique_public_uuids(self):
+        second_user = create_user(
+            username='second_user',
+            email='second@example.com',
+            is_active=True,
+        )
+
+        self.assertIsNotNone(self.user.uuid)
+        self.assertNotEqual(self.user.uuid, second_user.uuid)
 
     def test_update_profile(self):
         login_user(self.client, self.user_info_dict)

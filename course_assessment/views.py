@@ -22,7 +22,7 @@ from course_assessment.serializer import MyReviewSerializer, AddReviewSerializer
 from user.models import User
 from utils.custom_pagination import StandardResultsSetPagination
 from utils.throttle import CaptchaAnonRateThrottle, CaptchaUserRateThrottle
-from utils.utils import return_response, get_err_msg, get_msg_msg, userUtils
+from utils.utils import return_response, get_err_msg, get_msg_msg, userUtils, get_user_avatar_info
 
 logger = logging.getLogger(__name__)
 
@@ -141,7 +141,11 @@ class CourseView(APIView):
                            'nickname': get_msg_msg(
                                'anonymous_user_nickname') if review.anonymous else review.created_by.nickname,
                            'avatar': settings.ANONYMOUS_USER_AVATAR_UUID if review.anonymous else review.created_by.avatar_uuid,
-                           'anonymous': review.anonymous},
+                           'anonymous': review.anonymous,
+                           **({} if review.anonymous else {
+                               'uuid': review.created_by.uuid,
+                               'has_avatar': str(review.created_by.avatar_uuid) != str(settings.DEFAULT_USER_AVATAR_UUID),
+                           })},
                 'reply': [{'id': reviewReply.id,
                            'floor_number': index + 1,
                            'content': reviewReply.content if not reviewReply.is_deleted else "内容已删除",
@@ -149,7 +153,8 @@ class CourseView(APIView):
                            'parent': 0 if (reviewReply.parent is None) else reviewReply.parent.id,
                            'created_by': {'id': reviewReply.created_by.id if not reviewReply.is_deleted else 0,
                                           'name': reviewReply.created_by.nickname if not reviewReply.is_deleted else "未知用户",
-                                          'avatar': reviewReply.created_by.avatar_uuid if not reviewReply.is_deleted else ""},
+                                          **(get_user_avatar_info(reviewReply.created_by)
+                                             if not reviewReply.is_deleted else {'avatar': ""})},
                            'like': {'like': reviewReply.like_count,
                                     'dislike': reviewReply.dislike_count,
                                     'user_option': self.get_user_option(

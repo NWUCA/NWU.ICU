@@ -132,4 +132,6 @@ class FileUploadSecurityTests(APITestCase):
         )
 
         self.assertEqual(accepted.status_code, status.HTTP_200_OK)
+        self.assertEqual(accepted.data['contents']['avatar'], own_uuid)
+        self.assertTrue(accepted.data['contents']['has_avatar'])
         self.assertEqual(rejected.status_code, status.HTTP_400_BAD_REQUEST)

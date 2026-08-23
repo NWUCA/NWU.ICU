@@ -12,6 +12,7 @@ class ReviewUserInfoTests(SimpleTestCase):
             anonymous=False,
             created_by=SimpleNamespace(
                 id=2,
+                uuid='3e12d4ee-7abe-4b35-a8b0-d509ef847088',
                 nickname='test user',
                 avatar_uuid='avatar',
                 college_email=(
@@ -34,6 +35,8 @@ class ReviewUserInfoTests(SimpleTestCase):
         )
 
         self.assertTrue(user_info['is_student'])
+        self.assertEqual(user_info['uuid'], self.make_review(verified=True).created_by.uuid)
+        self.assertIn('has_avatar', user_info)
 
     def test_anonymous_review_does_not_expose_student_status(self):
         review = self.make_review(verified=True)
@@ -42,3 +45,5 @@ class ReviewUserInfoTests(SimpleTestCase):
         user_info = userUtils.get_user_info_in_review(review)
 
         self.assertFalse(user_info['is_student'])
+        self.assertNotIn('uuid', user_info)
+        self.assertNotIn('has_avatar', user_info)

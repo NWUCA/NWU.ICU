@@ -1,4 +1,4 @@
-import uuid
+import uuid as uuid_lib
 
 from django.contrib.auth.models import AbstractUser
 from django.db import models
@@ -15,7 +15,8 @@ class User(AbstractUser):
     nickname = models.CharField(max_length=30)
     college_email = models.EmailField(max_length=255, null=True)
     college_email_verified = models.BooleanField(default=False)
-    avatar_uuid = models.UUIDField(default=uuid.uuid4, editable=False)
+    uuid = models.UUIDField(default=uuid_lib.uuid4, unique=True, editable=False)
+    avatar_uuid = models.UUIDField(default=uuid_lib.uuid4, editable=False)
     bio = models.CharField(max_length=255, null=True)
     following = models.ManyToManyField('self', related_name='followers', symmetrical=False)
     followed_courses = models.ManyToManyField('course_assessment.Course', related_name='followCourse', blank=True)

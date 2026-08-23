@@ -15,7 +15,7 @@ from settings import settings
 from user.models import User
 from utils.custom_pagination import StandardResultsSetPagination
 from utils.throttle import CaptchaAnonRateThrottle, CaptchaUserRateThrottle
-from utils.utils import return_response, get_err_msg, userUtils
+from utils.utils import return_response, get_err_msg, userUtils, get_user_avatar_info
 from .models import Bulletin, About, Chat, ChatMessage, ChatLike, ChatReply
 from .serializers import CaptchaSerializer, ChatMessageSerializer, ChatMessageGetSerializer, SearchSerializer
 
@@ -54,7 +54,7 @@ class BulletinListView(APIView):
                 "title": bulletin.title,
                 "content": bulletin.content,
                 "publisher": {"nickname": bulletin.publisher.nickname, 'id': bulletin.publisher.id,
-                              'avatar': bulletin.publisher.avatar_uuid},
+                              **get_user_avatar_info(bulletin.publisher)},
                 "create_time": bulletin.create_time,
                 "update_time": bulletin.update_time,
             })
@@ -116,7 +116,7 @@ class MessageBoxView(GenericAPIView):
         for chat in chats_page:
             chatter = chat.sender if chat.receiver == request.user else chat.receiver
             temp_dict = {
-                'chatter': {'id': chatter.id, 'nickname': chatter.nickname, 'avatar': chatter.avatar_uuid},
+                'chatter': {'id': chatter.id, 'nickname': chatter.nickname, **get_user_avatar_info(chatter)},
                 'last_message': {'id': chat.last_message_id, 'content': chat.last_message_content,
                                  'datetime': chat.last_message_datetime},
                 'unread_count': chat.sender_unread_count if chat.sender == request.user else chat.receiver_unread_count,
@@ -154,7 +154,7 @@ class MessageBoxView(GenericAPIView):
             message_list.append({
                 'id': message.id,
                 'chatter': {'id': message.created_by.id, 'nickname': message.created_by.nickname,
-                            'avatar': message.created_by.avatar_uuid},
+                            **get_user_avatar_info(message.created_by)},
                 'content': message.content,
                 'datetime': message.create_time,
             })
@@ -207,7 +207,7 @@ class MessageBoxView(GenericAPIView):
                     'created_by': {
                         'id': notice.reply_content.created_by.id,
                         'nickname': notice.reply_content.created_by.nickname,
-                        'avatar': notice.reply_content.created_by.avatar_uuid,
+                        **get_user_avatar_info(notice.reply_content.created_by),
                     },
                     'course': {
                         'id': notice.raw_post_course_id,

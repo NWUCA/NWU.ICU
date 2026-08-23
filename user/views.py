@@ -18,7 +18,7 @@ from rest_framework.views import APIView
 import utils.utils
 from utils.throttle import CaptchaAnonRateThrottle, CaptchaUserRateThrottle, EmailAnonRateThrottle, \
     EmailUserRateThrottle, EmailAddressRateThrottle, LoginIPRateThrottle, LoginUsernameRateThrottle
-from utils.utils import return_response, get_err_msg, get_msg_msg
+from utils.utils import return_response, get_err_msg, get_msg_msg, get_user_avatar_info
 from .models import User
 from .serializers import LoginSerializer, PasswordResetMailRequestSerializer, UsernameDuplicationSerializer, \
     PasswordResetWhenLoginSerializer, BindCollegeEmailSerializer, UpdateProfileSerializer, PrivateSerializer
@@ -265,9 +265,9 @@ class Login(APIView):
                     "email": user.email,
                     "date_joined": user.date_joined,
                     "nickname": user.nickname,
-                    "avatar": user.avatar_uuid,
                     "bio": user.bio,
                 }
+                user_info.update(get_user_avatar_info(user))
                 return return_response(contents=user_info)
             else:
                 user = User.objects.filter(username=username).first()
@@ -320,11 +320,11 @@ class ProfileView(APIView):
             "id": profile_user.id,
             "bio": profile_user.bio,
             "nickname": profile_user.nickname,
-            "avatar": profile_user.avatar_uuid,
             'is_me': is_me,
             'verified': profile_user.college_email_verified,
             "date_joined": profile_user.date_joined,
         }
+        user_info.update(get_user_avatar_info(profile_user))
         if is_me:
             user_info.update({
                 "username": profile_user.username,
@@ -344,9 +344,9 @@ class ProfileView(APIView):
             user_info = {
                 "id": user.id,
                 "nickname": user.nickname,
-                "avatar": user.avatar_uuid,
                 "bio": user.bio,
             }
+            user_info.update(get_user_avatar_info(user))
             return return_response(contents=user_info)
         else:
             return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)

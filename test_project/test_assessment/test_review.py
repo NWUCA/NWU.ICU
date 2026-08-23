@@ -63,6 +63,8 @@ class ReviewTests(APITestCase):
         self.assertEqual(add_review_response.data['contents']['review_id'],
                          latest_review_list_response.data['contents']['results'][-1]['id'])
         self.assertEqual(latest_review_list_response.data['contents']['results'][-1]['author']['id'], self.user_id)
+        self.assertEqual(latest_review_list_response.data['contents']['results'][-1]['author']['uuid'], self.user.uuid)
+        self.assertIn('has_avatar', latest_review_list_response.data['contents']['results'][-1]['author'])
         self.assertEqual(latest_review_list_response.data['contents']['count'], 1)
         self.assertEqual(course_response.data['contents']['reviews'][-1]['author']['id'], self.user_id)
         return add_review_response.data['contents']['review_id'], self.course_id
@@ -87,6 +89,8 @@ class ReviewTests(APITestCase):
         self.assertEqual(latest_review_list_response.data['contents']['results'][-1]['author']['id'], -1)
         self.assertEqual(latest_review_list_response.data['contents']['results'][-1]['author']['avatar_uuid'],
                          settings.ANONYMOUS_USER_AVATAR_UUID)
+        self.assertNotIn('uuid', latest_review_list_response.data['contents']['results'][-1]['author'])
+        self.assertNotIn('has_avatar', latest_review_list_response.data['contents']['results'][-1]['author'])
         self.assertEqual(course_response.data['contents']['reviews'][-1]['author']['id'], 1)
         self.assertTrue(course_response.data['contents']['reviews'][-1]['author']['anonymous'])
         self.assertEqual(latest_review_list_response.data['contents']['count'], 1)

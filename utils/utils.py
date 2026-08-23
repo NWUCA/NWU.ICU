@@ -64,6 +64,15 @@ def get_cache_key(cache_key: str):
     return constants.cache_key_dict[cache_key]
 
 
+def get_user_avatar_info(user):
+    """Return the additive public fields needed to render a user's avatar."""
+    return {
+        'uuid': user.uuid,
+        'avatar': user.avatar_uuid,
+        'has_avatar': str(user.avatar_uuid) != str(settings.DEFAULT_USER_AVATAR_UUID),
+    }
+
+
 def custom_exception_handler(exc, context):
     response = exception_handler(exc, context)
 
@@ -79,7 +88,7 @@ def custom_exception_handler(exc, context):
 class userUtils:
     @staticmethod
     def get_user_info_in_review(review: Review):
-        return {
+        user_info = {
             "nickname": get_msg_msg(
                 'anonymous_user_nickname') if review.anonymous else review.created_by.nickname,
             "id": -1 if review.anonymous else review.created_by.id,
@@ -92,6 +101,12 @@ class userUtils:
                     settings.UNIVERSITY_STUDENT_MAIL_SUFFIX)
             )
         }
+        if not review.anonymous:
+            user_info.update({
+                'uuid': review.created_by.uuid,
+                'has_avatar': str(review.created_by.avatar_uuid) != str(settings.DEFAULT_USER_AVATAR_UUID),
+            })
+        return user_info
 
     @staticmethod
     def generate_random_nickname():
