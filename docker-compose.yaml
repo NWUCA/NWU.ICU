@@ -1,18 +1,21 @@
 services:
   web:
     build: .
+    restart: unless-stopped
+    env_file:
+      - .env
     command: bash -c "
-      uv sync --frozen &&
-      uv run --frozen python manage.py migrate &&
-      uv run --frozen python manage.py create_super_user &&
-      uv run --frozen python manage.py create_init_avatar &&
-      uv run --frozen python manage.py createcachetable &&
-      uv run --frozen python manage.py init_school &&
-      uv run --frozen python manage.py update_semester &&
-      uv run --frozen python manage.py collectstatic --noinput &&
-      uv run --frozen python manage.py runserver 0.0.0.0:8000"
+      python manage.py migrate &&
+      python manage.py create_super_user &&
+      python manage.py create_init_avatar &&
+      python manage.py createcachetable &&
+      python manage.py init_school &&
+      python manage.py update_semester &&
+      python manage.py collectstatic --noinput &&
+      gunicorn settings.wsgi:application --bind 0.0.0.0:8000 --workers $${GUNICORN_WORKERS:-3} --timeout $${GUNICORN_TIMEOUT:-60} --access-logfile - --error-logfile -"
     volumes:
-      - .:/app
+      - ${MEDIA_STORAGE_HOST_PATH:-./media}:/app/media
+      - ${RESOURCE_INDEX_HOST_PATH:-./data}:/app/data
       - ${RESOURCE_STORAGE_HOST_PATH:?请在.env中配置AList本地存储物理目录}:/resource-storage
     ports:
       - "127.0.0.1:8000:8000"
@@ -36,31 +39,43 @@ services:
       - UNIVERSITY_ENGLISH_ABBREVIATION_NAME=${UNIVERSITY_ENGLISH_ABBREVIATION_NAME}
       - WEBSITE_NAME=${WEBSITE_NAME}
       - RESOURCE_STORAGE_ROOT=/resource-storage
+      - GUNICORN_WORKERS=${GUNICORN_WORKERS:-3}
+      - GUNICORN_TIMEOUT=${GUNICORN_TIMEOUT:-60}
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     networks:
       - app-network
 
   db:
     image: abcfy2/zhparser:17
     container_name: pgsql
+    restart: unless-stopped
     volumes:
       - pgdata:/var/lib/postgresql/data
     environment:
       - POSTGRES_DB=${DB_NAME}
       - POSTGRES_USER=${DB_USER}
       - POSTGRES_PASSWORD=${DB_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
     networks:
       - app-network
 
   cron:
     build: .
+    restart: unless-stopped
+    env_file:
+      - .env
     command: bash -c "
-      uv sync --frozen &&
-      printf '0 0 * * * cd /app && uv run --frozen python manage.py update_semester\n0 3 * * * cd /app && uv run --frozen python scripts/export_resource_tree.py --root /resource-storage --output /app/data/resource_directories.json --source https://resour.nwu.icu\n15 3 * * * cd /app && uv run --frozen python manage.py clean_approved_resource_uploads\n' > /app/crontab &&
+      printf '0 0 * * * cd /app && python manage.py update_semester\n0 3 * * * cd /app && python scripts/export_resource_tree.py --root /resource-storage --output /app/data/resource_directories.json --source https://resour.nwu.icu\n15 3 * * * cd /app && python manage.py clean_approved_resource_uploads\n' > /app/crontab &&
       supercronic /app/crontab"
     volumes:
-      - .:/app
+      - ${MEDIA_STORAGE_HOST_PATH:-./media}:/app/media
+      - ${RESOURCE_INDEX_HOST_PATH:-./data}:/app/data
       - ${RESOURCE_STORAGE_HOST_PATH:?请在.env中配置AList本地存储物理目录}:/resource-storage:ro
     environment:
       - DJANGO_SETTINGS_MODULE=settings.settings
@@ -72,7 +87,8 @@ services:
       - DB_PORT=5432
       - RESOURCE_STORAGE_ROOT=/resource-storage
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     networks:
       - app-network
 

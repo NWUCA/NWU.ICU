@@ -1,5 +1,15 @@
 .git
+.env
+.env.*
+!.env.sample
 .venv
 .uv-cache
+.pytest_cache
 __pycache__
 *.py[cod]
+settings/development.py
+settings/production.py
+logs
+media
+data
+sql

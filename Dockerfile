@@ -27,6 +27,13 @@ RUN uv sync --frozen
 
 COPY . .
 
+RUN groupadd --gid 10001 app \
+    && useradd --uid 10001 --gid app --create-home --no-log-init app \
+    && mkdir -p /app/data /app/media /app/static \
+    && chown -R app:app /app
+
+USER app
+
 EXPOSE 8000
 
-CMD ["uv", "run", "--frozen", "python", "manage.py", "runserver", "0.0.0.0:8000"]
+CMD ["gunicorn", "settings.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3", "--timeout", "60", "--access-logfile", "-", "--error-logfile", "-"]
