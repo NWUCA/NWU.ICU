@@ -45,8 +45,7 @@ MIDDLEWARE = [
     # 'silk.middleware.SilkyMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
-    # 'django.middleware.csrf.CsrfViewMiddleware',
-    'settings.middle.DisableCSRFMiddleware',
+    'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
@@ -54,8 +53,7 @@ MIDDLEWARE = [
 REST_FRAMEWORK = {
     'EXCEPTION_HANDLER': 'utils.utils.custom_exception_handler',  # 不知道为什么会报黄
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework.authentication.SessionAuthentication',
-        'rest_framework.authentication.BasicAuthentication',
+        'utils.authentication.CSRFSafeSessionAuthentication',
         # 'rest_framework.authentication.TokenAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': (
@@ -185,7 +183,7 @@ LOGGING = {
         },
     },
 }
-SESSION_COOKIE_AGE = 365 * 24 * 60 * 60  # 365 days, in seconds
+SESSION_COOKIE_AGE = 14 * 24 * 60 * 60  # 14 days, in seconds
 
 # 验证码设置
 CAPTCHA_FONT_SIZE = 36
@@ -200,13 +198,27 @@ CAPTCHA_IMAGE_SIZE = (120, 50)
 # 文件上传设置
 FILE_UPLOAD_SIZE_LIMIT = {'avatar': 66 * 1024,
                           'file': 25 * 1024 * 1024,
-                          'img ': 25 * 1024 * 1024}
-
-SESSION_COOKIE_HTTPONLY = False
+                          'img': 25 * 1024 * 1024}
 
 SECRET_KEY = env('SECRET_KEY')
-CAPTCHA_TEST_MODE = env.bool('DEBUG')
 DEBUG = env.bool('DEBUG')
+# django-simple-captcha accepts a universal test answer in test mode. Never
+# permit an environment override to enable it when Django is running in production.
+CAPTCHA_TEST_MODE = DEBUG and env.bool('CAPTCHA_TEST_MODE', default=False)
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SECURE = not DEBUG
+SESSION_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SAMESITE = 'Lax'
+SECURE_SSL_REDIRECT = env.bool('SECURE_SSL_REDIRECT', default=not DEBUG)
+if env.bool('TRUST_X_FORWARDED_PROTO', default=not DEBUG):
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+SECURE_HSTS_SECONDS = env.int('SECURE_HSTS_SECONDS', default=0 if DEBUG else 3600)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = env.bool('SECURE_HSTS_INCLUDE_SUBDOMAINS', default=False)
+SECURE_HSTS_PRELOAD = env.bool('SECURE_HSTS_PRELOAD', default=False)
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_REFERRER_POLICY = 'no-referrer'
+SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin'
 ALLOWED_HOSTS = env('ALLOWED_HOSTS').split(',')
 
 UNIVERSITY_MAIL_SUFFIX = env('UNIVERSITY_MAIL_SUFFIX')

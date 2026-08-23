@@ -102,6 +102,7 @@ class ActiveTests(APITestCase):
             "captcha_value": "PASSED"
         }
         self.url = reverse('api:register')
+        self.activation_url = reverse('api:register-activate')
 
     def create_account_with_correct_info(self):
         response = self.client.post(self.url, self.register_data, format='json')
@@ -110,12 +111,16 @@ class ActiveTests(APITestCase):
         return response.data['contents']['token']
 
     def test_wrong_token(self):
-        response = self.client.get(self.url + '?token=cddi53-499d34fb09b1d8004411c6215f34a8a4')
+        response = self.client.post(
+            self.activation_url,
+            {'token': 'cddi53-499d34fb09b1d8004411c6215f34a8a4'},
+            format='json',
+        )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_correct_token(self):
         token = self.create_account_with_correct_info()
-        response = self.client.get(self.url + "?token=" + token)
+        response = self.client.post(self.activation_url, {'token': token}, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_password_reset_token_cannot_activate_account(self):
@@ -130,7 +135,30 @@ class ActiveTests(APITestCase):
             email=user.email,
         )
 
-        response = self.client.get(self.url + '?token=' + token)
+        response = self.client.post(
+            self.activation_url, {'token': token}, format='json'
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        user.refresh_from_db()
+        self.assertFalse(user.is_active)
+
+    def test_college_email_bind_token_cannot_activate_account(self):
+        user = create_user(
+            username='inactive_user',
+            email='inactive@example.com',
+            is_active=False,
+            college_email='student@' + settings.UNIVERSITY_MAIL_SUFFIX,
+        )
+        token = issue_user_token(
+            user,
+            UserTokenPurpose.COLLEGE_EMAIL_BIND,
+            email=user.college_email,
+        )
+
+        response = self.client.post(
+            self.activation_url, {'token': token}, format='json'
+        )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         user.refresh_from_db()

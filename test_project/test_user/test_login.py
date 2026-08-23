@@ -19,6 +19,7 @@ class LoginTests(APITestCase):
             'password': self.register_data['password'],
         }
         self.register_url = reverse('api:register')
+        self.activation_url = reverse('api:register-activate')
         self.login_url = reverse('api:login')
         self.logout_url = reverse('api:logout')
         self.active_url = reverse('api:active')
@@ -29,7 +30,7 @@ class LoginTests(APITestCase):
 
     def create_account_with_active(self):
         token = self.create_account_without_active()
-        response = self.client.get(self.register_url + "?token=" + token)
+        self.client.post(self.activation_url, {'token': token}, format='json')
 
     def test_login_without_active(self):
         self.create_account_without_active()
@@ -83,5 +84,7 @@ class LoginTests(APITestCase):
 
     def test_active_account_with_wrong_token(self):
         token = self.create_account_without_active()
-        response = self.client.get(self.register_url + "?token=" + token[::-1])
+        response = self.client.post(
+            self.activation_url, {'token': token[::-1]}, format='json'
+        )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)

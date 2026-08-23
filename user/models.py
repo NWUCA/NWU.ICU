@@ -2,6 +2,7 @@ import uuid
 
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from django.db.models.functions import Lower
 
 
 class User(AbstractUser):
@@ -21,6 +22,15 @@ class User(AbstractUser):
     private_review = models.IntegerField(choices=PRIVATE_CHOICES, default=0)
     private_reply = models.IntegerField(choices=PRIVATE_CHOICES, default=0)
     REQUIRED_FIELDS = []
+
+    class Meta(AbstractUser.Meta):
+        constraints = [
+            models.UniqueConstraint(
+                Lower('college_email'),
+                condition=models.Q(college_email_verified=True, college_email__isnull=False),
+                name='unique_verified_college_email_ci',
+            ),
+        ]
 
     @property
     def following_count(self):

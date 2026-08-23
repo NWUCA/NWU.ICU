@@ -46,9 +46,11 @@ from user.views import (
     Login,
     Logout,
     UsernameDuplicationView,
-    RegisterView,
+    RegisterView, AccountActivationView,
     PasswordResetView,
-    PasswordMailResetView, ProfileView, PasswordResetWhenLoginView, BindCollegeEmailView, ActiveUser, PrivateView,
+    PasswordMailResetView, PasswordMailResetVerifyView, ProfileView, PasswordResetWhenLoginView,
+    BindCollegeEmailView, VerifyCollegeEmailView, ActiveUser, PrivateView,
+    CsrfTokenView,
 )
 
 api_patterns = [
@@ -75,16 +77,19 @@ api_patterns = [
 
     # 用户
     path('user/login/', Login.as_view(), name='login'),
+    path('user/csrf/', CsrfTokenView.as_view(), name='csrf-token'),
     path('user/profile/<int:user_id>/', ProfileView.as_view(), name='profile'),
     path('user/profile/', ProfileView.as_view(), name='my_profile'),
     path('user/logout/', Logout.as_view(), name='logout'),
     path('user/register/', RegisterView.as_view(), name='register'),
+    path('user/register/activate/', AccountActivationView.as_view(), name='register-activate'),
     path('user/active/', ActiveUser.as_view(), name='active'),
     path('user/username/', UsernameDuplicationView.as_view(), name='username'),
     path('user/reset/', PasswordResetView.as_view(), name='reset'),
-    path('user/mail-reset/<str:token>/', PasswordMailResetView.as_view(), name='mail-reset'),
+    path('user/mail-reset/', PasswordMailResetView.as_view(), name='mail-reset'),
+    path('user/mail-reset/verify/', PasswordMailResetVerifyView.as_view(), name='mail-reset-verify'),
     path('user/reset-login/', PasswordResetWhenLoginView.as_view(), name='reset-login'),  # 通过旧密码在登录时重置密码
-    path('user/bind-college-email/verify/', BindCollegeEmailView.as_view(),
+    path('user/bind-college-email/verify/', VerifyCollegeEmailView.as_view(),
          name='bind-college-email-verify'),
     path('user/bind-college-email/bind/', BindCollegeEmailView.as_view(),
          name='bind-college-email-bind'),

@@ -2,6 +2,7 @@ import re
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
+from django.db.models import Q
 from rest_framework import serializers
 from soupsieve.util import lower
 
@@ -66,11 +67,12 @@ class RegisterSerializer(serializers.ModelSerializer):
 
         user_model = self.Meta.model
         username = data.get('username')
-        email = data.get('email')
+        email = data.get('email').strip().lower()
+        data['email'] = email
         username_checker(username)
         if lower(email).endswith(settings.settings.UNIVERSITY_MAIL_SUFFIX):
             raise serializers.ValidationError({"email": get_err_msg('invalid_college_email')})
-        if user_model.objects.filter(email=email).exists():
+        if user_model.objects.filter(email__iexact=email).exists():
             raise serializers.ValidationError({'email': get_err_msg('email_duplicate')})
 
         password = data.get('password')
@@ -165,12 +167,20 @@ class BindCollegeEmailSerializer(serializers.Serializer):
     college_email = serializers.EmailField(required=True)
 
     def validate(self, data):
-        email = data.get('college_email')
-        if email.endswith('@' + settings.settings.UNIVERSITY_TEACHER_MAIL_SUFFIX) or email.endswith(
-                '@' + settings.settings.UNIVERSITY_STUDENT_MAIL_SUFFIX):
-            return data
-        else:
+        email = data.get('college_email').strip().lower()
+        if not (
+                email.endswith('@' + settings.settings.UNIVERSITY_TEACHER_MAIL_SUFFIX.lower())
+                or email.endswith('@' + settings.settings.UNIVERSITY_STUDENT_MAIL_SUFFIX.lower())
+        ):
             raise serializers.ValidationError({'mail': get_err_msg('not_college_email')})
+        current_user = self.context['request'].user
+        if User.objects.filter(
+                college_email__iexact=email,
+                college_email_verified=True,
+        ).exclude(pk=current_user.pk).exists():
+            raise serializers.ValidationError({'college_email': get_err_msg('email_duplicate')})
+        data['college_email'] = email
+        return data
 
 
 class UpdateProfileSerializer(serializers.Serializer):
@@ -179,11 +189,21 @@ class UpdateProfileSerializer(serializers.Serializer):
     bio = serializers.CharField(required=False, allow_null=True, max_length=255)
 
     def validate(self, data):
-        if 'avatar' in data:
+        if 'avatar_uuid' in data:
             try:
-                UploadedFile.objects.get(id=data['avatar'], file_type='avatar')
+                request_user = self.context['request'].user
+                allowed_shared_avatars = {
+                    settings.settings.DEFAULT_USER_AVATAR_UUID,
+                    settings.settings.ANONYMOUS_USER_AVATAR_UUID,
+                }
+                avatar = UploadedFile.objects.get(
+                    Q(created_by=request_user) | Q(id__in=allowed_shared_avatars),
+                    id=data['avatar_uuid'],
+                    file_type='avatar',
+                )
+                data['avatar_uuid'] = avatar.id
             except (UploadedFile.DoesNotExist, ValidationError):
-                raise serializers.ValidationError({'avatar': get_err_msg('avatar_uuid_error')})
+                raise serializers.ValidationError({'avatar_uuid': get_err_msg('avatar_uuid_error')})
         if 'nickname' in data:
             if not (2 <= len(data['nickname']) <= 30):
                 raise serializers.ValidationError({'nickname': get_err_msg('nickname_not_match_length')})

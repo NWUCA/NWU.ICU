@@ -30,7 +30,7 @@ class PasswordResetViewTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(
             response.data['contents']['link'].startswith(
-                'https://frontend.example/user/forget-password?token='
+                'https://frontend.example/user/forget-password#token='
             )
         )
         self.assertNotIn('/user/activate', response.data['contents']['link'])
@@ -38,16 +38,21 @@ class PasswordResetViewTests(APITestCase):
     def test_password_reset_via_username_email_not_exist(self):
         self.reset_password_data['email'] = 'another@example.com'
         response = self.client.post(self.reset_url, self.reset_password_data, format='json')
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['contents'], {})
 
     def test_password_reset_via_email_token(self):
         token = self.client.post(self.reset_url, self.reset_password_data, format='json').data['contents']['token']
-        response = self.client.get(reverse('api:mail-reset', args=[token]))
+        response = self.client.post(
+            reverse('api:mail-reset-verify'), {'token': token}, format='json'
+        )
         self.assertEqual(response.status_code, 200)
 
     def test_password_reset_via_email_wrong_token(self):
         token = self.client.post(self.reset_url, self.reset_password_data, format='json').data['contents']['token']
-        response = self.client.get(reverse('api:mail-reset', args=[token[::-1]]))
+        response = self.client.post(
+            reverse('api:mail-reset-verify'), {'token': token[::-1]}, format='json'
+        )
         self.assertEqual(response.status_code, 400)
 
     def test_activation_token_cannot_reset_password(self):
@@ -62,7 +67,9 @@ class PasswordResetViewTests(APITestCase):
             email=inactive_user.email,
         )
 
-        response = self.client.get(reverse('api:mail-reset', args=[token]))
+        response = self.client.post(
+            reverse('api:mail-reset-verify'), {'token': token}, format='json'
+        )
 
         self.assertEqual(response.status_code, 400)
 
@@ -72,13 +79,16 @@ class PasswordResetViewTests(APITestCase):
         reset_new_password_data = {"new_password": new_password,
                                    "confirm_password": new_password,
                                    "captcha_key": "12",
-                                   "captcha_value": "123"}
-        response = self.client.post(reverse('api:mail-reset', args=[token]), reset_new_password_data, format='json')
+                                   "captcha_value": "123",
+                                   "token": token}
+        response = self.client.post(reverse('api:mail-reset'), reset_new_password_data, format='json')
         self.assertEqual(response.status_code, 200)
         self.user.refresh_from_db()
         self.assertTrue(self.user.check_password(new_password))
 
-        response = self.client.get(reverse('api:mail-reset', args=[token]))
+        response = self.client.post(
+            reverse('api:mail-reset-verify'), {'token': token}, format='json'
+        )
         self.assertEqual(response.status_code, 400)
 
     def test_reset_password_via_old_password_when_not_login(self):

@@ -25,5 +25,5 @@ def login_user(client, user_info_dict=None):
 
 
 def check_login_status(client):
-    response = client.get(reverse('api:profile'))
+    response = client.get(reverse('api:my_profile'))
     return response.status_code == 200

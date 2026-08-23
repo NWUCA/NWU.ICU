@@ -13,7 +13,7 @@ class PasswordResetViewTests(APITestCase):
         self.client = APIClient()
         self.user = create_user(is_active=True)
         self.user_info_dict = user_info()
-        self.profile_url = reverse('api:profile')
+        self.profile_url = reverse('api:my_profile')
 
     def test_user_profile(self):
         login_user(self.client, self.user_info_dict)
@@ -25,14 +25,12 @@ class PasswordResetViewTests(APITestCase):
 
     def test_update_profile(self):
         login_user(self.client, self.user_info_dict)
-        new_user_info_dict = {"username": 'new_username',
-                              "nickname": 'new_nickname',
+        new_user_info_dict = {"nickname": 'new_nickname',
                               "bio": 'new_bio',
                               }
         response = self.client.post(self.profile_url, new_user_info_dict, format='json')
         self.assertEqual(response.status_code, 200)
         self.user.refresh_from_db()
-        self.assertEqual(self.user.username, new_user_info_dict['username'])
         self.assertEqual(self.user.nickname, new_user_info_dict['nickname'])
         self.assertEqual(self.user.bio, new_user_info_dict['bio'])
 
@@ -41,10 +39,10 @@ class PasswordResetViewTests(APITestCase):
         new_user_info_dict = {"username": 'new_username',
                               "nickname": 'new_nickname',
                               "bio": 'new_bio',
-                              'avatar': 'wrong_uuid'
+                              'avatar_uuid': 'wrong_uuid'
                               }
         response = self.client.post(self.profile_url, new_user_info_dict, format='json')
         self.assertEqual(response.status_code, 400)
-        self.assertIn('avatar', response.data['errors'][-1]['field'])
+        self.assertIn('avatar_uuid', response.data['errors'][-1]['field'])
         self.assertIn('avatar_uuid_error', response.data['errors'][-1]['err_code'])
         self.assertEqual(errcode_dict['avatar_uuid_error'], response.data['errors'][-1]['err_msg'])
