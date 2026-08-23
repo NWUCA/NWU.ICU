@@ -174,7 +174,25 @@ class ReviewAndReplyLike(models.Model):
     review = models.ForeignKey(Review, on_delete=models.CASCADE)
     create_time = models.DateTimeField(auto_now_add=True)
     created_by = models.ForeignKey(User, on_delete=models.CASCADE)
-    like = models.SmallIntegerField(default=0, null=True)
+    like = models.SmallIntegerField(default=1)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=('review', 'created_by'),
+                condition=models.Q(review_reply__isnull=True),
+                name='unique_review_like_per_user',
+            ),
+            models.UniqueConstraint(
+                fields=('review_reply', 'created_by'),
+                condition=models.Q(review_reply__isnull=False),
+                name='unique_reply_like_per_user',
+            ),
+            models.CheckConstraint(
+                check=models.Q(like__in=(-1, 1)),
+                name='valid_review_reply_like_value',
+            ),
+        ]
 
 
 class CourseLike(models.Model):

@@ -93,10 +93,11 @@ class CourseTests(APITestCase):
     def test_course_list(self):
         self.test_add_course()
         course_list_response = self.client.get(self.course_list_url)
-        self.assertEqual(len(course_list_response.data['contents']['courses']), 1)
-        self.assertEqual(course_list_response.data['contents']['total'], 1)
+        self.assertEqual(len(course_list_response.data['contents']['results']), 1)
+        self.assertEqual(course_list_response.data['contents']['count'], 1)
         course_list_response = self.client.get(self.course_list_url + '?course_type=pe')
-        self.assertEqual(len(course_list_response.data['contents']['courses']), 0)
+        self.assertEqual(len(course_list_response.data['contents']['results']), 0)
+        self.assertEqual(course_list_response.data['contents']['count'], 0)
 
     def test_school_list_preserves_fixture_name_and_order(self):
         response = self.client.get(self.school_list_url)
@@ -111,4 +112,3 @@ class CourseTests(APITestCase):
             [school['id'] for school in schools],
             sorted(school['id'] for school in schools),
         )
-        self.assertEqual(course_list_response.data['contents']['total'], 0)

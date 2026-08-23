@@ -51,15 +51,25 @@ def update_course_normalized_avg_rating(sender, instance, **kwargs):
 def update_review_reply_like_dislike_counts(instance):
     if instance.review and instance.review_reply is None:
         review = instance.review
-        review.like_count = ReviewAndReplyLike.objects.filter(review=review, review_reply=None, like=1).count()
-        review.dislike_count = ReviewAndReplyLike.objects.filter(review=review, review_reply=None, like=-1).count()
-        review.save()
+        like_count = ReviewAndReplyLike.objects.filter(review=review, review_reply=None, like=1).count()
+        dislike_count = ReviewAndReplyLike.objects.filter(review=review, review_reply=None, like=-1).count()
+        Review.all_objects.filter(pk=review.pk).update(
+            like_count=like_count,
+            dislike_count=dislike_count,
+        )
+        review.like_count = like_count
+        review.dislike_count = dislike_count
 
     if instance.review_reply is not None:
         review_reply = instance.review_reply
-        review_reply.like_count = ReviewAndReplyLike.objects.filter(review_reply=review_reply, like=1).count()
-        review_reply.dislike_count = ReviewAndReplyLike.objects.filter(review_reply=review_reply, like=-1).count()
-        review_reply.save()
+        like_count = ReviewAndReplyLike.objects.filter(review_reply=review_reply, like=1).count()
+        dislike_count = ReviewAndReplyLike.objects.filter(review_reply=review_reply, like=-1).count()
+        ReviewReply.all_objects.filter(pk=review_reply.pk).update(
+            like_count=like_count,
+            dislike_count=dislike_count,
+        )
+        review_reply.like_count = like_count
+        review_reply.dislike_count = dislike_count
 
 
 def update_course_like_dislike_counts(instance):
@@ -86,11 +96,22 @@ def update_chat_like_counts(instance: ReviewAndReplyLike, sender):
         chat_like.raw_post_id = post.id
         chat_like.raw_post_classify = raw_post_classify
         chat_like.raw_post_content = post.content
-        chat_like.raw_post_course = post.course
+        chat_like.raw_post_course = post.review.course if instance.review_reply is not None else post.course
         chat_like.latest_like_datetime = instance.create_time
         chat_like.receiver = post.created_by
-        chat, _ = Chat.objects.get_or_create(receiver=post.created_by, classify='like',
-                                             sender=User.objects.get(id=settings.DEFAULT_SUPER_USER_ID))
+        system_sender = User.objects.filter(id=settings.DEFAULT_SUPER_USER_ID).first()
+        if system_sender is None:
+            chat, _ = Chat.objects.get_or_create(
+                receiver=post.created_by,
+                classify='like',
+                sender=None,
+            )
+        else:
+            chat, _ = Chat.get_or_create_chat(
+                sender=system_sender,
+                receiver=post.created_by,
+                classify='like',
+            )
         chat_like.chat_item = chat
         chat_like.save()
 
@@ -121,9 +142,7 @@ def update_chat_reply(instance: ReviewReply, operate: Operate):
                                                   raw_post_classify=raw_post_classify,
                                                   raw_post_id=raw_post_id, raw_post_content=raw_post_content,
                                                   raw_post_course=raw_post_course)
-            reply_notices_count = ChatReply.objects.filter(reply_content=instance, receiver=receiver_user).count()
-            chat, _ = Chat.objects.update_or_create(receiver=receiver_user, classify='reply', sender=None,
-                                                    receiver_unread_count=reply_notices_count)
+            chat, _ = Chat.objects.get_or_create(receiver=receiver_user, classify='reply', sender=None)
             chat_reply.chat_item = chat
             chat_reply.save()
         elif operate == Operate.DELETE:

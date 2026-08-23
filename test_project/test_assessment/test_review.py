@@ -1,11 +1,17 @@
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.management import call_command
+from django.db import IntegrityError, transaction
 from django.test import override_settings
 from django.urls import reverse
 from rest_framework.test import APITestCase, APIClient
 
-from course_assessment.models import ReviewHistory, Review, Semeseter
+from course_assessment.models import (
+    ReviewAndReplyLike,
+    ReviewHistory,
+    Review,
+    Semeseter,
+)
 from test_project.common import create_user, login_user
 
 
@@ -113,7 +119,7 @@ class ReviewTests(APITestCase):
         edit_review_response = self.client.put(self.review_url, edit_review_data)
         self.assertEqual(edit_review_response.data['contents']['review_id'], review_id)
         review.refresh_from_db()
-        self.assertNotEquals(review.content, old_review_content)
+        self.assertNotEqual(review.content, old_review_content)
         review_history = ReviewHistory.objects.get(review=review)
         self.assertEqual(review_history.content, old_review_content)
         self.assertEqual(review.content, edit_review_data['content'])
@@ -125,9 +131,33 @@ class ReviewTests(APITestCase):
         self.assertEqual(review.semester_id, edit_review_data['semester'])
         self.assertEqual(review.anonymous, edit_review_data['anonymous'])
 
+    def test_identical_edit_does_not_change_modify_time_or_history(self):
+        review_id, course_id = self.test_add_review()
+        review = Review.objects.get(id=review_id)
+        original_modify_time = review.modify_time
+        identical_data = {
+            'course': course_id,
+            'content': review.content,
+            'rating': review.rating,
+            'anonymous': review.anonymous,
+            'difficulty': review.difficulty,
+            'grade': review.grade,
+            'homework': review.homework,
+            'reward': review.reward,
+            'semester': review.semester_id,
+        }
+
+        response = self.client.put(self.review_url, identical_data)
+
+        self.assertEqual(response.status_code, 200)
+        review.refresh_from_db()
+        self.assertEqual(review.modify_time, original_modify_time)
+        self.assertFalse(review.edited)
+        self.assertFalse(ReviewHistory.objects.filter(review=review).exists())
+
     def test_my_review(self):
         self.test_edit_review()
-        my_review_response = self.client.get(reverse('api:my_review'))
+        my_review_response = self.client.get(reverse('api:user_review', args=[self.user_id]))
         self.assertEqual(my_review_response.data['contents']['count'], 1)
         my_review = my_review_response.data['contents']['results'][-1]
         self.assertEqual(my_review['content']['current_content'], 'test_message_edit')
@@ -151,12 +181,14 @@ class ReviewTests(APITestCase):
         login_user(clientB, user_info_dict={'username': 'test_userB', 'password': 'test_password'})
 
         review_id, _ = self.test_add_review()
+        original_modify_time = Review.objects.get(id=review_id).modify_time
         like_response = clientB.post(reverse('api:review_like'),
                                      data={'review_id': review_id, 'reply_id': 0, 'like_or_dislike': 1})
         self.assertEqual(like_response.status_code, 200)
         review = Review.objects.get(id=review_id)
         self.assertEqual(review.like_count, 1)
         self.assertEqual(review.dislike_count, 0)
+        self.assertEqual(review.modify_time, original_modify_time)
 
         repeal_like_response = clientB.post(reverse('api:review_like'),
                                             data={'review_id': review_id, 'reply_id': 0, 'like_or_dislike': 1})
@@ -171,7 +203,7 @@ class ReviewTests(APITestCase):
         self.assertEqual(review.like_count, 0)
         self.assertEqual(review.dislike_count, 1)
 
-        user_A_review_response = self.client.get(reverse('api:my_review'))
+        user_A_review_response = self.client.get(reverse('api:user_review', args=[self.user_id]))
         self.assertEqual(user_A_review_response.data['contents']['results'][0]['like']['like'], 0)
         self.assertEqual(user_A_review_response.data['contents']['results'][0]['like']['dislike'], 1)
 
@@ -185,3 +217,97 @@ class ReviewTests(APITestCase):
 
         user_A_unread_message_response = self.client.get(reverse('api:unread_message'))
         self.assertEqual(user_A_unread_message_response.data['contents']['unread']['like'], 0)
+
+    def test_switching_like_to_dislike_keeps_one_row_and_modify_time(self):
+        second_client = APIClient()
+        second_user = create_user(
+            is_active=True, username='test_userB', email='testB@example.com'
+        )
+        login_user(
+            second_client,
+            user_info_dict={'username': 'test_userB', 'password': 'test_password'},
+        )
+        review_id, _ = self.test_add_review()
+        original_modify_time = Review.objects.get(id=review_id).modify_time
+        like_url = reverse('api:review_like')
+
+        second_client.post(
+            like_url,
+            {'review_id': review_id, 'reply_id': 0, 'like_or_dislike': 1},
+        )
+        response = second_client.post(
+            like_url,
+            {'review_id': review_id, 'reply_id': 0, 'like_or_dislike': -1},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        review = Review.objects.get(id=review_id)
+        self.assertEqual(review.like_count, 0)
+        self.assertEqual(review.dislike_count, 1)
+        self.assertEqual(review.modify_time, original_modify_time)
+        likes = ReviewAndReplyLike.objects.filter(
+            review_id=review_id, created_by=second_user, review_reply=None
+        )
+        self.assertEqual(likes.count(), 1)
+        self.assertEqual(likes.get().like, -1)
+
+    def test_review_like_database_constraints_reject_duplicates_and_invalid_values(self):
+        review_id, _ = self.test_add_review()
+        review = Review.objects.get(id=review_id)
+        second_user = create_user(
+            is_active=True, username='test_userB', email='testB@example.com'
+        )
+        ReviewAndReplyLike.objects.create(
+            review=review, created_by=second_user, like=1
+        )
+
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            ReviewAndReplyLike.objects.create(
+                review=review, created_by=second_user, like=-1
+            )
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            ReviewAndReplyLike.objects.create(
+                review=review,
+                created_by=create_user(
+                    is_active=True,
+                    username='test_userC',
+                    email='testC@example.com',
+                ),
+                like=0,
+            )
+
+    def test_reply_cannot_be_liked_through_another_review(self):
+        first_review_id, course_id = self.test_add_review()
+        second_client = APIClient()
+        create_user(is_active=True, username='test_userB', email='testB@example.com')
+        login_user(second_client, user_info_dict={'username': 'test_userB', 'password': 'test_password'})
+        review_data = {
+            'course': course_id,
+            'content': 'second review',
+            'rating': 4,
+            'anonymous': False,
+            'difficulty': 2,
+            'grade': 2,
+            'homework': 2,
+            'reward': 2,
+            'semester': 1,
+        }
+        second_review_id = second_client.post(self.review_url, review_data).data['contents']['review_id']
+        reply_response = second_client.post(reverse('api:add_reply'), {
+            'review_id': second_review_id,
+            'parent_id': 0,
+            'content': 'reply on second review',
+        })
+        reply_id = reply_response.data['contents']['reply_id']
+
+        response = second_client.post(reverse('api:review_like'), {
+            'review_id': first_review_id,
+            'reply_id': reply_id,
+            'like_or_dislike': 1,
+        })
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(ReviewAndReplyLike.objects.filter(created_by__username='test_userB').exists())
+        first_review = Review.objects.get(id=first_review_id)
+        self.assertEqual(first_review.like_count, 0)
+        self.assertEqual(first_review.dislike_count, 0)

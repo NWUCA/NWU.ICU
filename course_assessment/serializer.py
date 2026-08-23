@@ -38,15 +38,16 @@ class AddReviewSerializer(serializers.ModelSerializer):
 
     def validate(self, data):
         fields = {
-            'rating': (0, 5),
-            'difficulty': (0, 3),
-            'grade': (0, 3),
-            'homework': (0, 3)
+            'rating': (1, 5),
+            'difficulty': (1, 3),
+            'grade': (1, 3),
+            'homework': (1, 3),
+            'reward': (1, 3),
         }
         for field, (min_val, max_val) in fields.items():
             value = data.get(field)
             if value is not None and (value < min_val or value > max_val):
-                raise serializers.ValidationError({'rating': get_err_msg('rating_out_range')})
+                raise serializers.ValidationError({field: get_err_msg('rating_out_range')})
         return data
 
 
@@ -97,10 +98,19 @@ class ReviewAndReplyLikeSerializer(serializers.Serializer):
     def validate(self, data):
         if data.get('like_or_dislike') not in [-1, 1]:
             raise serializers.ValidationError({'like_or_dislike': get_err_msg('operation_error')})
+        review_id = data.get('review_id')
         try:
-            Review.objects.get(id=data.get('review_id'))
+            Review.objects.get(id=review_id)
         except Review.DoesNotExist:
             raise serializers.ValidationError({'review': get_err_msg('review_not_exist')})
+        reply_id = data.get('reply_id')
+        if reply_id:
+            try:
+                reply = ReviewReply.objects.get(id=reply_id)
+            except ReviewReply.DoesNotExist:
+                raise serializers.ValidationError({'reply': get_err_msg('reply_not_exist')})
+            if reply.review_id != review_id:
+                raise serializers.ValidationError({'reply': get_err_msg('wrong_parent_id')})
         return data
 
 

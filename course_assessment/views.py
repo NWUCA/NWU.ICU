@@ -150,6 +150,10 @@ class CourseView(APIView):
                            'created_by': {'id': reviewReply.created_by.id if not reviewReply.is_deleted else 0,
                                           'name': reviewReply.created_by.nickname if not reviewReply.is_deleted else "未知用户",
                                           'avatar': reviewReply.created_by.avatar_uuid if not reviewReply.is_deleted else ""},
+                           'like': {'like': reviewReply.like_count,
+                                    'dislike': reviewReply.dislike_count,
+                                    'user_option': self.get_user_option(
+                                        review=review, reply=reviewReply, user=request.user)},
                            'is_deleted': reviewReply.is_deleted, }
                           for index, reviewReply in enumerate(review_replies)]
             })
@@ -264,10 +268,15 @@ class ReviewView(APIView):
             except Review.DoesNotExist:
                 return return_response(contents={'review': get_err_msg('review_not_exist')},
                                        status_code=HTTP_404_NOT_FOUND)
-            ReviewHistory.objects.create(review=review, content=review.content, is_deleted=False)
             fields_to_update = ['content', 'rating', 'anonymous', 'difficulty', 'grade', 'homework', 'reward']
+            new_values = {field: serializer.validated_data[field] for field in fields_to_update}
+            new_values['semester'] = semester
+            if all(getattr(review, field) == value for field, value in new_values.items()):
+                return return_response(message=get_msg_msg('review_update_success'), contents={'review_id': review.id})
+
+            ReviewHistory.objects.create(review=review, content=review.content, is_deleted=False)
             for field in fields_to_update:
-                setattr(review, field, serializer.data[field])
+                setattr(review, field, new_values[field])
             review.semester = semester
             review.edited = True
             review.save()
@@ -427,7 +436,7 @@ class MyReviewView(GenericAPIView):
 
     def get(self, request, user_id):
         desc = request.query_params.get('desc', '1')
-        view_type = {'user_review': 'review', 'user_reply': 'reply'}.get(request.resolver_match.url_name, 'user_review')
+        view_type = {'user_review': 'review', 'user_reply': 'reply'}.get(request.resolver_match.url_name, 'review')
         lookup_user_id = self.user_private(request, user_id, view_type=view_type)
         if type(lookup_user_id) == Response:
             return lookup_user_id
@@ -465,7 +474,7 @@ class MyReviewView(GenericAPIView):
                 'datetime': review_reply.create_time,
                 'course': {"name": review_reply.review.course.get_name(), "id": review_reply.review.course.id,
                            'semester': review_reply.review.semester.name, },
-                'reply': {'id': review_reply.review.id, 'content': review_reply.content},
+                'reply': {'id': review_reply.id, 'content': review_reply.content},
                 'like': {'like': review_reply.like_count, 'dislike': review_reply.dislike_count},
             })
         return my_reply_list
@@ -600,22 +609,21 @@ class ReviewAndReplyLikeView(APIView):
             review_object = Review.objects.get(id=serializer.validated_data['review_id'])
             try:
                 review_reply_object = None if serializer.validated_data['reply_id'] == 0 else ReviewReply.objects.get(
-                    id=serializer.validated_data['reply_id'])
+                    id=serializer.validated_data['reply_id'], review=review_object)
             except ReviewReply.DoesNotExist:
                 return return_response(errors={'review': get_err_msg('reply_not_exist')},
                                        status_code=status.HTTP_404_NOT_FOUND)
 
-            try:
-                review_and_reply_like = ReviewAndReplyLike.objects.get(review=review_object, created_by=request.user,
-                                                                       review_reply=review_reply_object)
-            except ReviewAndReplyLike.DoesNotExist:
-                ReviewAndReplyLike.objects.create(review=review_object, review_reply=review_reply_object,
-                                                  like=serializer.validated_data['like_or_dislike'],
-                                                  created_by=request.user)
+            review_and_reply_like, created = ReviewAndReplyLike.objects.get_or_create(
+                review=review_object,
+                created_by=request.user,
+                review_reply=review_reply_object,
+                defaults={'like': serializer.validated_data['like_or_dislike']},
+            )
+            if created:
                 return return_response(contents={'like': self.like_dislike_count(review_object, review_reply_object)})
 
-            if serializer.validated_data['like_or_dislike'] == 0 or serializer.validated_data[
-                'like_or_dislike'] == review_and_reply_like.like:
+            if serializer.validated_data['like_or_dislike'] == review_and_reply_like.like:
                 review_and_reply_like.delete()
             else:
                 review_and_reply_like.like = serializer.validated_data['like_or_dislike']
