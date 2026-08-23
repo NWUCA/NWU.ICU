@@ -32,6 +32,7 @@ from common.views import (
     AboutView,
     CaptchaView,
     TextContentView, MessageBoxView, BulletinListView, MessageUnreadView, CourseTeacherSearchView, IndexView,
+    ConversationReadView, NotificationReadView,
 )
 from course_assessment.views import (
     MyReviewView,
@@ -98,6 +99,8 @@ api_patterns = [
     # 站内信
     path('message/', MessageBoxView.as_view(), name='send_message'),
     path('message/unread/', MessageUnreadView.as_view(), name='unread_message'),
+    path('message/notifications/read/', NotificationReadView.as_view(), name='read_notifications'),
+    path('message/user/<int:chatter_id>/read/', ConversationReadView.as_view(), name='read_conversation'),
     path('message/<str:classify>/<int:chatter_id>', MessageBoxView.as_view(), name='check_particular_message'),
     path('message/<str:classify>/', MessageBoxView.as_view(), name='check_all_message'),
 

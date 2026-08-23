@@ -66,17 +66,14 @@ class ResourceUploadNotificationTests(SimpleTestCase):
         self.assertIn(self.upload_request.rejection_reason, message)
 
     @patch('common.file.resource_notifications.send_mail')
-    @patch('common.file.resource_notifications.ChatMessage.objects.create')
-    @patch('common.file.resource_notifications.Chat.get_or_create_chat')
+    @patch('common.file.resource_notifications.send_direct_message')
     def test_all_results_send_site_message_and_email(
-            self, get_or_create_chat, create_chat_message, send_mail):
-        get_or_create_chat.return_value = (Mock(), False)
+            self, send_site_message, send_mail):
 
         for result in (RESULT_APPROVED, RESULT_PUBLISH_FAILED, RESULT_REJECTED):
             notify_resource_upload_result(self.reviewer, self.upload_request, result)
 
-        self.assertEqual(get_or_create_chat.call_count, 3)
-        self.assertEqual(create_chat_message.call_count, 3)
+        self.assertEqual(send_site_message.call_count, 3)
         self.assertEqual(send_mail.call_count, 3)
         for call in send_mail.call_args_list:
             self.assertEqual(call.args[2], 'notify@nwu.icu')

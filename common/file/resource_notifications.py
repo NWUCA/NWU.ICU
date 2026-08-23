@@ -4,7 +4,7 @@ from urllib.parse import quote
 from django.conf import settings
 from django.core.mail import send_mail
 
-from common.models import Chat, ChatMessage
+from common.messaging import send_direct_message
 
 
 logger = logging.getLogger(__name__)
@@ -51,15 +51,10 @@ def notify_resource_upload_result(reviewer, upload_request, result):
     content = build_resource_upload_result_message(upload_request, result)
     if reviewer != upload_request.uploaded_by:
         try:
-            chat, unused = Chat.get_or_create_chat(
+            send_direct_message(
                 sender=reviewer,
-                receiver=upload_request.uploaded_by,
-                classify='user',
-            )
-            ChatMessage.objects.create(
+                recipient=upload_request.uploaded_by,
                 content=content,
-                chat_item=chat,
-                created_by=reviewer,
             )
         except Exception:
             logger.exception(

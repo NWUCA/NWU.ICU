@@ -1,6 +1,5 @@
 from enum import Enum
 
-from django.conf import settings
 from django.contrib.postgres.search import SearchVector
 from django.core.cache import cache
 from django.db.models import Avg, Sum, Count
@@ -8,10 +7,9 @@ from django.db.models.signals import post_save, post_delete, pre_save
 from django.dispatch import receiver
 from pypinyin import lazy_pinyin
 
-from common.models import ChatLike, ChatReply, Chat
+from common.models import Notification
 from common.signals import soft_delete_signal
-from user.models import User
-from utils.utils import get_cache_key
+from utils.utils import get_cache_key, get_user_avatar_info
 from .models import Review, Course, ReviewAndReplyLike, CourseLike, Teacher, ReviewReply
 
 
@@ -86,34 +84,32 @@ def update_chat_like_counts(instance: ReviewAndReplyLike, sender):
         raw_post_classify = 'reply' if instance.review_reply is not None else 'review'
         if post.created_by == like_create_by:
             return
-        chat_like, created = ChatLike.objects.get_or_create(raw_post_classify=raw_post_classify, raw_post_id=post.id)
-        chat_like.read = False
-        chat_like.like_count = post.like_count
-        chat_like.dislike_count = post.dislike_count
-        if chat_like.like_count == 0 and chat_like.dislike_count == 0:
-            chat_like.delete()
+        dedupe_key = f'like:{raw_post_classify}:{post.id}:{post.created_by_id}'
+        if post.like_count == 0 and post.dislike_count == 0:
+            Notification.objects.filter(dedupe_key=dedupe_key).delete()
             return
-        chat_like.raw_post_id = post.id
-        chat_like.raw_post_classify = raw_post_classify
-        chat_like.raw_post_content = post.content
-        chat_like.raw_post_course = post.review.course if instance.review_reply is not None else post.course
-        chat_like.latest_like_datetime = instance.create_time
-        chat_like.receiver = post.created_by
-        system_sender = User.objects.filter(id=settings.DEFAULT_SUPER_USER_ID).first()
-        if system_sender is None:
-            chat, _ = Chat.objects.get_or_create(
-                receiver=post.created_by,
-                classify='like',
-                sender=None,
-            )
-        else:
-            chat, _ = Chat.get_or_create_chat(
-                sender=system_sender,
-                receiver=post.created_by,
-                classify='like',
-            )
-        chat_like.chat_item = chat
-        chat_like.save()
+        course = post.review.course if instance.review_reply is not None else post.course
+        Notification.objects.update_or_create(
+            dedupe_key=dedupe_key,
+            defaults={
+                'recipient': post.created_by,
+                'actor': None,
+                'kind': Notification.KIND_LIKE,
+                'read_at': None,
+                'payload': {
+                    'raw_info': {
+                        'raw_post': {
+                            'classify': raw_post_classify,
+                            'id': post.id,
+                            'content': post.content,
+                        },
+                        'course': {'id': course.id, 'name': course.name},
+                    },
+                    'like': {'like': post.like_count, 'dislike': post.dislike_count},
+                    'datetime': instance.create_time.isoformat(),
+                },
+            },
+        )
 
 
 class Operate(Enum):
@@ -138,19 +134,41 @@ def update_chat_reply(instance: ReviewReply, operate: Operate):
         receiver_user = instance.review.created_by
     if instance.created_by != receiver_user:
         if operate == Operate.ADD:
-            chat_reply = ChatReply.objects.create(reply_content=instance, receiver=receiver_user,
-                                                  raw_post_classify=raw_post_classify,
-                                                  raw_post_id=raw_post_id, raw_post_content=raw_post_content,
-                                                  raw_post_course=raw_post_course)
-            chat, _ = Chat.objects.get_or_create(receiver=receiver_user, classify='reply', sender=None)
-            chat_reply.chat_item = chat
-            chat_reply.save()
+            dedupe_key = f'reply:{instance.id}:{receiver_user.id}'
+            notification, created = Notification.objects.get_or_create(
+                dedupe_key=dedupe_key,
+                defaults={
+                    'recipient': receiver_user,
+                    'actor': instance.created_by,
+                    'kind': Notification.KIND_REPLY,
+                    'payload': {},
+                },
+            )
+            notification.recipient = receiver_user
+            notification.actor = instance.created_by
+            notification.kind = Notification.KIND_REPLY
+            notification.payload = {
+                'reply': {'id': instance.id, 'content': instance.content},
+                'created_by': {
+                    'id': instance.created_by.id,
+                    'nickname': instance.created_by.nickname,
+                    **get_user_avatar_info(instance.created_by),
+                },
+                'course': {'id': raw_post_course.id, 'name': raw_post_course.name},
+                'raw_post': {
+                    'id': raw_post_id,
+                    'classify': raw_post_classify,
+                    'content': raw_post_content,
+                },
+                'datetime': instance.create_time.isoformat(),
+            }
+            notification.save(update_fields=(
+                'recipient', 'actor', 'kind', 'payload', 'updated_at',
+            ))
         elif operate == Operate.DELETE:
-            chat_reply = ChatReply.objects.get(reply_content=instance, receiver=receiver_user,
-                                               raw_post_classify=raw_post_classify,
-                                               raw_post_id=raw_post_id, raw_post_content=raw_post_content,
-                                               raw_post_course=raw_post_course)
-            chat_reply.delete()
+            Notification.objects.filter(
+                dedupe_key=f'reply:{instance.id}:{receiver_user.id}'
+            ).delete()
 
 
 @receiver(post_save, sender=ReviewReply)

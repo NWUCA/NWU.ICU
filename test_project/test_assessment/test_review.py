@@ -219,6 +219,9 @@ class ReviewTests(APITestCase):
         self.assertEqual(user_A_like_notice_response.data['contents']['results'][0]['like']['like'], 0)
         self.assertEqual(user_A_like_notice_response.data['contents']['results'][0]['like']['dislike'], 1)
 
+        notification_id = user_A_like_notice_response.data['contents']['results'][0]['id']
+        self.client.post(reverse('api:read_notifications'), {'ids': [notification_id]}, format='json')
+
         user_A_unread_message_response = self.client.get(reverse('api:unread_message'))
         self.assertEqual(user_A_unread_message_response.data['contents']['unread']['like'], 0)
 

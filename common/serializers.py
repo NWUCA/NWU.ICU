@@ -3,7 +3,7 @@ from django.conf import settings
 from rest_framework import serializers
 
 from utils.utils import get_err_msg
-from .models import About, Chat
+from .models import About
 
 
 class CaptchaSerializer(serializers.Serializer):
@@ -38,19 +38,36 @@ class AboutSerializer(serializers.Serializer):
 
 class ChatMessageSerializer(serializers.Serializer):
     receiver = serializers.IntegerField()
-    content = serializers.CharField(max_length=5000)
+    content = serializers.CharField(max_length=500)
     classify = serializers.ChoiceField(choices=('user',), default='user')
 
 
-class ChatMessageGetSerializer(serializers.Serializer):
-    classify = serializers.ChoiceField(choices=tuple(message[0] for message in Chat.classify_MESSAGE))
+class DirectMessageCursorSerializer(serializers.Serializer):
+    before_id = serializers.IntegerField(required=False, min_value=1)
+    after_id = serializers.IntegerField(required=False, min_value=1)
     last_message_id = serializers.IntegerField(required=False, min_value=1)
-    order = serializers.ChoiceField(choices=('before', 'after'), required=False, default='before')
+    order = serializers.ChoiceField(choices=('before', 'after'), required=False)
+    page_size = serializers.IntegerField(required=False, min_value=1, max_value=100, default=10)
 
     def validate(self, data):
-        if data['classify'] != 'user' and ('last_message_id' in data or 'order' in self.initial_data):
-            raise serializers.ValidationError({'classify': get_err_msg('operation_error')})
+        if data.get('before_id') and data.get('after_id'):
+            raise serializers.ValidationError('before_id and after_id are mutually exclusive.')
+        legacy_id = data.get('last_message_id')
+        if legacy_id and not (data.get('before_id') or data.get('after_id')):
+            data[f"{data.get('order', 'before')}_id"] = legacy_id
         return data
+
+
+class ConversationReadSerializer(serializers.Serializer):
+    through_message_id = serializers.IntegerField(min_value=0)
+
+
+class NotificationReadSerializer(serializers.Serializer):
+    ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        allow_empty=False,
+        max_length=100,
+    )
 
 
 class SearchSerializer(serializers.Serializer):

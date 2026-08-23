@@ -3,7 +3,7 @@ import logging
 import requests
 from captcha.helpers import captcha_image_url
 from captcha.models import CaptchaStore
-from django.db.models import Q
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.generics import GenericAPIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -16,8 +16,23 @@ from user.models import User
 from utils.custom_pagination import StandardResultsSetPagination
 from utils.throttle import CaptchaAnonRateThrottle, CaptchaUserRateThrottle
 from utils.utils import return_response, get_err_msg, userUtils, get_user_avatar_info
-from .models import Bulletin, About, Chat, ChatMessage, ChatLike, ChatReply
-from .serializers import CaptchaSerializer, ChatMessageSerializer, ChatMessageGetSerializer, SearchSerializer
+from .messaging import (
+    get_conversation,
+    get_unread_message_count,
+    mark_conversation_read,
+    send_direct_message,
+)
+from .models import (
+    Bulletin, About, Conversation, ConversationParticipant, DirectMessage, Notification,
+)
+from .serializers import (
+    CaptchaSerializer,
+    ChatMessageSerializer,
+    ConversationReadSerializer,
+    DirectMessageCursorSerializer,
+    NotificationReadSerializer,
+    SearchSerializer,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -107,150 +122,120 @@ class MessageBoxView(GenericAPIView):
             return [CaptchaUserRateThrottle()]
         return []
 
-    def get_user_message_list(self, request, classify):
-        chats = Chat.objects.filter((Q(receiver=request.user) | Q(sender=request.user)) & Q(classify=classify)) \
-            .select_related('sender', 'receiver') \
-            .order_by('-last_message_datetime')
-        chats_page = self.paginate_queryset(chats)
-        chat_list = []
-        for chat in chats_page:
-            chatter = chat.sender if chat.receiver == request.user else chat.receiver
-            temp_dict = {
-                'chatter': {'id': chatter.id, 'nickname': chatter.nickname, **get_user_avatar_info(chatter)},
-                'last_message': {'id': chat.last_message_id, 'content': chat.last_message_content,
-                                 'datetime': chat.last_message_datetime},
-                'unread_count': chat.sender_unread_count if chat.sender == request.user else chat.receiver_unread_count,
-            }
-            chat_list.append(temp_dict)
-        return self.get_paginated_response(chat_list)
-
-    def get_particular_user_message(self, request, chat_object: Chat, last_message_id, order='before'):
-        if order not in ['before', 'after']:
-            order = 'before'
-        if last_message_id is None or last_message_id == '':
-            chat_message = ChatMessage.objects.filter(
-                chat_item=chat_object).order_by('-create_time')
-        else:
-            if order == 'before':
-                chat_message = ChatMessage.objects.filter(chat_item=chat_object, id__lt=last_message_id).order_by(
-                    '-create_time')
-            else:
-                chat_message = ChatMessage.objects.filter(chat_item=chat_object, id__gt=last_message_id).order_by(
-                    '-create_time')
-        message_page = self.paginate_queryset(chat_message)
-        unread_message_list = [
-            message for message in message_page if message.created_by != request.user]
-        ChatMessage.objects.filter(
-            id__in=[message.id for message in unread_message_list]).update(read=True)
-        if chat_object.sender != request.user:
-            chat_object.receiver_unread_count = ChatMessage.objects.filter(chat_item=chat_object, read=False,
-                                                                           created_by=chat_object.sender).count()
-        else:
-            chat_object.sender_unread_count = ChatMessage.objects.filter(chat_item=chat_object, read=False,
-                                                                         created_by=chat_object.receiver).count()
-        chat_object.save()
-        message_list = []
-        for message in message_page:
-            message_list.append({
-                'id': message.id,
-                'chatter': {'id': message.created_by.id, 'nickname': message.created_by.nickname,
-                            **get_user_avatar_info(message.created_by)},
-                'content': message.content,
-                'datetime': message.create_time,
-            })
-        return self.get_paginated_response(message_list)
-
-    def get_like_notice(self, request):
-        like_notices = (
-            ChatLike.objects.filter(receiver=request.user)
-            .select_related('raw_post_course')
-            .order_by('-latest_like_datetime', '-pk')
+    def get_user_message_list(self, request):
+        participations = (
+            ConversationParticipant.objects.filter(user=request.user)
+            .select_related(
+                'conversation__user_low',
+                'conversation__user_high',
+                'conversation__last_message',
+            )
+            .order_by('-conversation__last_message_id', '-conversation_id')
         )
-        notice_page = self.paginate_queryset(like_notices)
-        notice_list = []
-        for notice in notice_page:
-            notice_list.append({
-                'id': notice.id,
-                'raw_info': {
-                    'raw_post': {'classify': notice.raw_post_classify,
-                                 'id': notice.raw_post_id,
-                                 'content': notice.raw_post_content, },
-                    'course': {'id': notice.raw_post_course_id,
-                               'name': notice.raw_post_course.name},
+        page = self.paginate_queryset(participations)
+        result = []
+        for participation in page:
+            conversation = participation.conversation
+            chatter = conversation.other_user(request.user)
+            last_message = conversation.last_message
+            result.append({
+                'conversation_id': conversation.id,
+                'chatter': {
+                    'id': chatter.id,
+                    'nickname': chatter.nickname,
+                    **get_user_avatar_info(chatter),
                 },
-                'like': {
-                    'like': notice.like_count,
-                    'dislike': notice.dislike_count,
+                'last_message': {
+                    'id': last_message.id if last_message else None,
+                    'content': last_message.content if last_message else '',
+                    'datetime': last_message.created_at if last_message else None,
                 },
-                'datetime': notice.latest_like_datetime,
+                'unread_count': get_unread_message_count(
+                    conversation,
+                    request.user,
+                    participation.last_read_message_id,
+                ),
             })
-            notice.read = True
-            notice.save()
-        return self.get_paginated_response(notice_list)
+        return self.get_paginated_response(result)
 
-    def get_reply_notice(self, request):
-        reply_notices = (
-            ChatReply.objects.filter(receiver=request.user)
-            .select_related('reply_content', 'raw_post_course', 'reply_content__created_by')
-            .order_by('-reply_content__create_time', '-pk')
-        )
-        notice_page = self.paginate_queryset(reply_notices)
-        notice_list = []
-        for notice in notice_page:
-            if notice.reply_content.created_by != request.user:
-                notice_list.append({
-                    'id': notice.id,
-                    'reply': {
-                        'id': notice.reply_content.id,
-                        'content': notice.reply_content.content,
-                    },
-                    'created_by': {
-                        'id': notice.reply_content.created_by.id,
-                        'nickname': notice.reply_content.created_by.nickname,
-                        **get_user_avatar_info(notice.reply_content.created_by),
-                    },
-                    'course': {
-                        'id': notice.raw_post_course_id,
-                        'name': notice.raw_post_course.name
-                    },
-                    'raw_post': {
-                        'id': notice.raw_post_id,
-                        'classify': notice.raw_post_classify,
-                        'content': notice.raw_post_content,
-                    },
-                    'datetime': notice.reply_content.create_time,
-                })
-                notice.read = True
-                notice.save()
-        return self.get_paginated_response(notice_list)
+    def get_particular_user_message(self, request, conversation):
+        serializer = DirectMessageCursorSerializer(data=request.query_params)
+        if not serializer.is_valid():
+            return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
+        params = serializer.validated_data
+        page_size = params['page_size']
+        messages = DirectMessage.objects.filter(conversation=conversation).select_related('sender')
+        snapshot_latest_message_id = conversation.last_message_id or 0
+
+        if params.get('after_id'):
+            candidates = list(messages.filter(id__gt=params['after_id']).order_by('id')[:page_size + 1])
+            has_more = len(candidates) > page_size
+            message_page = candidates[:page_size]
+        elif params.get('before_id'):
+            candidates = list(messages.filter(id__lt=params['before_id']).order_by('-id')[:page_size + 1])
+            has_more = len(candidates) > page_size
+            message_page = list(reversed(candidates[:page_size]))
+        else:
+            candidates = list(messages.filter(
+                id__lte=snapshot_latest_message_id
+            ).order_by('-id')[:page_size + 1]) if snapshot_latest_message_id else []
+            has_more = len(candidates) > page_size
+            message_page = list(reversed(candidates[:page_size]))
+
+        result = [{
+            'id': message.id,
+            'chatter': {
+                'id': message.sender.id,
+                'nickname': message.sender.nickname,
+                **get_user_avatar_info(message.sender),
+            },
+            'content': message.content,
+            'datetime': message.created_at,
+        } for message in message_page]
+        return return_response(contents={
+            'conversation_id': conversation.id,
+            'count': messages.count(),
+            'results': result,
+            'has_more': has_more,
+            'before_id': result[0]['id'] if result else None,
+            'after_id': result[-1]['id'] if result else None,
+            'snapshot_latest_message_id': snapshot_latest_message_id,
+        })
+
+    def get_notification_list(self, request, classify):
+        notices = Notification.objects.filter(
+            recipient=request.user,
+            kind=classify,
+        ).order_by('-updated_at', '-id')
+        page = self.paginate_queryset(notices)
+        result = []
+        for notice in page:
+            item = {'id': notice.id, **notice.payload}
+            item.setdefault('datetime', notice.updated_at)
+            result.append(item)
+        return self.get_paginated_response(result)
 
     def get(self, request, classify, chatter_id=None):
-        serializer_data = {'classify': classify}
-        if request.query_params.get('last_message_id') not in (None, ''):
-            serializer_data['last_message_id'] = request.query_params.get('last_message_id')
-        if request.query_params.get('order') not in (None, ''):
-            serializer_data['order'] = request.query_params.get('order')
-        serializer = ChatMessageGetSerializer(data=serializer_data)
-        if serializer.is_valid():
-            if chatter_id is None:
-                if classify == 'user':
-                    return self.get_user_message_list(request, classify)
-                elif classify == 'like':
-                    return self.get_like_notice(request)
-                elif classify == 'reply':
-                    return self.get_reply_notice(request)
-
-            else:
-                try:
-                    chat = Chat.get_chat_object(sender=request.user, receiver=User.objects.get(id=chatter_id))
-                except (Chat.DoesNotExist, User.DoesNotExist):
-                    return return_response(errors={'chat': get_err_msg('chat_not_exist')},
-                                           status_code=status.HTTP_400_BAD_REQUEST)
-                last_message_id = serializer.validated_data.get('last_message_id')
-                order = serializer.validated_data['order']
-                return self.get_particular_user_message(request, chat, last_message_id, order)
-        else:
-            return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
+        if classify not in ('user', Notification.KIND_LIKE, Notification.KIND_REPLY, Notification.KIND_SYSTEM):
+            return return_response(errors={'classify': get_err_msg('operation_error')},
+                                   status_code=status.HTTP_400_BAD_REQUEST)
+        if chatter_id is None:
+            if classify == 'user':
+                return self.get_user_message_list(request)
+            return self.get_notification_list(request, classify)
+        if classify != 'user':
+            return return_response(errors={'classify': get_err_msg('operation_error')},
+                                   status_code=status.HTTP_400_BAD_REQUEST)
+        try:
+            chatter = User.objects.get(id=chatter_id)
+            conversation = get_conversation(request.user, chatter)
+        except User.DoesNotExist:
+            return return_response(errors={'user': get_err_msg('user_not_exist')},
+                                   status_code=status.HTTP_404_NOT_FOUND)
+        except (ValueError, Conversation.DoesNotExist):
+            return return_response(errors={'chat': get_err_msg('chat_not_exist')},
+                                   status_code=status.HTTP_404_NOT_FOUND)
+        return self.get_particular_user_message(request, conversation)
 
     def post(self, request):
         serializer = ChatMessageSerializer(data=request.data)
@@ -263,14 +248,16 @@ class MessageBoxView(GenericAPIView):
             if receiver == request.user:
                 return return_response(errors={'user': get_err_msg('cannot_send_message_to_self')},
                                        status_code=status.HTTP_400_BAD_REQUEST)
-            chat, created = Chat.get_or_create_chat(sender=request.user, receiver=receiver,
-                                                    classify=serializer.validated_data['classify'])
-            chat_message = ChatMessage.objects.create(
+            direct_message = send_direct_message(
+                sender=request.user,
+                recipient=receiver,
                 content=serializer.validated_data['content'],
-                chat_item=chat,
-                created_by=request.user,
             )
-            return return_response(contents={'message': chat_message.id}, status_code=status.HTTP_201_CREATED)
+            return return_response(contents={
+                'message': direct_message.id,
+                'conversation_id': direct_message.conversation_id,
+                'datetime': direct_message.created_at,
+            }, status_code=status.HTTP_201_CREATED)
         else:
             return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
 
@@ -278,14 +265,57 @@ class MessageBoxView(GenericAPIView):
 class MessageUnreadView(APIView):
 
     def get(self, request):
-        unread_counts = {}
-        for i in Chat.classify_MESSAGE:
-            unread_counts[i[0]] = 0
-        for chat in Chat.objects.filter(sender=request.user):
-            unread_counts[chat.classify] += chat.sender_unread_count
-        for chat in Chat.objects.filter(receiver=request.user):
-            unread_counts[chat.classify] += chat.receiver_unread_count
+        unread_counts = {'user': 0, 'system': 0, 'like': 0, 'reply': 0}
+        participations = ConversationParticipant.objects.filter(user=request.user).select_related('conversation')
+        for participation in participations:
+            unread_counts['user'] += get_unread_message_count(
+                participation.conversation,
+                request.user,
+                participation.last_read_message_id,
+            )
+        for kind in (Notification.KIND_SYSTEM, Notification.KIND_LIKE, Notification.KIND_REPLY):
+            unread_counts[kind] = Notification.objects.filter(
+                recipient=request.user,
+                kind=kind,
+                read_at__isnull=True,
+            ).count()
         return return_response(contents={'unread': unread_counts, 'total': sum(unread_counts.values())})
+
+
+class ConversationReadView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, chatter_id):
+        serializer = ConversationReadSerializer(data=request.data)
+        if not serializer.is_valid():
+            return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
+        try:
+            chatter = User.objects.get(id=chatter_id)
+            conversation = get_conversation(request.user, chatter)
+            mark_conversation_read(
+                conversation,
+                request.user,
+                serializer.validated_data['through_message_id'],
+            )
+        except (User.DoesNotExist, ValueError, Conversation.DoesNotExist):
+            return return_response(errors={'chat': get_err_msg('chat_not_exist')},
+                                   status_code=status.HTTP_404_NOT_FOUND)
+        return return_response(contents={'through_message_id': serializer.validated_data['through_message_id']})
+
+
+class NotificationReadView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = NotificationReadSerializer(data=request.data)
+        if not serializer.is_valid():
+            return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
+        updated = Notification.objects.filter(
+            recipient=request.user,
+            id__in=serializer.validated_data['ids'],
+            read_at__isnull=True,
+        ).update(read_at=timezone.now())
+        return return_response(contents={'updated': updated})
 
 
 class CourseTeacherSearchView(APIView):

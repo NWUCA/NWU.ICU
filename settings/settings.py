@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/3.1/ref/settings/
 """
 import os
+import uuid
 from pathlib import Path
 
 import environ
@@ -241,11 +242,11 @@ DEFAULT_SUPER_USER_EMAIL = env('DEFAULT_SUPER_USER_EMAIL')
 
 # 默认用户设置
 DEFAULT_USER_AVATAR_FILE_NAME = env('DEFAULT_USER_AVATAR_FILE_NAME')
-DEFAULT_USER_AVATAR_UUID = env('DEFAULT_USER_AVATAR_UUID')
+DEFAULT_USER_AVATAR_UUID = uuid.UUID(env('DEFAULT_USER_AVATAR_UUID'))
 
 # 匿名用户设置
 ANONYMOUS_USER_AVATAR_FILE_NAME = env('ANONYMOUS_USER_AVATAR_FILE_NAME')
-ANONYMOUS_USER_AVATAR_UUID = env('ANONYMOUS_USER_AVATAR_UUID')
+ANONYMOUS_USER_AVATAR_UUID = uuid.UUID(env('ANONYMOUS_USER_AVATAR_UUID'))
 
 # 站外链接
 RESOURCES_WEBSITE_URL = env('RESOURCES_WEBSITE_URL')

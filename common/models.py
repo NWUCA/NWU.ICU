@@ -1,7 +1,6 @@
 from django.conf import settings
 from django.db import models
 from django.db.models import Q
-from django.db.models import CharField
 
 from user.models import User
 
@@ -47,99 +46,139 @@ class About(models.Model):
     type = models.TextField(choices=TYPE_CHOICES, default='about')
 
 
-class Chat(models.Model):
-    classify_MESSAGE = [
-        ('user', '站内信'),
-        ('system', '系统通知'),
-        ('like', '点赞提醒'),
-        ('reply', '回复提醒')
-    ]
-    sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='messages_sender', null=True)
-    receiver = models.ForeignKey(User, on_delete=models.CASCADE, related_name='messages_receiver')
-    classify = models.CharField(choices=classify_MESSAGE, default='system')
-    last_message_id = models.IntegerField(null=True)
-    last_message_content = models.TextField(null=True, blank=True)
-    last_message_datetime = models.DateTimeField(null=True)
-    receiver_unread_count = models.IntegerField(default=0)
-    sender_unread_count = models.IntegerField(default=0)
+class Conversation(models.Model):
+    """Canonical one-to-one conversation.
+
+    ``user_low`` and ``user_high`` are ordered by primary key so the database,
+    rather than application convention alone, guarantees one row per user pair.
+    """
+
+    user_low = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='conversations_as_low_user',
+    )
+    user_high = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='conversations_as_high_user',
+    )
+    last_message = models.ForeignKey(
+        'DirectMessage',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='+',
+    )
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                check=Q(user_low_id__lt=models.F('user_high_id')),
+                name='conversation_users_canonical_order',
+            ),
+            models.UniqueConstraint(
+                fields=('user_low', 'user_high'),
+                name='unique_conversation_user_pair',
+            ),
+        ]
+
+    @staticmethod
+    def canonical_user_ids(first_user, second_user):
+        first_id = first_user.pk if isinstance(first_user, User) else int(first_user)
+        second_id = second_user.pk if isinstance(second_user, User) else int(second_user)
+        if first_id == second_id:
+            raise ValueError('A conversation requires two different users.')
+        return min(first_id, second_id), max(first_id, second_id)
+
+    def other_user(self, user):
+        if user.pk == self.user_low_id:
+            return self.user_high
+        if user.pk == self.user_high_id:
+            return self.user_low
+        raise ValueError('User is not a participant in this conversation.')
+
+
+class ConversationParticipant(models.Model):
+    conversation = models.ForeignKey(
+        Conversation,
+        on_delete=models.CASCADE,
+        related_name='participants',
+    )
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='conversation_participations',
+    )
+    # A monotonic global message-id watermark. Keeping this as an integer makes
+    # it survive future message retention/deletion without moving backwards.
+    last_read_message_id = models.PositiveBigIntegerField(default=0)
 
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=['sender', 'receiver', 'classify'],
-                name='unique_chat_pair',
-            ),
-            models.UniqueConstraint(
-                fields=['receiver', 'sender', 'classify'],
-                name='unique_chat_pair_reverse',
-            ),
-            models.UniqueConstraint(
-                fields=['receiver', 'classify'],
-                condition=Q(sender__isnull=True),
-                name='unique_system_chat_receiver_classify',
+                fields=('conversation', 'user'),
+                name='unique_conversation_participant',
             ),
         ]
-
-    def save(self, *args, **kwargs):
-        if self.sender is not None and self.sender_id > self.receiver_id:
-            self.sender, self.receiver = self.receiver, self.sender
-        super().save(*args, **kwargs)
-
-    @classmethod
-    def get_or_create_chat(cls, sender, receiver, classify):
-        if sender.id > receiver.id:
-            sender, receiver = receiver, sender
-        return cls.objects.get_or_create(sender=sender, receiver=receiver, classify=classify)
-
-    @staticmethod
-    def get_chat_object(sender: User, receiver: User, classify='user'):
-        if sender.id > receiver.id:
-            sender, receiver = receiver, sender
-        return Chat.objects.get(sender=sender, receiver=receiver, classify=classify)
+        indexes = [
+            models.Index(fields=('user', 'conversation'), name='common_cp_user_conv_idx'),
+        ]
 
 
-class ChatMessage(models.Model):
-    content = models.TextField()
-    create_time = models.DateTimeField(auto_now_add=True)
-    created_by = models.ForeignKey(User, on_delete=models.DO_NOTHING, related_name='messages_create_by', null=True)
-    chat_item = models.ForeignKey(Chat, null=True, on_delete=models.CASCADE, related_name='messages')
-    read = models.BooleanField(default=False)
+class DirectMessage(models.Model):
+    conversation = models.ForeignKey(
+        Conversation,
+        on_delete=models.CASCADE,
+        related_name='direct_messages',
+    )
+    sender = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='direct_messages_sent',
+    )
+    content = models.TextField(max_length=500)
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         indexes = [
-            models.Index(fields=['chat_item']),
-            models.Index(fields=['create_time']),
-            models.Index(fields=['created_by']),
+            models.Index(fields=('conversation', 'id'), name='common_dm_conv_id_idx'),
+            models.Index(fields=('conversation', 'sender', 'id'), name='common_dm_conv_sender_idx'),
         ]
+        ordering = ('id',)
 
 
-class ChatReply(models.Model):
-    read = models.BooleanField(default=False)
-    reply_content = models.ForeignKey('course_assessment.ReviewReply', on_delete=models.CASCADE)
-    reply_classify = [
-        ('review', '关于评价的回复'),
-        ('reply', '楼中楼的回复'),
-    ]
-    receiver = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reply_notice_receiver')
-    raw_post_classify = CharField(choices=reply_classify)
-    raw_post_id = models.IntegerField()
-    raw_post_content = models.TextField()
-    raw_post_course = models.ForeignKey('course_assessment.Course', on_delete=models.CASCADE)
-    chat_item = models.ForeignKey(Chat, on_delete=models.CASCADE, related_name='reply_messages', null=True)
+class Notification(models.Model):
+    KIND_LIKE = 'like'
+    KIND_REPLY = 'reply'
+    KIND_SYSTEM = 'system'
+    KIND_CHOICES = (
+        (KIND_LIKE, '点赞提醒'),
+        (KIND_REPLY, '回复提醒'),
+        (KIND_SYSTEM, '系统通知'),
+    )
 
+    recipient = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='notifications_received',
+    )
+    actor = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='notifications_created',
+    )
+    kind = models.CharField(max_length=16, choices=KIND_CHOICES)
+    payload = models.JSONField(default=dict)
+    dedupe_key = models.CharField(max_length=255, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    read_at = models.DateTimeField(null=True, blank=True)
 
-class ChatLike(models.Model):
-    reply_classify = [
-        ('review', '评价'),
-        ('reply', '评论回复'),
-    ]
-    raw_post_classify = CharField(choices=reply_classify)
-    raw_post_id = models.IntegerField(null=True)
-    raw_post_course = models.ForeignKey('course_assessment.Course', on_delete=models.CASCADE, null=True)
-    raw_post_content = models.TextField(null=True)
-    receiver = models.ForeignKey(User, on_delete=models.CASCADE, related_name='like_notice_receiver', null=True)
-    like_count = models.IntegerField(default=0)
-    dislike_count = models.IntegerField(default=0)
-    latest_like_datetime = models.DateTimeField(null=True)
-    read = models.BooleanField(default=False)
-    chat_item = models.ForeignKey(Chat, on_delete=models.CASCADE, related_name='like_messages', null=True)
+    class Meta:
+        indexes = [
+            models.Index(fields=('recipient', 'kind', 'read_at'), name='common_notif_unread_idx'),
+            models.Index(fields=('recipient', 'kind', '-updated_at'), name='common_notif_recent_idx'),
+        ]

@@ -1,0 +1,29 @@
+services:
+  db:
+    container_name: nwuicu-test-pgsql
+    restart: "no"
+    volumes:
+      - test-pgdata:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:55432:5432"
+
+  test:
+    build: .
+    restart: "no"
+    env_file:
+      - .env.test
+    environment:
+      DJANGO_SETTINGS_MODULE: settings.test
+      DB_HOST: db
+      DB_PORT: 5432
+    command: pytest -q
+    volumes:
+      - .:/app
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - app-network
+
+volumes:
+  test-pgdata:
