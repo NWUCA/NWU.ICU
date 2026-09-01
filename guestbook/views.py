@@ -1,5 +1,5 @@
 from django.conf import settings
-from django.db import IntegrityError, transaction
+from django.db import transaction
 from django.db.models import F
 from rest_framework import status
 from rest_framework.generics import GenericAPIView
@@ -59,9 +59,12 @@ def serialize_entry(entry, request, *, include_reply_count=True):
     return payload
 
 
-def get_entry_or_none(entry_id):
+def get_entry_or_none(entry_id, *, lock=False):
     try:
-        return GuestbookEntry.all_objects.select_related('author', 'parent', 'root').get(id=entry_id)
+        entries = GuestbookEntry.all_objects.select_related('author', 'parent', 'root')
+        if lock:
+            entries = entries.select_for_update(of=('self',))
+        return entries.get(id=entry_id)
     except GuestbookEntry.DoesNotExist:
         return None
 
@@ -124,10 +127,11 @@ class GuestbookRepliesView(GenericAPIView):
         page = self.paginate_queryset(entries)
         return self.get_paginated_response([serialize_entry(entry, request) for entry in page])
 
+    @transaction.atomic
     def post(self, request, entry_id):
         if not request.user.is_authenticated:
             return return_response(errors={'login': {'err_code': 'not_login', 'err_msg': '请先登录'}}, status_code=401)
-        parent = get_entry_or_none(entry_id)
+        parent = get_entry_or_none(entry_id, lock=True)
         if parent is None:
             return return_response(errors={'entry': {'err_code': 'not_found', 'err_msg': '留言不存在'}}, status_code=404)
         if parent.is_deleted:
@@ -166,8 +170,9 @@ class GuestbookContextView(GenericAPIView):
 class GuestbookLikeView(GenericAPIView):
     permission_classes = [IsAuthenticated]
 
+    @transaction.atomic
     def put(self, request, entry_id):
-        entry = get_entry_or_none(entry_id)
+        entry = get_entry_or_none(entry_id, lock=True)
         if entry is None:
             return return_response(errors={'entry': {'err_code': 'not_found', 'err_msg': '留言不存在'}}, status_code=404)
         if entry.is_deleted:
@@ -176,20 +181,17 @@ class GuestbookLikeView(GenericAPIView):
         if not serializer.is_valid():
             return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
         liked = serializer.validated_data['liked']
-        try:
-            with transaction.atomic():
-                if liked:
-                    _, created = GuestbookLike.objects.get_or_create(entry=entry, user=request.user)
-                    if created:
-                        GuestbookEntry.all_objects.filter(id=entry.id).update(like_count=F('like_count') + 1)
-                else:
-                    deleted, _ = GuestbookLike.objects.filter(entry=entry, user=request.user).delete()
-                    if deleted:
-                        GuestbookEntry.all_objects.filter(id=entry.id, like_count__gt=0).update(like_count=F('like_count') - 1)
-        except IntegrityError:
-            pass
+        if liked:
+            _, changed = GuestbookLike.objects.get_or_create(entry=entry, user=request.user)
+            if changed:
+                GuestbookEntry.all_objects.filter(id=entry.id).update(like_count=F('like_count') + 1)
+        else:
+            changed, _ = GuestbookLike.objects.filter(entry=entry, user=request.user).delete()
+            if changed:
+                GuestbookEntry.all_objects.filter(id=entry.id, like_count__gt=0).update(like_count=F('like_count') - 1)
         entry.refresh_from_db(fields=('like_count',))
-        notify_guestbook_like(entry)
+        if changed:
+            notify_guestbook_like(entry, mark_unread=liked and request.user.id != entry.author_id)
         return return_response(contents={'liked': liked, 'like_count': entry.like_count})
 
 

@@ -10,7 +10,25 @@ class GuestbookEntryAdmin(admin.ModelAdmin):
     list_display = ('id', 'author', 'anonymous', 'parent', 'created_at', 'is_deleted', 'like_count')
     list_filter = ('anonymous', 'is_deleted', 'created_at')
     search_fields = ('content', 'author__username', 'author__nickname')
-    readonly_fields = ('created_at', 'deleted_at', 'like_count')
+    readonly_fields = tuple(field.name for field in GuestbookEntry._meta.fields)
+    actions = ['soft_delete_selected']
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    @admin.action(description='移除选中的内容（保留原文和回复）')
+    def soft_delete_selected(self, request, queryset):
+        self.delete_queryset(request, queryset)
+
+    def delete_model(self, request, obj):
+        obj.soft_delete()
+
+    def delete_queryset(self, request, queryset):
+        for entry in queryset.order_by('pk'):
+            entry.soft_delete()
 
     def get_queryset(self, request):
         return GuestbookEntry.all_objects.select_related('author', 'parent')
@@ -21,7 +39,10 @@ class GuestbookReportAdmin(admin.ModelAdmin):
     list_display = ('id', 'entry', 'reporter', 'reason', 'status', 'created_at', 'handled_at')
     list_filter = ('reason', 'status', 'created_at')
     search_fields = ('detail', 'handling_note', 'reporter__username')
-    readonly_fields = ('created_at',)
+    readonly_fields = ('entry', 'reporter', 'reason', 'detail', 'created_at', 'handled_at', 'handled_by')
+
+    def has_add_permission(self, request):
+        return False
 
     def save_model(self, request, obj, form, change):
         previous_status = None
@@ -40,4 +61,10 @@ class GuestbookReportAdmin(admin.ModelAdmin):
 @admin.register(GuestbookLike)
 class GuestbookLikeAdmin(admin.ModelAdmin):
     list_display = ('entry', 'user', 'created_at')
-    readonly_fields = ('created_at',)
+    readonly_fields = ('entry', 'user', 'created_at')
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

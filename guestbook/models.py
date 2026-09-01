@@ -1,5 +1,5 @@
 from django.conf import settings
-from django.db import models
+from django.db import models, transaction
 
 from utils.models import SoftDeleteModel
 
@@ -29,6 +29,19 @@ class GuestbookEntry(SoftDeleteModel):
     @property
     def is_root(self):
         return self.parent_id is None
+
+    @transaction.atomic
+    def soft_delete(self):
+        # Serialize deletion with replies and likes, including their notifications.
+        current = type(self).all_objects.select_for_update().get(pk=self.pk)
+        if not current.is_deleted:
+            super(GuestbookEntry, current).soft_delete()
+        self.is_deleted, self.deleted_at = current.is_deleted, current.deleted_at
+        from .notifications import remove_entry_notifications
+        remove_entry_notifications(self.pk)
+
+    def delete(self, using=None, keep_parents=False):
+        self.soft_delete()
 
 
 class GuestbookLike(models.Model):

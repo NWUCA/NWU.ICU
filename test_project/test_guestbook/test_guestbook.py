@@ -101,6 +101,8 @@ class GuestbookApiTests(APITestCase):
         reply_notice = Notification.objects.get(recipient=self.author, kind=Notification.KIND_REPLY)
         self.assertEqual(reply_notice.payload['source'], 'guestbook')
         self.assertNotIn('content', reply_notice.payload['guestbook'])
+        self.assertNotIn('content', reply_notice.payload['reply'])
+        self.assertIsInstance(reply_notice.payload['created_by']['has_avatar'], bool)
 
         like_url = reverse('api:guestbook-like', kwargs={'entry_id': entry.id})
         self.reader_client.put(like_url, {'liked': True}, format='json')
@@ -113,3 +115,83 @@ class GuestbookApiTests(APITestCase):
             'content': f'<p>{"字" * 501}</p>',
         }, format='json')
         self.assertEqual(too_long.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_deletion_preserves_tree_and_removes_related_notifications(self):
+        root = GuestbookEntry.objects.create(author=self.author, content='<p>original</p>')
+        response = self.reader_client.post(self.replies_url(root), {'content': '<p>reply</p>'}, format='json')
+        child = GuestbookEntry.objects.get(pk=response.data['contents']['entry']['id'])
+        self.reader_client.put(reverse('api:guestbook-like', kwargs={'entry_id': root.id}), {'liked': True}, format='json')
+        self.assertEqual(Notification.objects.filter(recipient=self.author).count(), 2)
+        self.author_client.delete(self.entry_url(root))
+        root.refresh_from_db()
+        child.refresh_from_db()
+        self.assertTrue(root.is_deleted)
+        self.assertEqual(root.content, '<p>original</p>')
+        self.assertEqual(child.parent_id, root.id)
+        self.assertFalse(Notification.objects.filter(recipient=self.author).exists())
+        from guestbook.notifications import notify_guestbook_like, notify_guestbook_reply
+        notify_guestbook_like(root)
+        child.parent = root
+        notify_guestbook_reply(child)
+        self.assertFalse(Notification.objects.filter(recipient=self.author).exists())
+
+    def test_deleted_reply_is_removed_from_notifications(self):
+        root = GuestbookEntry.objects.create(author=self.author, content='<p>root</p>')
+        response = self.reader_client.post(self.replies_url(root), {'content': '<p>reply</p>'}, format='json')
+        child = GuestbookEntry.objects.get(pk=response.data['contents']['entry']['id'])
+        self.assertTrue(Notification.objects.filter(recipient=self.author).exists())
+        self.reader_client.delete(self.entry_url(child))
+        self.assertFalse(Notification.objects.filter(recipient=self.author).exists())
+
+    def test_admin_deletion_is_soft_and_content_is_read_only(self):
+        from django.contrib.admin.sites import AdminSite
+        from guestbook.admin import GuestbookEntryAdmin
+        root = GuestbookEntry.objects.create(author=self.author, content='<p>root</p>')
+        child = GuestbookEntry.objects.create(author=self.reader, content='<p>reply</p>', parent=root, root=root)
+        admin = GuestbookEntryAdmin(GuestbookEntry, AdminSite())
+        admin.delete_queryset(None, GuestbookEntry.all_objects.filter(pk=root.pk))
+        root.refresh_from_db()
+        child.refresh_from_db()
+        self.assertTrue(root.is_deleted)
+        self.assertEqual(root.content, '<p>root</p>')
+        self.assertEqual(child.parent_id, root.id)
+        self.assertIn('content', admin.readonly_fields)
+        self.assertIn('parent', admin.readonly_fields)
+
+    def test_repeated_and_removed_likes_do_not_reset_read_state(self):
+        from django.utils import timezone
+        root = GuestbookEntry.objects.create(author=self.author, content='<p>root</p>')
+        url = reverse('api:guestbook-like', kwargs={'entry_id': root.id})
+        self.reader_client.put(url, {'liked': True}, format='json')
+        notice = Notification.objects.get(recipient=self.author, kind=Notification.KIND_LIKE)
+        read_at = timezone.now()
+        notice.read_at = read_at
+        notice.save()
+        self.reader_client.put(url, {'liked': True}, format='json')
+        self.author_client.put(url, {'liked': True}, format='json')
+        notice.refresh_from_db()
+        self.assertEqual(notice.read_at, read_at)
+        other = create_user(username='guestbook-other', email='guestbook-other@example.com')
+        other_client = APIClient()
+        other_client.force_login(other)
+        other_client.put(url, {'liked': True}, format='json')
+        notice.refresh_from_db()
+        self.assertIsNone(notice.read_at)
+        notice.read_at = read_at
+        notice.save()
+        self.reader_client.put(url, {'liked': False}, format='json')
+        notice.refresh_from_db()
+        self.assertEqual(notice.read_at, read_at)
+        self.assertEqual(notice.payload['like']['like'], 2)
+
+    def test_notification_text_resolves_current_entry_instead_of_legacy_snapshot(self):
+        from guestbook.notifications import hydrate_guestbook_notifications
+        root = GuestbookEntry.objects.create(author=self.author, content='<p>root</p>')
+        response = self.reader_client.post(self.replies_url(root), {'content': '<p>current</p>'}, format='json')
+        notice = Notification.objects.get(recipient=self.author, kind=Notification.KIND_REPLY)
+        notice.payload['reply']['content'] = 'stale snapshot'
+        hydrate_guestbook_notifications([notice])
+        self.assertEqual(notice.payload['reply']['content'], '<p>current</p>')
+        GuestbookEntry.all_objects.filter(pk=response.data['contents']['entry']['id']).update(is_deleted=True)
+        hydrate_guestbook_notifications([notice])
+        self.assertEqual(notice.payload['reply']['content'], '[内容已删除]')
