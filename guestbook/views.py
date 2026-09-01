@@ -121,7 +121,7 @@ class GuestbookRepliesView(GenericAPIView):
             return return_response(errors={'entry': {'err_code': 'not_found', 'err_msg': '留言不存在'}}, status_code=404)
         entries = GuestbookEntry.all_objects.filter(parent_id=parent.id).select_related('author').order_by('created_at', 'id')
         page = self.paginate_queryset(entries)
-        return self.get_paginated_response([serialize_entry(entry, request, include_reply_count=False) for entry in page])
+        return self.get_paginated_response([serialize_entry(entry, request) for entry in page])
 
     def post(self, request, entry_id):
         if not request.user.is_authenticated:
