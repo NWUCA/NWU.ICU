@@ -25,6 +25,7 @@ environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
 
 INSTALLED_APPS = [
     'course_assessment',
+    'guestbook',
     'common',
     'user',
     # below are 3rd apps
