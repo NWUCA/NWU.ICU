@@ -18,9 +18,13 @@ class GuestbookEntry(SoftDeleteModel):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     like_count = models.PositiveIntegerField(default=0)
+    submission_id = models.UUIDField(null=True, blank=True, editable=False)
 
     class Meta:
         ordering = ('-created_at', '-id')
+        constraints = [
+            models.UniqueConstraint(fields=('author', 'submission_id'), name='unique_guestbook_submission'),
+        ]
         indexes = [
             models.Index(fields=('root', 'parent', 'created_at'), name='guestbook_reply_tree_idx'),
             models.Index(fields=('-created_at', '-id'), name='guestbook_recent_idx'),

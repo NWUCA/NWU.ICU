@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.db import transaction
-from django.db.models import F
+from django.db.models import Count, Exists, F, IntegerField, OuterRef, Subquery, Value
+from django.db.models.functions import Coalesce
 from rest_framework import status
 from rest_framework.generics import GenericAPIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -11,6 +12,7 @@ from utils.utils import get_user_avatar_info, return_response
 
 from .models import GuestbookEntry, GuestbookLike, GuestbookReport
 from .notifications import notify_guestbook_like, notify_guestbook_reply
+from .submissions import create_submission, previous_submission
 from .serializers import (
     GuestbookContentSerializer,
     GuestbookLikeSerializer,
@@ -19,6 +21,17 @@ from .serializers import (
 )
 
 DELETED_CONTENT = '[内容已删除]'
+
+
+def with_entry_counts(entries, request):
+    children = GuestbookEntry.all_objects.filter(parent_id=OuterRef('pk')).order_by().values('parent_id')
+    descendants = GuestbookEntry.all_objects.filter(root_id=OuterRef('pk')).order_by().values('root_id')
+    likes = GuestbookLike.objects.filter(entry_id=OuterRef('pk'), user_id=request.user.pk)
+    return entries.select_related('author').annotate(
+        children_count=Coalesce(Subquery(children.annotate(n=Count('pk')).values('n')), 0, output_field=IntegerField()),
+        descendant_count=Coalesce(Subquery(descendants.annotate(n=Count('pk')).values('n')), 0, output_field=IntegerField()),
+        current_user_liked=Exists(likes) if request.user.is_authenticated else Value(False),
+    )
 
 
 def entry_author(entry, request):
@@ -38,6 +51,12 @@ def entry_author(entry, request):
 
 def serialize_entry(entry, request, *, include_reply_count=True):
     is_authenticated = bool(request.user and request.user.is_authenticated)
+    children_count = getattr(entry, 'children_count', None)
+    if children_count is None:
+        children_count = GuestbookEntry.all_objects.filter(parent_id=entry.id).count()
+    liked = getattr(entry, 'current_user_liked', None)
+    if liked is None:
+        liked = is_authenticated and GuestbookLike.objects.filter(entry_id=entry.id, user_id=request.user.id).exists()
     payload = {
         'id': entry.id,
         'root_id': entry.root_id,
@@ -49,13 +68,15 @@ def serialize_entry(entry, request, *, include_reply_count=True):
         'like_count': entry.like_count,
         'author': entry_author(entry, request),
         'is_me': is_authenticated and entry.author_id == request.user.id,
-        'liked_by_me': is_authenticated and GuestbookLike.objects.filter(
-            entry_id=entry.id, user_id=request.user.id
-        ).exists(),
+        'liked_by_me': liked,
+        'children_count': children_count,
     }
     if include_reply_count:
-        root_id = entry.root_id or entry.id
-        payload['reply_count'] = GuestbookEntry.all_objects.filter(root_id=root_id).count()
+        total = getattr(entry, 'descendant_count', None)
+        payload['reply_count'] = (
+            (total if total is not None else GuestbookEntry.all_objects.filter(root_id=entry.id).count())
+            if entry.is_root else children_count
+        )
     return payload
 
 
@@ -74,7 +95,7 @@ class GuestbookListView(GenericAPIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        entries = GuestbookEntry.all_objects.filter(parent__isnull=True).select_related('author')
+        entries = with_entry_counts(GuestbookEntry.all_objects.filter(parent__isnull=True), request)
         page = self.paginate_queryset(entries)
         return self.get_paginated_response([serialize_entry(entry, request) for entry in page])
 
@@ -84,7 +105,7 @@ class GuestbookListView(GenericAPIView):
         serializer = GuestbookContentSerializer(data=request.data)
         if not serializer.is_valid():
             return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
-        entry = GuestbookEntry.objects.create(author=request.user, **serializer.validated_data)
+        entry, _ = create_submission(request.user, serializer.validated_data)
         return return_response(
             message='留言发布成功', contents={'entry': serialize_entry(entry, request)}, status_code=status.HTTP_201_CREATED
         )
@@ -123,7 +144,7 @@ class GuestbookRepliesView(GenericAPIView):
         parent = get_entry_or_none(entry_id)
         if parent is None:
             return return_response(errors={'entry': {'err_code': 'not_found', 'err_msg': '留言不存在'}}, status_code=404)
-        entries = GuestbookEntry.all_objects.filter(parent_id=parent.id).select_related('author').order_by('created_at', 'id')
+        entries = with_entry_counts(GuestbookEntry.all_objects.filter(parent_id=parent.id), request).order_by('created_at', 'id')
         page = self.paginate_queryset(entries)
         return self.get_paginated_response([serialize_entry(entry, request) for entry in page])
 
@@ -134,16 +155,16 @@ class GuestbookRepliesView(GenericAPIView):
         parent = get_entry_or_none(entry_id, lock=True)
         if parent is None:
             return return_response(errors={'entry': {'err_code': 'not_found', 'err_msg': '留言不存在'}}, status_code=404)
-        if parent.is_deleted:
-            return return_response(errors={'entry': {'err_code': 'deleted', 'err_msg': '已删除内容不能继续回复'}}, status_code=400)
         serializer = GuestbookReplySerializer(data=request.data)
         if not serializer.is_valid():
             return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
-        root_id = parent.root_id or parent.id
-        entry = GuestbookEntry.objects.create(
-            author=request.user, parent=parent, root_id=root_id, anonymous=False, **serializer.validated_data
-        )
-        notify_guestbook_reply(entry)
+        entry = previous_submission(request.user, serializer.validated_data, parent)
+        if not entry:
+            if parent.is_deleted:
+                return return_response(errors={'entry': {'err_code': 'deleted', 'err_msg': '已删除内容不能继续回复'}}, status_code=400)
+            entry, created = create_submission(request.user, serializer.validated_data, parent)
+            if created:
+                notify_guestbook_reply(entry)
         return return_response(
             message='回复发布成功', contents={'entry': serialize_entry(entry, request, include_reply_count=False)},
             status_code=status.HTTP_201_CREATED,
@@ -161,10 +182,16 @@ class GuestbookContextView(GenericAPIView):
             return return_response(errors={'entry': {'err_code': 'not_found', 'err_msg': '留言不存在'}}, status_code=404)
         path = []
         current = entry
-        while current is not None:
+        while current is not None and current.id not in path:
             path.append(current.id)
             current = current.parent
-        return return_response(contents={'root_id': entry.root_id or entry.id, 'path': list(reversed(path))})
+        path.reverse()
+        entries = with_entry_counts(GuestbookEntry.all_objects.filter(id__in=path), request).in_bulk()
+        return return_response(contents={
+            'root_id': entry.root_id or entry.id,
+            'path': path,
+            'entries': [serialize_entry(entries[entry_id], request) for entry_id in path],
+        })
 
 
 class GuestbookLikeView(GenericAPIView):

@@ -195,3 +195,43 @@ class GuestbookApiTests(APITestCase):
         GuestbookEntry.all_objects.filter(pk=response.data['contents']['entry']['id']).update(is_deleted=True)
         hydrate_guestbook_notifications([notice])
         self.assertEqual(notice.payload['reply']['content'], '[内容已删除]')
+
+    def test_retrying_submission_returns_original_without_duplicate_notification(self):
+        from uuid import uuid4
+        data = {'content': '<p>post</p>', 'submission_id': str(uuid4())}
+        root_response = self.author_client.post(reverse('api:guestbook'), data, format='json')
+        retry = self.author_client.post(reverse('api:guestbook'), data, format='json')
+        self.assertEqual(retry.status_code, 201)
+        self.assertEqual(retry.data['contents']['entry']['id'], root_response.data['contents']['entry']['id'])
+        root = GuestbookEntry.objects.get(pk=root_response.data['contents']['entry']['id'])
+        reply_data = {'content': '<p>reply</p>', 'submission_id': str(uuid4())}
+        first = self.reader_client.post(self.replies_url(root), reply_data, format='json')
+        second = self.reader_client.post(self.replies_url(root), reply_data, format='json')
+        self.assertEqual(first.data['contents']['entry']['id'], second.data['contents']['entry']['id'])
+        self.assertEqual(Notification.objects.filter(recipient=self.author).count(), 1)
+        conflict = self.reader_client.post(self.replies_url(root), {**reply_data, 'content': 'changed'}, format='json')
+        self.assertEqual(conflict.status_code, 409)
+        root.soft_delete()
+        self.assertEqual(self.reader_client.post(self.replies_url(root), reply_data, format='json').status_code, 201)
+        self.assertFalse(Notification.objects.filter(recipient=self.author).exists())
+
+    def test_nested_unsafe_tags_are_discarded_without_server_error(self):
+        response = self.author_client.post(reverse('api:guestbook'), {
+            'content': '<p>safe</p><object><div><p>unsafe</p></div></object>',
+        }, format='json')
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data['contents']['entry']['content'], '<p>safe</p>')
+
+    def test_context_includes_target_beyond_first_page_and_counts_direct_children(self):
+        root = GuestbookEntry.objects.create(author=self.author, content='root')
+        for _ in range(11):
+            child = GuestbookEntry.objects.create(author=self.reader, content='child', parent=root, root=root)
+        leaf = GuestbookEntry.objects.create(author=self.author, content='leaf', parent=child, root=root)
+        response = APIClient().get(reverse('api:guestbook-context', kwargs={'entry_id': leaf.id}))
+        entries = response.data['contents']['entries']
+        self.assertEqual([entry['id'] for entry in entries], [root.id, child.id, leaf.id])
+        self.assertEqual(entries[0]['reply_count'], 12)
+        self.assertEqual(entries[0]['children_count'], 11)
+        self.assertEqual(entries[1]['children_count'], 1)
+        self.assertEqual(entries[2]['reply_count'], 0)
+        self.assertEqual(entries[2]['children_count'], 0)
