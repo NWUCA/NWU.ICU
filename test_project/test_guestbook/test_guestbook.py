@@ -4,6 +4,7 @@ from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
 from guestbook.models import GuestbookEntry, GuestbookLike, GuestbookReport
+from common.models import Notification
 from test_project.common import create_user
 
 
@@ -92,6 +93,20 @@ class GuestbookApiTests(APITestCase):
         self.assertEqual(created.status_code, status.HTTP_201_CREATED)
         self.assertEqual(duplicate.status_code, status.HTTP_200_OK)
         self.assertEqual(GuestbookReport.objects.count(), 1)
+
+    def test_reply_and_like_create_guestbook_notifications_without_content_snapshots(self):
+        entry = GuestbookEntry.objects.create(author=self.author, content='<p>root</p>')
+        reply = self.reader_client.post(self.replies_url(entry), {'content': '<p>reply</p>'}, format='json')
+        self.assertEqual(reply.status_code, status.HTTP_201_CREATED)
+        reply_notice = Notification.objects.get(recipient=self.author, kind=Notification.KIND_REPLY)
+        self.assertEqual(reply_notice.payload['source'], 'guestbook')
+        self.assertNotIn('content', reply_notice.payload['guestbook'])
+
+        like_url = reverse('api:guestbook-like', kwargs={'entry_id': entry.id})
+        self.reader_client.put(like_url, {'liked': True}, format='json')
+        like_notice = Notification.objects.get(recipient=self.author, kind=Notification.KIND_LIKE)
+        self.assertEqual(like_notice.payload['guestbook']['root_id'], entry.id)
+        self.assertNotIn('content', like_notice.payload['guestbook'])
 
     def test_content_limit_is_counted_as_plain_text(self):
         too_long = self.author_client.post(reverse('api:guestbook'), {

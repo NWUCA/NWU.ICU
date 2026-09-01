@@ -10,6 +10,7 @@ from utils.throttle import CaptchaUserRateThrottle
 from utils.utils import get_user_avatar_info, return_response
 
 from .models import GuestbookEntry, GuestbookLike, GuestbookReport
+from .notifications import notify_guestbook_like, notify_guestbook_reply
 from .serializers import (
     GuestbookContentSerializer,
     GuestbookLikeSerializer,
@@ -138,6 +139,7 @@ class GuestbookRepliesView(GenericAPIView):
         entry = GuestbookEntry.objects.create(
             author=request.user, parent=parent, root_id=root_id, anonymous=False, **serializer.validated_data
         )
+        notify_guestbook_reply(entry)
         return return_response(
             message='回复发布成功', contents={'entry': serialize_entry(entry, request, include_reply_count=False)},
             status_code=status.HTTP_201_CREATED,
@@ -187,6 +189,7 @@ class GuestbookLikeView(GenericAPIView):
         except IntegrityError:
             pass
         entry.refresh_from_db(fields=('like_count',))
+        notify_guestbook_like(entry)
         return return_response(contents={'liked': liked, 'like_count': entry.like_count})
 
 

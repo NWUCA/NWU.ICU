@@ -1,6 +1,8 @@
 from django.contrib import admin
+from django.utils import timezone
 
 from .models import GuestbookEntry, GuestbookLike, GuestbookReport
+from .notifications import notify_guestbook_report
 
 
 @admin.register(GuestbookEntry)
@@ -20,6 +22,19 @@ class GuestbookReportAdmin(admin.ModelAdmin):
     list_filter = ('reason', 'status', 'created_at')
     search_fields = ('detail', 'handling_note', 'reporter__username')
     readonly_fields = ('created_at',)
+
+    def save_model(self, request, obj, form, change):
+        previous_status = None
+        if change:
+            previous_status = GuestbookReport.objects.filter(pk=obj.pk).values_list('status', flat=True).first()
+        if obj.status != GuestbookReport.STATUS_PENDING:
+            obj.handled_by = request.user
+            obj.handled_at = timezone.now()
+        super().save_model(request, obj, form, change)
+        if obj.status == GuestbookReport.STATUS_REMOVED and not obj.entry.is_deleted:
+            obj.entry.soft_delete()
+        if obj.status != GuestbookReport.STATUS_PENDING and obj.status != previous_status:
+            notify_guestbook_report(obj)
 
 
 @admin.register(GuestbookLike)
