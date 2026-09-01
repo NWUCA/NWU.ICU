@@ -1,0 +1,55 @@
+from bs4 import BeautifulSoup, Comment
+from rest_framework import serializers
+
+from .models import GuestbookReport
+
+ALLOWED_TAGS = {'p', 'br', 'strong', 'em', 's', 'u'}
+DISCARDED_TAGS = {'script', 'style', 'iframe', 'object', 'embed', 'template'}
+
+
+def clean_guestbook_html(value):
+    soup = BeautifulSoup(value or '', 'html.parser')
+    for comment in soup.find_all(string=lambda text: isinstance(text, Comment)):
+        comment.extract()
+    for tag in list(soup.find_all(True)):
+        if tag.name in DISCARDED_TAGS:
+            tag.decompose()
+        elif tag.name not in ALLOWED_TAGS:
+            tag.unwrap()
+        else:
+            tag.attrs = {}
+    return str(soup).strip(), soup.get_text().strip()
+
+
+class GuestbookContentSerializer(serializers.Serializer):
+    content = serializers.CharField(max_length=16_000)
+    anonymous = serializers.BooleanField(default=False)
+
+    def validate_content(self, value):
+        content, text = clean_guestbook_html(value)
+        if not text:
+            raise serializers.ValidationError('内容不能为空。')
+        if len(text) > 500:
+            raise serializers.ValidationError('内容不能超过 500 字。')
+        return content
+
+
+class GuestbookReplySerializer(serializers.Serializer):
+    content = serializers.CharField(max_length=16_000)
+
+    def validate_content(self, value):
+        content, text = clean_guestbook_html(value)
+        if not text:
+            raise serializers.ValidationError('内容不能为空。')
+        if len(text) > 500:
+            raise serializers.ValidationError('内容不能超过 500 字。')
+        return content
+
+
+class GuestbookLikeSerializer(serializers.Serializer):
+    liked = serializers.BooleanField()
+
+
+class GuestbookReportSerializer(serializers.Serializer):
+    reason = serializers.ChoiceField(choices=GuestbookReport.REASON_CHOICES)
+    detail = serializers.CharField(max_length=500, required=False, allow_blank=True)

@@ -43,6 +43,14 @@ from course_assessment.views import (
     ReviewAndReplyLikeView, CourseList, CourseLikeView, SchoolView,
     LatestReviewView, SemesterView, ReviewAnalysisView,
 )
+from guestbook.views import (
+    GuestbookContextView,
+    GuestbookDetailView,
+    GuestbookLikeView,
+    GuestbookListView,
+    GuestbookRepliesView,
+    GuestbookReportView,
+)
 from user.views import (
     Login,
     Logout,
@@ -55,6 +63,14 @@ from user.views import (
 )
 
 api_patterns = [
+
+    # 留言板
+    path('guestbook/', GuestbookListView.as_view(), name='guestbook'),
+    path('guestbook/<int:entry_id>/', GuestbookDetailView.as_view(), name='guestbook-detail'),
+    path('guestbook/<int:entry_id>/replies/', GuestbookRepliesView.as_view(), name='guestbook-replies'),
+    path('guestbook/<int:entry_id>/context/', GuestbookContextView.as_view(), name='guestbook-context'),
+    path('guestbook/<int:entry_id>/like/', GuestbookLikeView.as_view(), name='guestbook-like'),
+    path('guestbook/<int:entry_id>/reports/', GuestbookReportView.as_view(), name='guestbook-report'),
 
     # 课程评价
     path('assessment/user/activities/review/<int:user_id>/', MyReviewView.as_view(), name='user_review'),
