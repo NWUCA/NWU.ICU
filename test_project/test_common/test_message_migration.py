@@ -3,12 +3,18 @@ from django.db.migrations.executor import MigrationExecutor
 from django.test import TransactionTestCase
 
 
+def restore_latest_schema():
+    executor = MigrationExecutor(connection)
+    executor.migrate(executor.loader.graph.leaf_nodes())
+
+
 class MessageDataMigrationTests(TransactionTestCase):
     migrate_from = [('common', '0036_unique_system_chat')]
     migrate_to = [('common', '0038_remove_legacy_chat_models')]
 
     def setUp(self):
         super().setUp()
+        self.addCleanup(restore_latest_schema)
         executor = MigrationExecutor(connection)
         executor.migrate(self.migrate_from)
         old_apps = executor.loader.project_state(self.migrate_from).apps
@@ -107,6 +113,12 @@ class MessageMigrationAtomicFailureTests(TransactionTestCase):
         ChatMessage = old_apps.get_model('common', 'ChatMessage')
         ChatMessage.objects.create(chat_item_id=None, created_by_id=None, content='orphaned')
 
+        def restore_after_failure():
+            ChatMessage.objects.filter(chat_item_id=None).delete()
+            restore_latest_schema()
+
+        self.addCleanup(restore_after_failure)
+
         executor = MigrationExecutor(connection)
         with self.assertRaises(RuntimeError):
             executor.migrate(self.migrate_to)
@@ -116,8 +128,3 @@ class MessageMigrationAtomicFailureTests(TransactionTestCase):
         self.assertIn('common_chatreply', table_names)
         self.assertIn('common_chatmessage', table_names)
         self.assertIn('common_chat', table_names)
-
-        # Restore the latest schema so TransactionTestCase can flush the test
-        # database using the current model state during teardown.
-        ChatMessage.objects.filter(chat_item_id=None).delete()
-        MigrationExecutor(connection).migrate(self.migrate_to)
