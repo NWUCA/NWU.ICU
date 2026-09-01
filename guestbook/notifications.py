@@ -53,19 +53,19 @@ def notify_guestbook_like(entry, *, mark_unread=True):
         Notification.objects.filter(dedupe_key=dedupe_key).delete()
         return
     defaults = {
-            'recipient': entry.author,
-            'actor': None,
-            'kind': Notification.KIND_LIKE,
-            'payload': {
-                'source': 'guestbook',
-                'guestbook': {
-                    'root_id': entry.root_id or entry.id,
-                    'entry_id': entry.id,
-                },
-                'like': {'like': entry.like_count, 'dislike': 0},
-                'datetime': timezone.now().isoformat(),
+        'recipient': entry.author,
+        'actor': None,
+        'kind': Notification.KIND_LIKE,
+        'payload': {
+            'source': 'guestbook',
+            'guestbook': {
+                'root_id': entry.root_id or entry.id,
+                'entry_id': entry.id,
             },
-        }
+            'like': {'like': entry.like_count, 'dislike': 0},
+            'datetime': timezone.now().isoformat(),
+        },
+    }
     if mark_unread:
         defaults['read_at'] = None
         Notification.objects.update_or_create(dedupe_key=dedupe_key, defaults=defaults)
@@ -85,7 +85,7 @@ def hydrate_guestbook_notifications(notifications):
     from .models import GuestbookEntry
     ids = [note.payload.get('guestbook', {}).get('entry_id') for note in notifications
            if note.payload.get('source') == 'guestbook' and note.kind == Notification.KIND_REPLY]
-    entries = GuestbookEntry.all_objects.in_bulk(ids)
+    entries = GuestbookEntry.all_objects.select_related('author').in_bulk(ids)
     for note in notifications:
         if note.payload.get('source') != 'guestbook' or note.kind != Notification.KIND_REPLY:
             continue
@@ -95,6 +95,8 @@ def hydrate_guestbook_notifications(notifications):
             'id': entry_id,
             'content': entry.content if entry and not entry.is_deleted else '[内容已删除]',
         }}
+        if entry:
+            note.payload['created_by'] = notification_author(entry.author)
 
 
 def notify_guestbook_report(report):
