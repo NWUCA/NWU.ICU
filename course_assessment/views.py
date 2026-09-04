@@ -230,12 +230,22 @@ class LatestReviewView(GenericAPIView):
 
         page = self.paginate_queryset(review_all_set)
         if page is not None:
-            review_list = self.get_paginated_response(self.build_review_list(page))
+            review_list = self.get_paginated_response(self.build_review_list(page, request.user))
             return review_list
 
         return return_response(errors={'review': get_err_msg('review_not_exist')})
 
-    def build_review_list(self, review_page):
+    def build_review_list(self, review_page, user):
+        user_options = {}
+        if user.is_authenticated:
+            user_options = dict(
+                ReviewAndReplyLike.objects.filter(
+                    created_by=user,
+                    review__in=review_page,
+                    review_reply__isnull=True,
+                ).values_list('review_id', 'like')
+            )
+
         review_list = []
         for review in review_page:
             review_list.append({
@@ -249,6 +259,11 @@ class LatestReviewView(GenericAPIView):
                 },
                 'content': review.content,
                 "teachers": [{"name": teacher.name, "id": teacher.id} for teacher in review.course.teachers.all()],
+                'like': {
+                    'like': review.like_count,
+                    'dislike': review.dislike_count,
+                    'user_option': user_options.get(review.id, 0),
+                },
                 'edited': review.edited,
             })
         return review_list

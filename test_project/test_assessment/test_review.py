@@ -65,6 +65,10 @@ class ReviewTests(APITestCase):
         self.assertEqual(latest_review_list_response.data['contents']['results'][-1]['author']['id'], self.user_id)
         self.assertEqual(latest_review_list_response.data['contents']['results'][-1]['author']['uuid'], self.user.uuid)
         self.assertIn('has_avatar', latest_review_list_response.data['contents']['results'][-1]['author'])
+        self.assertEqual(
+            latest_review_list_response.data['contents']['results'][-1]['like'],
+            {'like': 0, 'dislike': 0, 'user_option': 0},
+        )
         self.assertEqual(latest_review_list_response.data['contents']['count'], 1)
         self.assertEqual(course_response.data['contents']['reviews'][-1]['author']['id'], self.user_id)
         return add_review_response.data['contents']['review_id'], self.course_id
@@ -200,6 +204,12 @@ class ReviewTests(APITestCase):
         review = Review.objects.get(id=review_id)
         self.assertEqual(review.like_count, 0)
         self.assertEqual(review.dislike_count, 0)
+
+        clientB.post(reverse('api:review_like'),
+                     data={'review_id': review_id, 'reply_id': 0, 'like_or_dislike': 1})
+        timeline_response = clientB.get(self.review_list_url)
+        timeline_like = timeline_response.data['contents']['results'][0]['like']
+        self.assertEqual(timeline_like, {'like': 1, 'dislike': 0, 'user_option': 1})
 
         clientB.post(reverse('api:review_like'),
                      data={'review_id': review_id, 'reply_id': 0, 'like_or_dislike': -1})
