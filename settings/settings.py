@@ -41,7 +41,14 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'django.contrib.postgres',
 ]
-CSRF_TRUSTED_ORIGINS = ['https://*.mydomain.com', 'https://*.127.0.0.1', 'http://localhost:5173']
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in env(
+        'CSRF_TRUSTED_ORIGINS',
+        default='http://localhost:5173,http://127.0.0.1:5173',
+    ).split(',')
+    if origin.strip()
+]
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     # 'silk.middleware.SilkyMiddleware',
