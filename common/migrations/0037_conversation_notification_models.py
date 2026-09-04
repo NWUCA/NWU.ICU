@@ -166,6 +166,7 @@ def migrate_legacy_messages(apps, schema_editor):
 class Migration(migrations.Migration):
     dependencies = [
         ('common', '0036_unique_system_chat'),
+        ('user', '0012_user_uuid'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 

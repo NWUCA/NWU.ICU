@@ -57,6 +57,10 @@ def merge_duplicate_system_chats(apps, schema_editor):
 
 class Migration(migrations.Migration):
 
+    # PostgreSQL cannot create the partial unique index while foreign-key
+    # updates from the data migration still have pending trigger events.
+    atomic = False
+
     dependencies = [
         ('common', '0035_resourceuploadrequest_creates_new_folder'),
     ]
