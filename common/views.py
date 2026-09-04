@@ -9,7 +9,11 @@ from rest_framework.generics import GenericAPIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
 
-from course_assessment.managers import SearchModuleErrorException
+from course_assessment.managers import (
+    SearchModuleErrorException,
+    get_search_display_text,
+    get_search_highlight_ranges,
+)
 from course_assessment.models import Course, Review, Teacher
 from settings import settings
 from user.models import User
@@ -335,7 +339,9 @@ class CourseTeacherSearchView(APIView):
             courses = Course.objects.search(search_keyword, page_size=page_size,
                                             current_page=current_page,
                                             prefetch_related_fields=['semester', 'teachers'])
-            search_result_list = [{'id': course.id, 'name': course.name, 'teacher': course.get_teachers(),
+            search_result_list = [{'id': course.id, 'name': course.name,
+                                   'name_highlight_ranges': get_search_highlight_ranges(course.name, search_keyword),
+                                   'teacher': course.get_teachers(),
                                    'classification': course.get_classification(),
                                    'school': course.school.get_name(), 'semester': course.get_semester(),
                                    'rating': {
@@ -360,6 +366,8 @@ class CourseTeacherSearchView(APIView):
             search_result_list = [{'id': review.id,
                                    'course': {'id': review.course.id, 'name': review.course.get_name(), },
                                    'content': review.content,
+                                   'content_highlight_ranges': get_search_highlight_ranges(
+                                       get_search_display_text(review.content), search_keyword),
                                    'rating': review.rating,
                                    'created_by': userUtils.get_user_info_in_review(review),
                                    'modify_time': review.modify_time,
@@ -375,7 +383,9 @@ class CourseTeacherSearchView(APIView):
         def teacher_search(search_keyword):
             teachers = Teacher.objects.search(search_keyword, page_size=page_size,
                                               current_page=current_page, select_related_fields=['school'])
-            search_result_list = [{'id': teacher.id, 'name': teacher.name, 'school': teacher.school.get_name(),
+            search_result_list = [{'id': teacher.id, 'name': teacher.name,
+                                   'name_highlight_ranges': get_search_highlight_ranges(teacher.name, search_keyword),
+                                   'school': teacher.school.get_name(),
                                    'avatar_uuid': teacher.avatar_uuid} for
                                   teacher in teachers['results']]
             page_info = {k: v for k, v in teachers.items() if k != 'results'}

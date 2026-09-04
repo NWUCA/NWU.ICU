@@ -1,9 +1,60 @@
+import html
+import re
+
 from django.contrib.postgres.search import TrigramSimilarity, SearchVector, SearchQuery
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.db import models
+from django.utils.html import strip_tags
 from pypinyin import lazy_pinyin
 
 from utils.models import SoftDeleteManager
+
+
+def get_search_display_text(content):
+    """Match the plain-text representation rendered by the search result card."""
+    content_with_image_labels = re.sub(r'<img\b[^>]*>', '[图片]\n', content, flags=re.IGNORECASE)
+    return html.unescape(strip_tags(content_with_image_labels))
+
+
+def get_search_highlight_ranges(content, query):
+    """Return character ranges matched by either the original query or its pinyin."""
+    if not content or not query:
+        return []
+
+    ranges = []
+
+    def add_range(start, end):
+        if start < end:
+            ranges.append((start, end))
+
+    normalized_content = content.casefold()
+    normalized_query = query.casefold()
+    match_start = normalized_content.find(normalized_query)
+    while match_start != -1:
+        add_range(match_start, match_start + len(normalized_query))
+        match_start = normalized_content.find(normalized_query, match_start + len(normalized_query))
+
+    pinyin_segments = [''.join(lazy_pinyin(character)).casefold() for character in content]
+    pinyin_content = ''.join(pinyin_segments)
+    pinyin_query = ''.join(lazy_pinyin(query)).casefold()
+    pinyin_match_start = pinyin_content.find(pinyin_query)
+    while pinyin_query and pinyin_match_start != -1:
+        pinyin_match_end = pinyin_match_start + len(pinyin_query)
+        segment_start = 0
+        for character_index, segment in enumerate(pinyin_segments):
+            segment_end = segment_start + len(segment)
+            if segment_end > pinyin_match_start and segment_start < pinyin_match_end:
+                add_range(character_index, character_index + 1)
+            segment_start = segment_end
+        pinyin_match_start = pinyin_content.find(pinyin_query, pinyin_match_start + len(pinyin_query))
+
+    merged_ranges = []
+    for start, end in sorted(ranges):
+        if merged_ranges and start <= merged_ranges[-1][1]:
+            merged_ranges[-1] = (merged_ranges[-1][0], max(merged_ranges[-1][1], end))
+        else:
+            merged_ranges.append((start, end))
+    return merged_ranges
 
 
 class SearchModuleErrorException(Exception):
