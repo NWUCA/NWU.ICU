@@ -1,6 +1,7 @@
 from pathlib import Path
 from types import SimpleNamespace
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 from django.test import SimpleTestCase, override_settings
 
@@ -105,6 +106,46 @@ class ResourcePublishTests(SimpleTestCase):
         self.assertFalse((destination_directory / 'copied-before-error.txt').exists())
         self.assertTrue(first_source.exists())
         self.assertTrue(second_source.exists())
+
+    def test_interrupted_publish_resumes_from_verified_final_file(self):
+        source = self.staging_root / 'notes.txt'
+        source.write_bytes(b'content')
+        destination_directory = self.storage_root / 'courses'
+        destination_directory.mkdir()
+        destination = destination_directory / 'notes.txt'
+        destination.write_bytes(b'content')
+        upload_file = make_upload_file(source, 'notes.txt')
+        # This is the durable marker written immediately before os.replace.
+        upload_file.published_path = '/courses/notes.txt'
+        upload_file.content_hash = 'ed7002b439e9ac845f22357d822bac1444730fbdb6016d3ec9432297b9ec9f73'
+        upload_file.published_at = None
+        source.unlink()
+        upload_request = SimpleNamespace(target_path='/courses', files=FakeFiles([upload_file]))
+
+        entries = publish_resource_upload(upload_request)
+
+        self.assertEqual(entries[0]['path'], '/courses/notes.txt')
+        self.assertIsNotNone(upload_file.published_at)
+        self.assertEqual(destination.read_bytes(), b'content')
+
+    def test_concurrent_destination_creation_is_not_overwritten(self):
+        source = self.staging_root / 'notes.txt'
+        source.write_bytes(b'content')
+        upload_request = SimpleNamespace(
+            target_path='/courses',
+            files=FakeFiles([make_upload_file(source, 'notes.txt')]),
+        )
+        destination = self.storage_root / 'courses' / 'notes.txt'
+
+        def create_competing_file_then_fail(_temporary_path, final_path):
+            Path(final_path).write_bytes(b'competitor')
+            raise FileExistsError
+
+        with patch('common.file.resource_publish.os.link', side_effect=create_competing_file_then_fail):
+            with self.assertRaisesRegex(ResourcePublishError, '目标文件已存在'):
+                publish_resource_upload(upload_request)
+
+        self.assertEqual(destination.read_bytes(), b'competitor')
 
     @override_settings(RESOURCE_STORAGE_ROOT=None)
     def test_missing_storage_root_configuration_is_reported(self):

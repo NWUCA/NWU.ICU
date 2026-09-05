@@ -241,6 +241,7 @@ FRONTEND_URL = env(
     'FRONTEND_URL',
     default='http://localhost:5173' if DEBUG else 'https://nwu.icu',
 )
+ADMIN_PUBLIC_URL = env('ADMIN_PUBLIC_URL', default=FRONTEND_URL)
 
 # 默认超级用户设置
 DEFAULT_SUPER_USER_ID = env('DEFAULT_SUPER_USER_ID')

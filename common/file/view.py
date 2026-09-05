@@ -11,15 +11,16 @@ from rest_framework import status, generics
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework.views import APIView
-
 from settings.log import TelegramBotHandler
+
 from utils.utils import get_err_msg
-from utils.utils import format_file_size, return_response
+from utils.utils import return_response
 from .resource_directories import (
     ResourceDirectoryCacheError,
     get_cached_child_directories,
 )
 from .models import ResourceUploadFile, ResourceUploadRequest, UploadedFile
+from .resource_notifications import queue_resource_upload_notifications
 from .serializers import (
     ResourceDirectorySerializer,
     ResourceUploadCreateSerializer,
@@ -31,7 +32,7 @@ from .serializers import (
 logger = logging.getLogger(__name__)
 resource_upload_notification_executor = ThreadPoolExecutor(
     max_workers=1,
-    thread_name_prefix='resource-upload-notification',
+    thread_name_prefix='resource-upload-legacy-notification',
 )
 RESOURCE_UPLOAD_MAX_FILE_SIZE = 100 * 1024 * 1024
 RESOURCE_UPLOAD_MAX_FILE_COUNT = 20
@@ -42,43 +43,24 @@ RESOURCE_UPLOAD_ALLOWED_EXTENSIONS = {
 }
 
 
-def build_resource_upload_telegram_message(upload_request, event='created'):
-    file_lines = '\n'.join(
-        f'- {item.relative_path} ({format_file_size(item.size)})'
-        for item in upload_request.files.all()
-    )
-    title = '收到新的资料上传请求' if event == 'created' else '资料上传请求已被用户更新'
-    return (
-        f'{title} #{upload_request.pk}\n'
-        f'用户: {upload_request.uploaded_by.username} (ID: {upload_request.uploaded_by_id})\n'
-        f'目标路径: {upload_request.target_path}\n'
-        f'总大小: {format_file_size(upload_request.total_size)}\n'
-        f'文件:\n{file_lines}'
-    )
-
-
 def send_resource_upload_telegram_notification(upload_request_id, message):
+    """Deprecated compatibility helper. New uploads use ResourceNotificationOutbox."""
     if not settings.TELEGRAM_BOT_API_TOKEN or not settings.TELEGRAM_CHAT_ID:
-        logger.warning(
-            'Skipped Telegram notification for resource upload request %s: '
-            'TELEGRAM_BOT_API_TOKEN or TELEGRAM_CHAT_ID is not configured',
-            upload_request_id,
-        )
         return
-    try:
-        handler = TelegramBotHandler(send_timeout=10)
-        handler.setFormatter(logging.Formatter('%(message)s'))
-        handler.handle(logging.LogRecord(__name__, logging.INFO, '', 0, message, (), None))
-    except Exception:
-        logger.exception('Failed to send Telegram notification for resource upload request %s', upload_request_id)
+    handler = TelegramBotHandler(send_timeout=10)
+    handler.setFormatter(logging.Formatter('%(message)s'))
+    handler.handle(logging.LogRecord(__name__, logging.INFO, '', 0, message, (), None))
 
 
 def enqueue_resource_upload_telegram_notification(upload_request, event='created'):
-    message = build_resource_upload_telegram_message(upload_request, event=event)
+    """Deprecated compatibility helper retained for existing integrations."""
+    file_lines = '\n'.join(
+        f'- {item.relative_path}' for item in upload_request.files.all()
+    )
     resource_upload_notification_executor.submit(
         send_resource_upload_telegram_notification,
         upload_request.pk,
-        message,
+        f'资料上传请求 #{upload_request.pk}\n{file_lines}',
     )
 
 
@@ -207,6 +189,17 @@ class ResourceDirectoryView(APIView):
         return return_response(contents=contents)
 
 
+class ResourceUploadConfigView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return return_response(contents={
+            'max_file_size': RESOURCE_UPLOAD_MAX_FILE_SIZE,
+            'max_file_count': RESOURCE_UPLOAD_MAX_FILE_COUNT,
+            'allowed_extensions': sorted(RESOURCE_UPLOAD_ALLOWED_EXTENSIONS),
+        })
+
+
 class ResourceUploadRequestView(APIView):
     parser_classes = (MultiPartParser, FormParser)
     permission_classes = [IsAuthenticated]
@@ -268,8 +261,9 @@ class ResourceUploadRequestView(APIView):
                 )
                 for index, uploaded_file in enumerate(files)
             ])
+            # The outbox row belongs to the same transaction as the submission.
+            queue_resource_upload_notifications(upload_request, event='created')
         upload_request = ResourceUploadRequest.objects.prefetch_related('files').get(pk=upload_request.pk)
-        enqueue_resource_upload_telegram_notification(upload_request)
         return return_response(
             contents={'upload_request': ResourceUploadRequestSerializer(upload_request).data},
             status_code=status.HTTP_201_CREATED,
@@ -295,6 +289,13 @@ class ResourceUploadRequestDetailView(APIView):
                 errors={'remove_file_ids': get_err_msg('resource_upload_invalid_file_ids')},
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
+        try:
+            expected_revision = int(request.data.get('expected_revision'))
+        except (TypeError, ValueError):
+            return return_response(
+                errors={'expected_revision': get_err_msg('resource_upload_invalid_revision')},
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
 
         with transaction.atomic():
             upload_request = (
@@ -308,12 +309,22 @@ class ResourceUploadRequestDetailView(APIView):
                     errors={'upload_request': get_err_msg('resource_upload_not_found')},
                     status_code=status.HTTP_404_NOT_FOUND,
                 )
+            if upload_request.files_deleted_at:
+                return return_response(
+                    errors={'upload_request': get_err_msg('resource_upload_staging_expired')},
+                    status_code=status.HTTP_409_CONFLICT,
+                )
             if upload_request.status not in {
                 ResourceUploadRequest.STATUS_PENDING,
                 ResourceUploadRequest.STATUS_REJECTED,
             }:
                 return return_response(
                     errors={'upload_request': get_err_msg('resource_upload_not_editable')},
+                    status_code=status.HTTP_409_CONFLICT,
+                )
+            if upload_request.revision != expected_revision:
+                return return_response(
+                    errors={'upload_request': '投稿内容已更新，请刷新后重试'},
                     status_code=status.HTTP_409_CONFLICT,
                 )
 
@@ -386,6 +397,9 @@ class ResourceUploadRequestDetailView(APIView):
             upload_request.reviewed_at = None
             upload_request.reviewed_by = None
             upload_request.rejection_reason = ''
+            upload_request.publish_error = ''
+            upload_request.files_deleted_at = None
+            upload_request.revision += 1
             upload_request.save(update_fields=(
                 'target_path',
                 'creates_new_folder',
@@ -394,10 +408,15 @@ class ResourceUploadRequestDetailView(APIView):
                 'reviewed_at',
                 'reviewed_by',
                 'rejection_reason',
+                'publish_error',
+                'files_deleted_at',
+                'revision',
+                'updated_at',
             ))
 
+            # The edit and administrator notification succeed or roll back together.
+            queue_resource_upload_notifications(upload_request, event='updated')
         upload_request = ResourceUploadRequest.objects.prefetch_related('files').get(pk=upload_request.pk)
-        enqueue_resource_upload_telegram_notification(upload_request, event='updated')
         return return_response(
             contents={'upload_request': ResourceUploadRequestSerializer(upload_request).data},
         )

@@ -4,18 +4,19 @@ from django import forms
 from django.contrib import admin, messages
 from django.contrib.admin.helpers import ActionForm
 from django.db.models import Sum
-from django.urls import reverse
+from django.shortcuts import redirect
+from django.template.response import TemplateResponse
+from django.urls import path, reverse
 from django.utils import timezone
 from django.utils.html import format_html, format_html_join
 
 from common.file.models import ResourceUploadFile, ResourceUploadRequest
-from common.file.resource_notifications import (
-    RESULT_APPROVED,
-    RESULT_PUBLISH_FAILED,
-    RESULT_REJECTED,
-    notify_resource_upload_result,
+from common.file.resource_workflow import (
+    ResourceReviewError,
+    approve_resource_upload,
+    reject_resource_upload,
+    retry_resource_publish,
 )
-from common.file.resource_publish import ResourcePublishError, publish_resource_upload
 from utils.utils import format_file_size
 from .models import Announcement, Bulletin, About
 
@@ -25,6 +26,28 @@ logger = logging.getLogger(__name__)
 
 class ResourceUploadActionForm(ActionForm):
     rejection_reason = forms.CharField(label='拒绝理由', required=False, max_length=2000)
+
+
+class ResourceUploadReviewForm(forms.Form):
+    ACTION_APPROVE = 'approve'
+    ACTION_REJECT = 'reject'
+    ACTION_RETRY = 'retry'
+    action = forms.ChoiceField(choices=(
+        (ACTION_APPROVE, '通过并发布'),
+        (ACTION_REJECT, '拒绝并通知'),
+        (ACTION_RETRY, '重新发布'),
+    ), widget=forms.HiddenInput)
+    expected_revision = forms.IntegerField(widget=forms.HiddenInput, min_value=1)
+    target_path = forms.CharField(label='最终目标目录', required=False, max_length=2048)
+    rejection_reason = forms.CharField(label='拒绝理由', required=False, max_length=2000, widget=forms.Textarea)
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get('action') in {self.ACTION_APPROVE, self.ACTION_RETRY} and not cleaned.get('target_path', '').strip():
+            self.add_error('target_path', '发布投稿时必须填写最终目标目录')
+        if cleaned.get('action') == self.ACTION_REJECT and not cleaned.get('rejection_reason', '').strip():
+            self.add_error('rejection_reason', '拒绝投稿时必须填写理由')
+        return cleaned
 
 
 class ResourceUploadFileInline(admin.TabularInline):
@@ -55,19 +78,85 @@ class ResourceUploadRequestAdmin(admin.ModelAdmin):
     actions = ('approve_requests', 'reject_requests')
     inlines = (ResourceUploadFileInline,)
     list_display = (
-        'id', 'uploaded_by', 'target_path', 'creates_new_folder', 'file_links', 'status', 'total_size_display',
+        'id', 'uploaded_by', 'target_path', 'creates_new_folder', 'file_links', 'status', 'revision', 'review_link', 'total_size_display',
         'created_at', 'reviewed_by', 'reviewed_at', 'files_deleted_at',
     )
     list_filter = ('status', 'created_at', 'reviewed_at', 'files_deleted_at')
     search_fields = ('uploaded_by__username', 'uploaded_by__nickname', 'target_path', 'files__relative_path')
     readonly_fields = (
         'uploaded_by', 'target_path', 'creates_new_folder', 'status', 'total_size_display', 'created_at',
-        'reviewed_at', 'reviewed_by', 'rejection_reason', 'files_deleted_at',
+        'revision', 'updated_at', 'reviewed_at', 'reviewed_by', 'rejection_reason', 'publish_error', 'files_deleted_at',
     )
     date_hierarchy = 'created_at'
 
     def get_queryset(self, request):
         return super().get_queryset(request).prefetch_related('files')
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                '<int:object_id>/review/',
+                self.admin_site.admin_view(self.review_view),
+                name='common_resourceuploadrequest_review',
+            ),
+        ]
+        return custom_urls + urls
+
+    @admin.display(description='审核')
+    def review_link(self, obj):
+        return format_html('<a href="{}">打开审核页</a>', reverse('admin:common_resourceuploadrequest_review', args=(obj.pk,)))
+
+    def review_view(self, request, object_id):
+        upload_request = self.get_queryset(request).filter(pk=object_id).first()
+        if upload_request is None:
+            self.message_user(request, '投稿不存在', messages.ERROR)
+            return redirect('admin:common_resourceuploadrequest_changelist')
+        if request.method == 'POST':
+            form = ResourceUploadReviewForm(request.POST)
+            if form.is_valid():
+                try:
+                    action = form.cleaned_data['action']
+                    if action == ResourceUploadReviewForm.ACTION_APPROVE:
+                        approve_resource_upload(
+                            upload_request_id=upload_request.pk,
+                            reviewer=request.user,
+                            expected_revision=form.cleaned_data['expected_revision'],
+                            target_path=form.cleaned_data['target_path'],
+                        )
+                        self.message_user(request, '已进入发布队列。', messages.SUCCESS)
+                    elif action == ResourceUploadReviewForm.ACTION_REJECT:
+                        reject_resource_upload(
+                            upload_request_id=upload_request.pk,
+                            reviewer=request.user,
+                            expected_revision=form.cleaned_data['expected_revision'],
+                            reason=form.cleaned_data['rejection_reason'],
+                        )
+                        self.message_user(request, '投稿已拒绝，通知已进入发送队列。', messages.SUCCESS)
+                    else:
+                        retry_resource_publish(
+                            upload_request_id=upload_request.pk,
+                            reviewer=request.user,
+                            expected_revision=form.cleaned_data['expected_revision'],
+                            target_path=form.cleaned_data['target_path'],
+                        )
+                        self.message_user(request, '已重新进入发布队列。', messages.SUCCESS)
+                    return redirect('admin:common_resourceuploadrequest_review', object_id=upload_request.pk)
+                except ResourceReviewError as error:
+                    form.add_error(None, str(error))
+        else:
+            form = ResourceUploadReviewForm(initial={
+                'expected_revision': upload_request.revision,
+                'target_path': upload_request.target_path,
+            })
+        context = {
+            **self.admin_site.each_context(request),
+            'title': f'审核投稿 #{upload_request.pk}',
+            'upload_request': upload_request,
+            'form': form,
+            'opts': self.model._meta,
+        }
+        return TemplateResponse(request, 'admin/common/resourceuploadrequest/review.html', context)
 
     @admin.display(description='投稿文件')
     def file_links(self, obj):
@@ -112,59 +201,23 @@ class ResourceUploadRequestAdmin(admin.ModelAdmin):
             .select_related('uploaded_by')
             .prefetch_related('files')
         )
-        approved_count = 0
-        failed_count = 0
+        queued_count = 0
         for upload_request in pending_requests:
             try:
-                published_entries = publish_resource_upload(upload_request)
-            except ResourcePublishError as error:
-                failed_count += 1
-                logger.exception('Failed to publish resource upload request %s', upload_request.pk)
-                upload_request.status = ResourceUploadRequest.STATUS_REJECTED
-                upload_request.reviewed_by = request.user
-                upload_request.reviewed_at = timezone.now()
-                upload_request.rejection_reason = f'系统发布时发生错误：{error}'
-                upload_request.save(update_fields=(
-                    'status', 'reviewed_by', 'reviewed_at', 'rejection_reason',
-                ))
-                notify_resource_upload_result(
-                    request.user,
-                    upload_request,
-                    RESULT_PUBLISH_FAILED,
+                approve_resource_upload(
+                    upload_request_id=upload_request.pk,
+                    reviewer=request.user,
+                    expected_revision=upload_request.revision,
+                    target_path=upload_request.target_path,
                 )
-                self.message_user(
-                    request,
-                    f'请求 #{upload_request.pk} 发布失败，已退回并通知投稿用户：{error}',
-                    messages.ERROR,
-                )
-                continue
-
-            upload_request.status = ResourceUploadRequest.STATUS_APPROVED
-            upload_request.reviewed_by = request.user
-            upload_request.reviewed_at = timezone.now()
-            upload_request.rejection_reason = ''
-            upload_request.save(update_fields=(
-                'status', 'reviewed_by', 'reviewed_at', 'rejection_reason',
-            ))
-            notify_resource_upload_result(request.user, upload_request, RESULT_APPROVED)
-            approved_count += 1
-            logger.info(
-                'Published resource upload request %s (%s files)',
-                upload_request.pk,
-                len(published_entries),
-            )
-
-        if approved_count:
+                queued_count += 1
+            except ResourceReviewError as error:
+                self.message_user(request, f'请求 #{upload_request.pk} 未进入发布队列：{error}', messages.ERROR)
+        if queued_count:
             self.message_user(
                 request,
-                f'已复制文件并通过 {approved_count} 个上传请求。原投稿文件将在 30 天后清理。',
+                f'已将 {queued_count} 个上传请求加入发布队列。',
                 messages.SUCCESS,
-            )
-        if failed_count:
-            self.message_user(
-                request,
-                f'{failed_count} 个请求发布失败，均已退回并通知投稿用户。',
-                messages.WARNING,
             )
 
     @admin.action(description='拒绝所选的未审核请求')
@@ -176,14 +229,16 @@ class ResourceUploadRequestAdmin(admin.ModelAdmin):
         upload_requests = list(
             queryset.filter(status=ResourceUploadRequest.STATUS_PENDING).select_related('uploaded_by')
         )
-        now = timezone.now()
         for upload_request in upload_requests:
-            upload_request.status = ResourceUploadRequest.STATUS_REJECTED
-            upload_request.reviewed_by = request.user
-            upload_request.reviewed_at = now
-            upload_request.rejection_reason = reason
-            upload_request.save(update_fields=('status', 'reviewed_by', 'reviewed_at', 'rejection_reason'))
-            notify_resource_upload_result(request.user, upload_request, RESULT_REJECTED)
+            try:
+                reject_resource_upload(
+                    upload_request_id=upload_request.pk,
+                    reviewer=request.user,
+                    expected_revision=upload_request.revision,
+                    reason=reason,
+                )
+            except ResourceReviewError as error:
+                self.message_user(request, f'请求 #{upload_request.pk} 未能拒绝：{error}', messages.ERROR)
         self.message_user(request, f'已拒绝 {len(upload_requests)} 个上传请求。', messages.SUCCESS)
 
 

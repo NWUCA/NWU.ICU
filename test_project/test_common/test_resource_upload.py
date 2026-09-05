@@ -76,8 +76,8 @@ class ResourceUploadRequestTests(APITestCase):
         )
         return upload_request, upload_file
 
-    @patch('common.file.view.enqueue_resource_upload_telegram_notification')
-    def test_upload_response_does_not_wait_for_telegram(self, enqueue_notification):
+    @patch('common.file.view.queue_resource_upload_notifications')
+    def test_upload_response_queues_telegram_notification(self, queue_notification):
         uploaded_file = SimpleUploadedFile(
             'notes.txt',
             b'test resource',
@@ -107,7 +107,7 @@ class ResourceUploadRequestTests(APITestCase):
             response.data['contents']['upload_request']['total_size_display'],
             '13 B',
         )
-        enqueue_notification.assert_called_once()
+        queue_notification.assert_called_once()
 
     def test_only_admin_can_download_submitted_file(self):
         upload_request = ResourceUploadRequest.objects.create(
@@ -139,8 +139,8 @@ class ResourceUploadRequestTests(APITestCase):
             closer()
         response._resource_closers.clear()
 
-    @patch('common.file.view.enqueue_resource_upload_telegram_notification')
-    def test_rejected_request_can_remove_add_and_move_files(self, enqueue_notification):
+    @patch('common.file.view.queue_resource_upload_notifications')
+    def test_rejected_request_can_remove_add_and_move_files(self, queue_notification):
         upload_request, removed_file = self.create_upload_request(
             status=ResourceUploadRequest.STATUS_REJECTED,
         )
@@ -160,6 +160,7 @@ class ResourceUploadRequestTests(APITestCase):
             reverse('api:resource-upload-request-detail', args=[upload_request.pk]),
             {
                 'target_path': '/documents',
+                'expected_revision': str(upload_request.revision),
                 'new_folder_name': 'new-course',
                 'remove_file_ids': [str(removed_file.pk)],
                 'files': [SimpleUploadedFile('new.txt', b'new')],
@@ -181,8 +182,8 @@ class ResourceUploadRequestTests(APITestCase):
             set(upload_request.files.values_list('relative_path', flat=True)),
             {kept_file.relative_path, 'new.txt'},
         )
-        enqueue_notification.assert_called_once()
-        self.assertEqual(enqueue_notification.call_args.kwargs, {'event': 'updated'})
+        queue_notification.assert_called_once()
+        self.assertEqual(queue_notification.call_args.kwargs, {'event': 'updated'})
 
     def test_approved_request_cannot_be_edited(self):
         upload_request, _ = self.create_upload_request(
@@ -191,7 +192,7 @@ class ResourceUploadRequestTests(APITestCase):
 
         response = self.client.put(
             reverse('api:resource-upload-request-detail', args=[upload_request.pk]),
-            {'target_path': '/documents'},
+            {'target_path': '/documents', 'expected_revision': str(upload_request.revision)},
             format='multipart',
         )
 
@@ -206,6 +207,7 @@ class ResourceUploadRequestTests(APITestCase):
             reverse('api:resource-upload-request-detail', args=[upload_request.pk]),
             {
                 'target_path': '/documents',
+                'expected_revision': str(upload_request.revision),
                 'remove_file_ids': [str(upload_file.pk)],
             },
             format='multipart',

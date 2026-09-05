@@ -71,7 +71,7 @@ services:
     env_file:
       - .env
     command: bash -c "
-      printf '0 0 * * * cd /app && python manage.py update_semester\n0 3 * * * cd /app && python scripts/export_resource_tree.py --root /resource-storage --output /app/data/resource_directories.json --source https://resour.nwu.icu\n15 3 * * * cd /app && python manage.py clean_approved_resource_uploads\n' > /app/crontab &&
+      printf '0 0 * * * cd /app && python manage.py update_semester\n0 3 * * * cd /app && python scripts/export_resource_tree.py --root /resource-storage --output /app/data/resource_directories.json --source https://resour.nwu.icu\n15 3 * * * cd /app && python manage.py clean_approved_resource_uploads\n30 3 * * * cd /app && python manage.py clean_expired_resource_uploads\n' > /app/crontab &&
       supercronic /app/crontab"
     volumes:
       - ${MEDIA_STORAGE_HOST_PATH:-./media}:/app/media
@@ -86,6 +86,32 @@ services:
       - DB_HOST=db
       - DB_PORT=5432
       - RESOURCE_STORAGE_ROOT=/resource-storage
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  resource-worker:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    command: python manage.py process_resource_upload_tasks --poll-seconds 5
+    volumes:
+      - ${MEDIA_STORAGE_HOST_PATH:-./media}:/app/media
+      - ${RESOURCE_INDEX_HOST_PATH:-./data}:/app/data
+      - ${RESOURCE_STORAGE_HOST_PATH:?请在.env中配置AList本地存储物理目录}:/resource-storage
+    environment:
+      - DJANGO_SETTINGS_MODULE=settings.settings
+      - SECRET_KEY=${SECRET_KEY}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_HOST=db
+      - DB_PORT=5432
+      - RESOURCE_STORAGE_ROOT=/resource-storage
+      - ADMIN_PUBLIC_URL=${ADMIN_PUBLIC_URL:-https://nwu.icu}
     depends_on:
       db:
         condition: service_healthy

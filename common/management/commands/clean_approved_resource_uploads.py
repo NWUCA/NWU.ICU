@@ -1,5 +1,3 @@
-from datetime import timedelta
-
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
@@ -7,13 +5,11 @@ from common.file.models import ResourceUploadRequest
 
 
 class Command(BaseCommand):
-    help = 'Delete files from approved resource upload requests after 30 days'
+    help = 'Delete remaining staging files from approved resource upload requests'
 
     def handle(self, *args, **options):
-        cutoff = timezone.now() - timedelta(days=30)
         upload_requests = ResourceUploadRequest.objects.filter(
             status=ResourceUploadRequest.STATUS_APPROVED,
-            reviewed_at__lte=cutoff,
             files_deleted_at__isnull=True,
         ).prefetch_related('files')
         deleted_requests = 0

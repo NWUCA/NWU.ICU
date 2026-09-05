@@ -1,0 +1,31 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+  <div id="content-main">
+    <h1>审核资料投稿 #{{ upload_request.pk }}</h1>
+    <p><strong>投稿人：</strong>{{ upload_request.uploaded_by }}　<strong>版本：</strong>{{ upload_request.revision }}　<strong>状态：</strong>{{ upload_request.get_status_display }}</p>
+    <p><strong>用户选择的目录：</strong><code>{{ upload_request.target_path }}</code></p>
+    {% if upload_request.publish_error %}<p class="errornote">发布错误：{{ upload_request.publish_error }}</p>{% endif %}
+    {% if upload_request.rejection_reason %}<p><strong>拒绝理由：</strong>{{ upload_request.rejection_reason }}</p>{% endif %}
+    <h2>投稿文件</h2>
+    <ul>
+      {% for file in upload_request.files.all %}
+        <li>{{ file.relative_path }}（{{ file.size }} bytes） {% if file.file %}<a href="{% url 'api:resource-upload-file-download' file.pk %}">下载审核</a>{% endif %}</li>
+      {% endfor %}
+    </ul>
+    <form method="post" novalidate>
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+      {{ form.expected_revision }}
+      <div class="form-row">{{ form.target_path.errors }}{{ form.target_path.label_tag }}{{ form.target_path }}<p class="help">可填写任意目录路径，例如 /学院/课程/资料；缺少的中间目录会自动创建。</p></div>
+      <div class="form-row">{{ form.rejection_reason.errors }}{{ form.rejection_reason.label_tag }}{{ form.rejection_reason }}</div>
+      {% if upload_request.status == 'pending' %}
+        <button class="button default" type="submit" name="action" value="approve">通过并发布</button>
+        <button class="button" type="submit" name="action" value="reject">拒绝并通知</button>
+      {% elif upload_request.status == 'publish_failed' %}
+        <button class="button default" type="submit" name="action" value="retry">按当前目录重新发布</button>
+        <button class="button" type="submit" name="action" value="reject">拒绝并通知</button>
+      {% endif %}
+    </form>
+  </div>
+{% endblock %}

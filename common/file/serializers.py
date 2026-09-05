@@ -8,6 +8,7 @@ from rest_framework import serializers
 from utils.utils import format_file_size
 from .resource_notifications import get_resource_public_url
 from .models import ResourceUploadFile, ResourceUploadRequest, UploadedFile
+from .resource_workflow import resource_upload_files_expire_at
 
 
 class UploadedFileSerializer(serializers.ModelSerializer):
@@ -59,7 +60,7 @@ class ResourceUploadFileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ResourceUploadFile
-        fields = ('id', 'original_name', 'relative_path', 'size', 'size_display')
+        fields = ('id', 'original_name', 'relative_path', 'size', 'size_display', 'published_path', 'published_at')
 
     def get_size_display(self, obj):
         return format_file_size(obj.size)
@@ -71,13 +72,15 @@ class ResourceUploadRequestSerializer(serializers.ModelSerializer):
     reviewed_by = serializers.SerializerMethodField()
     total_size_display = serializers.SerializerMethodField()
     resource_url = serializers.SerializerMethodField()
+    can_edit = serializers.SerializerMethodField()
+    files_expires_at = serializers.SerializerMethodField()
 
     class Meta:
         model = ResourceUploadRequest
         fields = (
             'id', 'uploaded_by', 'target_path', 'creates_new_folder', 'status', 'total_size', 'total_size_display',
-            'files', 'created_at', 'reviewed_at', 'reviewed_by', 'rejection_reason', 'files_deleted_at',
-            'resource_url',
+            'files', 'created_at', 'updated_at', 'revision', 'reviewed_at', 'reviewed_by', 'rejection_reason',
+            'publish_error', 'files_deleted_at', 'files_expires_at', 'can_edit', 'resource_url',
         )
 
     def get_uploaded_by(self, obj):
@@ -95,6 +98,16 @@ class ResourceUploadRequestSerializer(serializers.ModelSerializer):
         if obj.status != ResourceUploadRequest.STATUS_APPROVED:
             return None
         return get_resource_public_url(obj.target_path)
+
+    def get_can_edit(self, obj):
+        return (
+            obj.status in {ResourceUploadRequest.STATUS_PENDING, ResourceUploadRequest.STATUS_REJECTED}
+            and not obj.files_deleted_at
+        )
+
+    def get_files_expires_at(self, obj):
+        expires_at = resource_upload_files_expire_at(obj)
+        return expires_at.isoformat() if expires_at else None
 
 
 class ResourceUploadCreateSerializer(serializers.Serializer):

@@ -79,18 +79,16 @@ class ResourceUploadNotificationTests(SimpleTestCase):
             self.assertEqual(call.args[2], 'notify@nwu.icu')
             self.assertEqual(call.args[3], ['student@example.com'])
 
-    @patch('common.admin.notify_resource_upload_result')
-    @patch('common.admin.publish_resource_upload')
-    def test_publish_failure_is_returned_and_user_is_notified(
-            self, publish_resource_upload, notify_result):
-        publish_resource_upload.side_effect = ResourcePublishError('目标文件已存在')
+    @patch('common.admin.approve_resource_upload')
+    def test_bulk_approval_queues_publish_workflow(self, approve_resource_upload):
         upload_request = SimpleNamespace(
             pk=42,
             status=ResourceUploadRequest.STATUS_PENDING,
+            target_path='/courses',
             reviewed_by=None,
             reviewed_at=None,
             rejection_reason='',
-            save=Mock(),
+            revision=1,
         )
         filtered_queryset = Mock()
         filtered_queryset.select_related.return_value.prefetch_related.return_value = [upload_request]
@@ -102,11 +100,9 @@ class ResourceUploadNotificationTests(SimpleTestCase):
 
         model_admin.approve_requests(request, queryset)
 
-        self.assertEqual(upload_request.status, ResourceUploadRequest.STATUS_REJECTED)
-        self.assertIn('目标文件已存在', upload_request.rejection_reason)
-        upload_request.save.assert_called_once()
-        notify_result.assert_called_once_with(
-            self.reviewer,
-            upload_request,
-            RESULT_PUBLISH_FAILED,
+        approve_resource_upload.assert_called_once_with(
+            upload_request_id=42,
+            reviewer=self.reviewer,
+            expected_revision=1,
+            target_path=upload_request.target_path,
         )

@@ -69,6 +69,8 @@ errcode_dict = {
     'resource_upload_not_found': '投稿记录不存在',
     'resource_upload_not_editable': '只有待审核或已退回的投稿可以编辑',
     'resource_upload_invalid_file_ids': '要删除的文件不属于该投稿',
+    'resource_upload_invalid_revision': '投稿版本无效或已更新，请刷新后重试',
+    'resource_upload_staging_expired': '投稿暂存文件已清理，无法继续编辑',
 }
 
 message_dict = {
