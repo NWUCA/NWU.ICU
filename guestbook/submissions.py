@@ -17,6 +17,7 @@ def previous_submission(author, data, parent=None, board=GuestbookEntry.BOARD_GU
     if entry and (
         entry.board != board
         or entry.parent_id != (parent.id if parent else None)
+        or entry.title != data.get('title', '')
         or entry.content != data['content']
         or entry.anonymous != data.get('anonymous', False)
     ):

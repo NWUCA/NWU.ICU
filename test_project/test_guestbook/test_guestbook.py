@@ -54,12 +54,17 @@ class GuestbookApiTests(APITestCase):
             status.HTTP_403_FORBIDDEN,
         )
         created = admin_client.post(
-            announcements_url, {'content': '<p>notice</p>', 'anonymous': True}, format='json'
+            announcements_url, {'title': 'Important notice', 'content': '<p>notice</p>', 'anonymous': True}, format='json'
         )
         self.assertEqual(created.status_code, status.HTTP_201_CREATED)
         announcement = GuestbookEntry.objects.get(pk=created.data['contents']['entry']['id'])
         self.assertEqual(announcement.board, GuestbookEntry.BOARD_ANNOUNCEMENT)
+        self.assertEqual(created.data['contents']['entry']['title'], 'Important notice')
         self.assertFalse(announcement.anonymous)
+        self.assertEqual(
+            admin_client.post(announcements_url, {'content': '<p>missing title</p>'}, format='json').status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
         self.assertEqual(self.author_client.get(announcements_url).data['contents']['count'], 1)
         self.assertEqual(self.author_client.get(reverse('api:guestbook')).data['contents']['count'], 0)
 

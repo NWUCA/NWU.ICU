@@ -39,6 +39,15 @@ class GuestbookContentSerializer(GuestbookReplySerializer):
     anonymous = serializers.BooleanField(default=False)
 
 
+class AnnouncementContentSerializer(GuestbookContentSerializer):
+    title = serializers.CharField(max_length=100, trim_whitespace=True)
+
+    def validate_title(self, value):
+        if not value:
+            raise serializers.ValidationError('标题不能为空。')
+        return value
+
+
 class GuestbookLikeSerializer(serializers.Serializer):
     liked = serializers.BooleanField()
 

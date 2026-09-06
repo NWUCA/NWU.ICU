@@ -15,6 +15,7 @@ class GuestbookEntry(SoftDeleteModel):
     )
 
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    title = models.CharField(max_length=100, blank=True, default='')
     content = models.TextField()
     anonymous = models.BooleanField(default=False)
     board = models.CharField(max_length=16, choices=BOARD_CHOICES, default=BOARD_GUESTBOOK)

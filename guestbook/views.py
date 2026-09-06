@@ -14,6 +14,7 @@ from .models import GuestbookEntry, GuestbookLike, GuestbookReport
 from .notifications import notify_guestbook_like, notify_guestbook_reply
 from .submissions import create_submission, previous_submission
 from .serializers import (
+    AnnouncementContentSerializer,
     GuestbookContentSerializer,
     GuestbookLikeSerializer,
     GuestbookReplySerializer,
@@ -61,6 +62,7 @@ def serialize_entry(entry, request, *, include_reply_count=True):
         'id': entry.id,
         'root_id': entry.root_id,
         'parent_id': entry.parent_id,
+        'title': entry.title,
         'content': DELETED_CONTENT if entry.is_deleted else entry.content,
         'anonymous': entry.anonymous,
         'is_deleted': entry.is_deleted,
@@ -110,7 +112,12 @@ class GuestbookListView(GenericAPIView):
             return return_response(
                 errors={'auth': {'err_code': 'auth_error', 'err_msg': '仅管理员可以发布公告'}}, status_code=403
             )
-        serializer = GuestbookContentSerializer(data=request.data)
+        serializer_class = (
+            AnnouncementContentSerializer
+            if self.board == GuestbookEntry.BOARD_ANNOUNCEMENT
+            else GuestbookContentSerializer
+        )
+        serializer = serializer_class(data=request.data)
         if not serializer.is_valid():
             return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
         data = serializer.validated_data
