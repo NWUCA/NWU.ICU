@@ -102,24 +102,32 @@ class Course(models.Model):
 
 class Review(SoftDeleteModel):
     DIFFICULTY_CHOICES = [
-        (1, '简单'),
-        (2, '中等'),
-        (3, '困难'),
+        (1, '很简单'),
+        (2, '较简单'),
+        (3, '适中'),
+        (4, '较难'),
+        (5, '很难'),
     ]
     GRADE_CHOICES = [
-        (1, '超好'),
-        (2, '一般'),
-        (3, '杀手'),
+        (1, '很严'),
+        (2, '偏严'),
+        (3, '一般'),
+        (4, '偏宽'),
+        (5, '很宽'),
     ]
     HOMEWORK_CHOICES = [
-        (1, '不多'),
-        (2, '中等'),
-        (3, '超多'),
+        (1, '很少'),
+        (2, '较少'),
+        (3, '适中'),
+        (4, '较多'),
+        (5, '很多'),
     ]
     REWARD_CHOICES = [
-        (1, '很多'),
-        (2, '一般'),
-        (3, '没有'),
+        (1, '很少'),
+        (2, '较少'),
+        (3, '一般'),
+        (4, '较多'),
+        (5, '很多'),
     ]
 
     source_choice = (('user', '用户生成'),)
@@ -138,7 +146,7 @@ class Review(SoftDeleteModel):
     dislike_count = models.IntegerField(default=0, verbose_name='点踩')
     difficulty = models.PositiveSmallIntegerField(verbose_name='课程难度', choices=DIFFICULTY_CHOICES)
     grade = models.PositiveSmallIntegerField(verbose_name='给分高低', choices=GRADE_CHOICES)
-    homework = models.PositiveSmallIntegerField(verbose_name='作业多少', choices=HOMEWORK_CHOICES)
+    homework = models.PositiveSmallIntegerField(verbose_name='作业负担', choices=HOMEWORK_CHOICES)
     reward = models.PositiveSmallIntegerField(verbose_name='收获多少', choices=REWARD_CHOICES)
     source = models.CharField(verbose_name='来源', default='user', max_length=20)
     semester = models.ForeignKey(Semeseter, default=1, on_delete=models.CASCADE, verbose_name="开课学期")

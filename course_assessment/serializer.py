@@ -39,10 +39,10 @@ class AddReviewSerializer(serializers.ModelSerializer):
     def validate(self, data):
         fields = {
             'rating': (1, 5),
-            'difficulty': (1, 3),
-            'grade': (1, 3),
-            'homework': (1, 3),
-            'reward': (1, 3),
+            'difficulty': (1, 5),
+            'grade': (1, 5),
+            'homework': (1, 5),
+            'reward': (1, 5),
         }
         for field, (min_val, max_val) in fields.items():
             value = data.get(field)
