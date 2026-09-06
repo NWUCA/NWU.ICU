@@ -209,6 +209,13 @@ FILE_UPLOAD_SIZE_LIMIT = {'avatar': 66 * 1024,
                           'file': 25 * 1024 * 1024,
                           'img': 25 * 1024 * 1024}
 
+# Windows bind mounts exposed to Linux containers do not consistently support
+# chmod(2). Keep chmod enabled by default for Debian/Linux production, while
+# allowing local Windows development to opt out explicitly.
+DISABLE_FILE_UPLOAD_CHMOD = env.bool('DISABLE_FILE_UPLOAD_CHMOD', default=False)
+FILE_UPLOAD_PERMISSIONS = None if DISABLE_FILE_UPLOAD_CHMOD else 0o640
+FILE_UPLOAD_DIRECTORY_PERMISSIONS = None if DISABLE_FILE_UPLOAD_CHMOD else 0o750
+
 SECRET_KEY = env('SECRET_KEY')
 DEBUG = env.bool('DEBUG')
 # django-simple-captcha accepts a universal test answer in test mode. Never

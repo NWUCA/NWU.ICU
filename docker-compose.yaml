@@ -3,7 +3,7 @@ services:
     build: .
     restart: unless-stopped
     env_file:
-      - .env
+      - ${ENV_FILE:-.env}
     command: bash -c "
       python manage.py migrate &&
       python manage.py create_super_user &&
@@ -49,7 +49,6 @@ services:
 
   db:
     image: abcfy2/zhparser:17
-    container_name: pgsql
     restart: unless-stopped
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -69,7 +68,7 @@ services:
     build: .
     restart: unless-stopped
     env_file:
-      - .env
+      - ${ENV_FILE:-.env}
     command: bash -c "
       printf '0 0 * * * cd /app && python manage.py update_semester\n0 3 * * * cd /app && python scripts/export_resource_tree.py --root /resource-storage --output /app/data/resource_directories.json --source https://resour.nwu.icu\n15 3 * * * cd /app && python manage.py clean_approved_resource_uploads\n30 3 * * * cd /app && python manage.py clean_expired_resource_uploads\n' > /app/crontab &&
       supercronic /app/crontab"
@@ -96,7 +95,7 @@ services:
     build: .
     restart: unless-stopped
     env_file:
-      - .env
+      - ${ENV_FILE:-.env}
     command: python manage.py process_resource_upload_tasks --poll-seconds 5
     volumes:
       - ${MEDIA_STORAGE_HOST_PATH:-./media}:/app/media

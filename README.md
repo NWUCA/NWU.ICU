@@ -27,39 +27,10 @@
     uv run python manage.py runserver
     ```
 
-## 部署
+## 环境与部署
 
-### 手动部署
-
-- 确保 clone 了整个仓库
-- 根据 `production.py.sample` 建立 `production.py` 配置文件
-- 配置静态文件
-- 初始化数据库
-- 执行 `start.sh`
-- 配置反向代理
-
-目前生产环境的部署流程见[这里](https://github.com/cjc7373/ansible/blob/master/playbooks/nwu.icu.yml).
-
-### Docker部署
-
-1. git clone 本项目
-2. 按照.env.sample新建一个.env文件, 将环境变量值填写
-   - `RESOURCE_STORAGE_HOST_PATH` 必须填写 AList `Local` 存储驱动对应的宿主机物理根目录。审核通过时后端会直接复制投稿文件到该目录；它应当与 AList 中的虚拟根目录 `/` 一一对应。
-   - 非 Docker 启动时，将 `RESOURCE_STORAGE_ROOT` 直接填写为同一物理目录。Docker Compose 会把宿主机目录挂载为容器内的 `/resource-storage`。
-3. cd到项目目录
-4. 执行docker-compose up, 构建并启动容器
-5. 访问http:ip:8000, 看到NWU.ICU界面, 代表启动成功
-
-资源投稿审核采用“先发布、后通过”流程：所有文件复制成功且本地文件树缓存更新成功后才会标记通过；已有同名文件不会被覆盖。投稿暂存原件会保留 30 天，Docker 定时任务每天 03:15 清理到期原件；每天 03:00 会从 AList 物理存储重新导出完整文件树。
-
-### 注意事项
-
-1. 当前日志转储使用的是RotatingFileHandler, 在reload模式下, 转储时会发生PermissionError, 故在生产环境启动需要添加参数-noreload
-2. 学期的更新需要每年3,7月执行一次脚本(更建议每月一号执行一次), `python manage.py update_semester`, 推荐添加备忘录或使用Crontab
-3. 如在部署项目之前, 有任何的Course,Teacher,Review数据, 需要执行`python manage.py update_module_pinyin_name <module>`,
-   具体module取决于你之前存在什么数据, 每有一个上述内容, 就需执行一次, 以来实现拼音模糊搜索
-
-> 比如之前只有Course数据, 则只执行`python manage.py update_module_pinyin_name course`
+Windows 调试、Debian 生产部署、Docker Compose 与 OpenResty 配置见
+[部署文档](deploy/README.md)。
 
 ## Roadmap
 

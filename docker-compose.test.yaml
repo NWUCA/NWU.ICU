@@ -1,6 +1,5 @@
 services:
   db:
-    container_name: nwuicu-test-pgsql
     restart: "no"
     volumes:
       - test-pgdata:/var/lib/postgresql/data

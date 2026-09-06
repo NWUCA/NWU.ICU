@@ -1,0 +1,108 @@
+name: nwuicu
+
+x-backend-service: &backend-service
+  build: .
+  restart: unless-stopped
+  env_file:
+    - ${ENV_FILE:-.env.production}
+  environment:
+    DJANGO_SETTINGS_MODULE: settings.settings
+    DB_HOST: db
+    DB_PORT: 5432
+    RESOURCE_DIRECTORY_CACHE_FILE: /app/data/resource_directories.json
+    RESOURCE_STORAGE_ROOT: /resource-storage
+  volumes:
+    - ${MEDIA_STORAGE_HOST_PATH:?set MEDIA_STORAGE_HOST_PATH}:/app/media
+    - ${RESOURCE_INDEX_HOST_PATH:?set RESOURCE_INDEX_HOST_PATH}:/app/data
+    - ${RESOURCE_STORAGE_HOST_PATH:?set RESOURCE_STORAGE_HOST_PATH}:/resource-storage
+  depends_on:
+    db:
+      condition: service_healthy
+  networks:
+    - app-network
+
+services:
+  db:
+    image: abcfy2/zhparser:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:?set DB_NAME}
+      POSTGRES_USER: ${DB_USER:?set DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    networks:
+      - app-network
+
+  web:
+    <<: *backend-service
+    command: >-
+      bash -c "python manage.py migrate &&
+      python manage.py create_super_user &&
+      python manage.py create_init_avatar &&
+      python manage.py createcachetable &&
+      python manage.py init_school &&
+      python manage.py update_semester &&
+      python manage.py collectstatic --noinput &&
+      gunicorn settings.wsgi:application --bind 0.0.0.0:8000
+      --workers $${GUNICORN_WORKERS:-3} --timeout $${GUNICORN_TIMEOUT:-300}
+      --access-logfile - --error-logfile -"
+    volumes:
+      - ${MEDIA_STORAGE_HOST_PATH:?set MEDIA_STORAGE_HOST_PATH}:/app/media
+      - ${STATIC_STORAGE_HOST_PATH:?set STATIC_STORAGE_HOST_PATH}:/app/staticfiles
+      - ${RESOURCE_INDEX_HOST_PATH:?set RESOURCE_INDEX_HOST_PATH}:/app/data
+      - ${RESOURCE_STORAGE_HOST_PATH:?set RESOURCE_STORAGE_HOST_PATH}:/resource-storage
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/user/csrf/', timeout=3)"
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  cron:
+    <<: *backend-service
+    command: >-
+      bash -c "printf '0 0 * * * cd /app && python manage.py update_semester\n0 3 * * * cd /app && python scripts/export_resource_tree.py --root /resource-storage --output /app/data/resource_directories.json --source https://resour.nwu.icu\n15 3 * * * cd /app && python manage.py clean_approved_resource_uploads\n30 3 * * * cd /app && python manage.py clean_expired_resource_uploads\n' > /app/crontab && supercronic /app/crontab"
+
+  resource-worker:
+    <<: *backend-service
+    command: python manage.py process_resource_upload_tasks --poll-seconds 5
+
+  gateway:
+    build:
+      context: ../new_nwu_icu_frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    volumes:
+      - ${STATIC_STORAGE_HOST_PATH:?set STATIC_STORAGE_HOST_PATH}:/srv/django-static:ro
+    depends_on:
+      web:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    networks:
+      app-network:
+      proxy-network:
+        aliases:
+          - nwuicu-gateway
+
+volumes:
+  pgdata:
+
+networks:
+  app-network:
+  proxy-network:
+    external: true
+    name: ${PROXY_NETWORK_NAME:-web-proxy}
