@@ -1,4 +1,5 @@
 import logging
+import re
 from typing import List
 
 from django.conf import settings
@@ -207,7 +208,19 @@ class SchoolView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        schools = School.objects.order_by('id')
+        schools = list(School.objects.order_by('id'))
+
+        numbered_schools = []
+        unnumbered_schools = []
+        for school in schools:
+            number_match = re.match(r'^\d+', school.name)
+            if number_match:
+                numbered_schools.append((int(number_match.group()), school))
+            else:
+                unnumbered_schools.append(school)
+
+        numbered_schools.sort(key=lambda item: item[0])
+        schools = [school for _, school in numbered_schools] + unnumbered_schools
         return return_response(
             contents={
                 'schools': [
@@ -373,7 +386,7 @@ class TeacherView(GenericAPIView):
         teacher_list = []
         for teacher in teacher_page:
             teacher_list.append(
-                {"id": teacher.id, "name": teacher.name, "avatar": teacher.avatar_uuid,
+                {"id": teacher.id, "name": teacher.name,
                  "school": teacher.school.get_name()})
         return self.get_paginated_response(teacher_list)
 
@@ -390,7 +403,6 @@ class TeacherView(GenericAPIView):
             teacher_info = {
                 'id': teacher.id,
                 'name': teacher.name,
-                'avatar_uuid': teacher.avatar_uuid,
                 'school': teacher.school.get_name() if teacher.school else None,
             }
 

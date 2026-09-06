@@ -1,3 +1,5 @@
+import re
+
 from django.core.management import call_command
 from django.test import override_settings
 from django.urls import reverse
@@ -50,6 +52,23 @@ class CourseTests(APITestCase):
         teacher_id = teacher_response.data['contents']['teacher_id']
         self.assertEqual(Teacher.objects.get(id=teacher_id).name, teacher_name)
 
+    def test_teacher_responses_do_not_expose_avatar(self):
+        teacher_response = self.client.post(
+            self.add_teacher_url,
+            data={'name': 'testTeacher', 'school': 1},
+        )
+        teacher_id = teacher_response.data['contents']['teacher_id']
+
+        teacher_list_response = self.client.get(self.add_teacher_url)
+        teacher_item = teacher_list_response.data['contents']['results'][0]
+        self.assertNotIn('avatar', teacher_item)
+        self.assertNotIn('avatar_uuid', teacher_item)
+
+        teacher_detail_response = self.client.get(reverse('api:teacher', args=[teacher_id]))
+        teacher_info = teacher_detail_response.data['contents']['teacher_info']
+        self.assertNotIn('avatar', teacher_info)
+        self.assertNotIn('avatar_uuid', teacher_info)
+
     def test_add_course(self):
         self.test_add_teacher()
         course_data = {
@@ -99,16 +118,30 @@ class CourseTests(APITestCase):
         self.assertEqual(len(course_list_response.data['contents']['results']), 0)
         self.assertEqual(course_list_response.data['contents']['count'], 0)
 
-    def test_school_list_preserves_fixture_name_and_order(self):
+    def test_school_list_sorts_numeric_prefix_and_preserves_other_order(self):
         response = self.client.get(self.school_list_url)
         schools = response.data['contents']['schools']
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(schools[0], {
-            'id': 1,
-            'name': '117信息科学与技术学院 (软件学院)',
+            'id': 2,
+            'name': '101文学院',
         })
+
+        numbered_schools = [
+            school for school in schools
+            if re.match(r'^\d+', school['name'])
+        ]
         self.assertEqual(
-            [school['id'] for school in schools],
-            sorted(school['id'] for school in schools),
+            [int(re.match(r'^\d+', school['name']).group()) for school in numbered_schools],
+            sorted(int(re.match(r'^\d+', school['name']).group()) for school in numbered_schools),
+        )
+
+        unnumbered_school_ids = [
+            school['id'] for school in schools
+            if not re.match(r'^\d+', school['name'])
+        ]
+        self.assertEqual(
+            unnumbered_school_ids,
+            sorted(unnumbered_school_ids),
         )
