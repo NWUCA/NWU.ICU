@@ -7,9 +7,17 @@ from utils.models import SoftDeleteModel
 class GuestbookEntry(SoftDeleteModel):
     """A top-level guestbook post or one node in its reply tree."""
 
+    BOARD_GUESTBOOK = 'guestbook'
+    BOARD_ANNOUNCEMENT = 'announcement'
+    BOARD_CHOICES = (
+        (BOARD_GUESTBOOK, '留言板'),
+        (BOARD_ANNOUNCEMENT, '公告栏'),
+    )
+
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     content = models.TextField()
     anonymous = models.BooleanField(default=False)
+    board = models.CharField(max_length=16, choices=BOARD_CHOICES, default=BOARD_GUESTBOOK)
     parent = models.ForeignKey(
         'self', null=True, blank=True, on_delete=models.SET_NULL, related_name='replies'
     )
@@ -26,6 +34,7 @@ class GuestbookEntry(SoftDeleteModel):
             models.UniqueConstraint(fields=('author', 'submission_id'), name='unique_guestbook_submission'),
         ]
         indexes = [
+            models.Index(fields=('board', '-created_at', '-id'), name='guestbook_board_recent_idx'),
             models.Index(fields=('root', 'parent', 'created_at'), name='guestbook_reply_tree_idx'),
             models.Index(fields=('-created_at', '-id'), name='guestbook_recent_idx'),
         ]

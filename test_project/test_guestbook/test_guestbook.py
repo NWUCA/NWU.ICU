@@ -41,6 +41,55 @@ class GuestbookApiTests(APITestCase):
         self.assertEqual(entry['author']['nickname'], self.author.nickname)
         self.assertTrue(entry['is_me'])
 
+    def test_announcements_share_entries_but_are_isolated_and_admin_only_to_create(self):
+        admin = create_user(username='announcement-admin', email='announcement-admin@example.com')
+        admin.is_staff = True
+        admin.save(update_fields=('is_staff',))
+        admin_client = APIClient()
+        admin_client.force_login(admin)
+        announcements_url = reverse('api:announcements')
+
+        self.assertEqual(
+            self.author_client.post(announcements_url, {'content': '<p>blocked</p>'}, format='json').status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+        created = admin_client.post(
+            announcements_url, {'content': '<p>notice</p>', 'anonymous': True}, format='json'
+        )
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED)
+        announcement = GuestbookEntry.objects.get(pk=created.data['contents']['entry']['id'])
+        self.assertEqual(announcement.board, GuestbookEntry.BOARD_ANNOUNCEMENT)
+        self.assertFalse(announcement.anonymous)
+        self.assertEqual(self.author_client.get(announcements_url).data['contents']['count'], 1)
+        self.assertEqual(self.author_client.get(reverse('api:guestbook')).data['contents']['count'], 0)
+
+        reply_url = reverse('api:announcement-replies', kwargs={'entry_id': announcement.id})
+        reply = self.author_client.post(reply_url, {'content': '<p>reply</p>'}, format='json')
+        self.assertEqual(reply.status_code, status.HTTP_201_CREATED)
+        reply_entry = GuestbookEntry.objects.get(pk=reply.data['contents']['entry']['id'])
+        self.assertEqual(reply_entry.board, GuestbookEntry.BOARD_ANNOUNCEMENT)
+        like_url = reverse('api:announcement-like', kwargs={'entry_id': announcement.id})
+        self.assertEqual(
+            self.author_client.put(like_url, {'liked': True}, format='json').status_code,
+            status.HTTP_200_OK,
+        )
+        announcement.refresh_from_db()
+        self.assertEqual(announcement.like_count, 1)
+        self.assertEqual(
+            self.author_client.post(
+                reverse('api:announcement-report', kwargs={'entry_id': announcement.id}),
+                {'reason': 'spam'}, format='json',
+            ).status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+        self.assertEqual(
+            self.reader_client.post(
+                reverse('api:announcement-report', kwargs={'entry_id': reply_entry.id}),
+                {'reason': 'abuse'}, format='json',
+            ).status_code,
+            status.HTTP_201_CREATED,
+        )
+
     def test_anonymous_entry_never_exposes_author_identity(self):
         entry = GuestbookEntry.objects.create(author=self.author, content='<p>secret</p>', anonymous=True)
         response = self.reader_client.get(self.entry_url(entry))

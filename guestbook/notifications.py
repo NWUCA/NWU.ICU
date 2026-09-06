@@ -6,7 +6,11 @@ from django.utils import timezone
 from common.models import Notification
 from utils.utils import get_user_avatar_info
 
-from .models import GuestbookLike
+from .models import GuestbookEntry, GuestbookLike
+
+
+def entry_source(entry):
+    return 'announcement' if entry.board == GuestbookEntry.BOARD_ANNOUNCEMENT else 'guestbook'
 
 
 def notification_author(user):
@@ -31,7 +35,7 @@ def notify_guestbook_reply(entry):
             'kind': Notification.KIND_REPLY,
             'read_at': None,
             'payload': {
-                'source': 'guestbook',
+                'source': entry_source(entry),
                 'guestbook': {
                     'root_id': entry.root_id or entry.id,
                     'entry_id': entry.id,
@@ -57,7 +61,7 @@ def notify_guestbook_like(entry, *, mark_unread=True):
         'actor': None,
         'kind': Notification.KIND_LIKE,
         'payload': {
-            'source': 'guestbook',
+            'source': entry_source(entry),
             'guestbook': {
                 'root_id': entry.root_id or entry.id,
                 'entry_id': entry.id,
@@ -75,7 +79,7 @@ def notify_guestbook_like(entry, *, mark_unread=True):
 
 
 def remove_entry_notifications(entry_id):
-    Notification.objects.filter(payload__source='guestbook').filter(
+    Notification.objects.filter(payload__source__in=('guestbook', 'announcement')).filter(
         Q(payload__guestbook__entry_id=entry_id) | Q(payload__guestbook__target_id=entry_id)
     ).delete()
 
@@ -84,10 +88,10 @@ def hydrate_guestbook_notifications(notifications):
     """Resolve text at read time, including notifications written before this change."""
     from .models import GuestbookEntry
     ids = [note.payload.get('guestbook', {}).get('entry_id') for note in notifications
-           if note.payload.get('source') == 'guestbook' and note.kind == Notification.KIND_REPLY]
+           if note.payload.get('source') in ('guestbook', 'announcement') and note.kind == Notification.KIND_REPLY]
     entries = GuestbookEntry.all_objects.select_related('author').in_bulk(ids)
     for note in notifications:
-        if note.payload.get('source') != 'guestbook' or note.kind != Notification.KIND_REPLY:
+        if note.payload.get('source') not in ('guestbook', 'announcement') or note.kind != Notification.KIND_REPLY:
             continue
         entry_id = note.payload.get('guestbook', {}).get('entry_id')
         entry = entries.get(entry_id)
@@ -110,7 +114,7 @@ def notify_guestbook_report(report):
             'kind': Notification.KIND_SYSTEM,
             'read_at': None,
             'payload': {
-                'title': '留言板举报处理结果',
+                'title': f'{"公告栏" if report.entry.board == GuestbookEntry.BOARD_ANNOUNCEMENT else "留言板"}举报处理结果',
                 'content': report.handling_note or (
                     '管理员已移除你举报的内容。' if report.status == report.STATUS_REMOVED else '管理员已处理你的举报。'
                 ),

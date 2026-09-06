@@ -45,6 +45,12 @@ from course_assessment.views import (
     LatestReviewView, SemesterView, ReviewAnalysisView,
 )
 from guestbook.views import (
+    AnnouncementContextView,
+    AnnouncementDetailView,
+    AnnouncementLikeView,
+    AnnouncementListView,
+    AnnouncementRepliesView,
+    AnnouncementReportView,
     GuestbookContextView,
     GuestbookDetailView,
     GuestbookLikeView,
@@ -72,6 +78,14 @@ api_patterns = [
     path('guestbook/<int:entry_id>/context/', GuestbookContextView.as_view(), name='guestbook-context'),
     path('guestbook/<int:entry_id>/like/', GuestbookLikeView.as_view(), name='guestbook-like'),
     path('guestbook/<int:entry_id>/reports/', GuestbookReportView.as_view(), name='guestbook-report'),
+
+    # 公告栏（仅管理员可以发布，所有登录用户可以互动）
+    path('announcements/', AnnouncementListView.as_view(), name='announcements'),
+    path('announcements/<int:entry_id>/', AnnouncementDetailView.as_view(), name='announcement-detail'),
+    path('announcements/<int:entry_id>/replies/', AnnouncementRepliesView.as_view(), name='announcement-replies'),
+    path('announcements/<int:entry_id>/context/', AnnouncementContextView.as_view(), name='announcement-context'),
+    path('announcements/<int:entry_id>/like/', AnnouncementLikeView.as_view(), name='announcement-like'),
+    path('announcements/<int:entry_id>/reports/', AnnouncementReportView.as_view(), name='announcement-report'),
 
     # 课程评价
     path('assessment/user/activities/review/<int:user_id>/', MyReviewView.as_view(), name='user_review'),

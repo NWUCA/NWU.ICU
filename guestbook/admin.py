@@ -7,8 +7,8 @@ from .notifications import notify_guestbook_report
 
 @admin.register(GuestbookEntry)
 class GuestbookEntryAdmin(admin.ModelAdmin):
-    list_display = ('id', 'author', 'anonymous', 'parent', 'created_at', 'is_deleted', 'like_count')
-    list_filter = ('anonymous', 'is_deleted', 'created_at')
+    list_display = ('id', 'board', 'author', 'anonymous', 'parent', 'created_at', 'is_deleted', 'like_count')
+    list_filter = ('board', 'anonymous', 'is_deleted', 'created_at')
     search_fields = ('content', 'author__username', 'author__nickname')
     readonly_fields = tuple(field.name for field in GuestbookEntry._meta.fields)
     actions = ['soft_delete_selected']

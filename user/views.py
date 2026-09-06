@@ -329,7 +329,8 @@ class ProfileView(APIView):
             user_info.update({
                 "username": profile_user.username,
                 "email": profile_user.email,
-                "college_email": profile_user.college_email
+                "college_email": profile_user.college_email,
+                "is_staff": profile_user.is_staff,
             })
         return return_response(contents=user_info)
 

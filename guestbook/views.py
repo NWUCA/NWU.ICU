@@ -80,11 +80,13 @@ def serialize_entry(entry, request, *, include_reply_count=True):
     return payload
 
 
-def get_entry_or_none(entry_id, *, lock=False):
+def get_entry_or_none(entry_id, *, lock=False, board=None):
     try:
         entries = GuestbookEntry.all_objects.select_related('author', 'parent', 'root')
         if lock:
             entries = entries.select_for_update(of=('self',))
+        if board is not None:
+            entries = entries.filter(board=board)
         return entries.get(id=entry_id)
     except GuestbookEntry.DoesNotExist:
         return None
@@ -93,21 +95,30 @@ def get_entry_or_none(entry_id, *, lock=False):
 class GuestbookListView(GenericAPIView):
     pagination_class = StandardResultsSetPagination
     permission_classes = [AllowAny]
+    board = GuestbookEntry.BOARD_GUESTBOOK
+    board_label = '留言'
 
     def get(self, request):
-        entries = with_entry_counts(GuestbookEntry.all_objects.filter(parent__isnull=True), request)
+        entries = with_entry_counts(GuestbookEntry.all_objects.filter(parent__isnull=True, board=self.board), request)
         page = self.paginate_queryset(entries)
         return self.get_paginated_response([serialize_entry(entry, request) for entry in page])
 
     def post(self, request):
         if not request.user.is_authenticated:
             return return_response(errors={'login': {'err_code': 'not_login', 'err_msg': '请先登录'}}, status_code=401)
+        if self.board == GuestbookEntry.BOARD_ANNOUNCEMENT and not request.user.is_staff:
+            return return_response(
+                errors={'auth': {'err_code': 'auth_error', 'err_msg': '仅管理员可以发布公告'}}, status_code=403
+            )
         serializer = GuestbookContentSerializer(data=request.data)
         if not serializer.is_valid():
             return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
-        entry, _ = create_submission(request.user, serializer.validated_data)
+        data = serializer.validated_data
+        if self.board == GuestbookEntry.BOARD_ANNOUNCEMENT:
+            data = {**data, 'anonymous': False}
+        entry, _ = create_submission(request.user, data, board=self.board)
         return return_response(
-            message='留言发布成功', contents={'entry': serialize_entry(entry, request)}, status_code=status.HTTP_201_CREATED
+            message=f'{self.board_label}发布成功', contents={'entry': serialize_entry(entry, request)}, status_code=status.HTTP_201_CREATED
         )
 
     def get_throttles(self):
@@ -116,8 +127,10 @@ class GuestbookListView(GenericAPIView):
 
 class GuestbookDetailView(GenericAPIView):
     permission_classes = [AllowAny]
+    board = GuestbookEntry.BOARD_GUESTBOOK
+    board_label = '留言'
     def get(self, request, entry_id):
-        entry = get_entry_or_none(entry_id)
+        entry = get_entry_or_none(entry_id, board=self.board)
         if entry is None:
             return return_response(errors={'entry': {'err_code': 'not_found', 'err_msg': '留言不存在'}}, status_code=404)
         root = entry.root if entry.root_id else entry
@@ -126,22 +139,23 @@ class GuestbookDetailView(GenericAPIView):
     def delete(self, request, entry_id):
         if not request.user.is_authenticated:
             return return_response(errors={'login': {'err_code': 'not_login', 'err_msg': '请先登录'}}, status_code=401)
-        entry = get_entry_or_none(entry_id)
+        entry = get_entry_or_none(entry_id, board=self.board)
         if entry is None:
             return return_response(errors={'entry': {'err_code': 'not_found', 'err_msg': '留言不存在'}}, status_code=404)
         if entry.author_id != request.user.id:
             return return_response(errors={'auth': {'err_code': 'auth_error', 'err_msg': '无权删除此内容'}}, status_code=403)
         if not entry.is_deleted:
             entry.soft_delete()
-        return return_response(message='留言已删除', contents={'entry_id': entry.id})
+        return return_response(message=f'{self.board_label}已删除', contents={'entry_id': entry.id})
 
 
 class GuestbookRepliesView(GenericAPIView):
     pagination_class = StandardResultsSetPagination
     permission_classes = [AllowAny]
+    board = GuestbookEntry.BOARD_GUESTBOOK
 
     def get(self, request, entry_id):
-        parent = get_entry_or_none(entry_id)
+        parent = get_entry_or_none(entry_id, board=self.board)
         if parent is None:
             return return_response(errors={'entry': {'err_code': 'not_found', 'err_msg': '留言不存在'}}, status_code=404)
         entries = with_entry_counts(GuestbookEntry.all_objects.filter(parent_id=parent.id), request).order_by('created_at', 'id')
@@ -152,17 +166,17 @@ class GuestbookRepliesView(GenericAPIView):
     def post(self, request, entry_id):
         if not request.user.is_authenticated:
             return return_response(errors={'login': {'err_code': 'not_login', 'err_msg': '请先登录'}}, status_code=401)
-        parent = get_entry_or_none(entry_id, lock=True)
+        parent = get_entry_or_none(entry_id, lock=True, board=self.board)
         if parent is None:
             return return_response(errors={'entry': {'err_code': 'not_found', 'err_msg': '留言不存在'}}, status_code=404)
         serializer = GuestbookReplySerializer(data=request.data)
         if not serializer.is_valid():
             return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
-        entry = previous_submission(request.user, serializer.validated_data, parent)
+        entry = previous_submission(request.user, serializer.validated_data, parent, self.board)
         if not entry:
             if parent.is_deleted:
                 return return_response(errors={'entry': {'err_code': 'deleted', 'err_msg': '已删除内容不能继续回复'}}, status_code=400)
-            entry, created = create_submission(request.user, serializer.validated_data, parent)
+            entry, created = create_submission(request.user, serializer.validated_data, parent, self.board)
             if created:
                 notify_guestbook_reply(entry)
         return return_response(
@@ -176,8 +190,9 @@ class GuestbookRepliesView(GenericAPIView):
 
 class GuestbookContextView(GenericAPIView):
     permission_classes = [AllowAny]
+    board = GuestbookEntry.BOARD_GUESTBOOK
     def get(self, request, entry_id):
-        entry = get_entry_or_none(entry_id)
+        entry = get_entry_or_none(entry_id, board=self.board)
         if entry is None:
             return return_response(errors={'entry': {'err_code': 'not_found', 'err_msg': '留言不存在'}}, status_code=404)
         path = []
@@ -196,10 +211,11 @@ class GuestbookContextView(GenericAPIView):
 
 class GuestbookLikeView(GenericAPIView):
     permission_classes = [IsAuthenticated]
+    board = GuestbookEntry.BOARD_GUESTBOOK
 
     @transaction.atomic
     def put(self, request, entry_id):
-        entry = get_entry_or_none(entry_id, lock=True)
+        entry = get_entry_or_none(entry_id, lock=True, board=self.board)
         if entry is None:
             return return_response(errors={'entry': {'err_code': 'not_found', 'err_msg': '留言不存在'}}, status_code=404)
         if entry.is_deleted:
@@ -224,9 +240,10 @@ class GuestbookLikeView(GenericAPIView):
 
 class GuestbookReportView(GenericAPIView):
     permission_classes = [IsAuthenticated]
+    board = GuestbookEntry.BOARD_GUESTBOOK
 
     def post(self, request, entry_id):
-        entry = get_entry_or_none(entry_id)
+        entry = get_entry_or_none(entry_id, board=self.board)
         if entry is None or entry.is_deleted:
             return return_response(errors={'entry': {'err_code': 'not_found', 'err_msg': '留言不存在'}}, status_code=404)
         serializer = GuestbookReportSerializer(data=request.data)
@@ -240,3 +257,37 @@ class GuestbookReportView(GenericAPIView):
             contents={'report_id': report.id, 'created': created},
             status_code=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
         )
+
+
+class AnnouncementListView(GuestbookListView):
+    board = GuestbookEntry.BOARD_ANNOUNCEMENT
+    board_label = '公告'
+
+
+class AnnouncementDetailView(GuestbookDetailView):
+    board = GuestbookEntry.BOARD_ANNOUNCEMENT
+    board_label = '公告'
+
+
+class AnnouncementRepliesView(GuestbookRepliesView):
+    board = GuestbookEntry.BOARD_ANNOUNCEMENT
+
+
+class AnnouncementContextView(GuestbookContextView):
+    board = GuestbookEntry.BOARD_ANNOUNCEMENT
+
+
+class AnnouncementLikeView(GuestbookLikeView):
+    board = GuestbookEntry.BOARD_ANNOUNCEMENT
+
+
+class AnnouncementReportView(GuestbookReportView):
+    board = GuestbookEntry.BOARD_ANNOUNCEMENT
+
+    def post(self, request, entry_id):
+        entry = get_entry_or_none(entry_id, board=self.board)
+        if entry is not None and entry.is_root:
+            return return_response(
+                errors={'auth': {'err_code': 'auth_error', 'err_msg': '公告不能被举报'}}, status_code=403
+            )
+        return super().post(request, entry_id)
