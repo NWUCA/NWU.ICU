@@ -1,4 +1,8 @@
 from django.urls import path
+from .resource_files import ManagementFileActionView, ManagementFileListView, ManagementFileUploadView, ManagementTrashView
+from .resource_tools import (ManagementResourceOperationsView, ManagementResourceReadmeView,
+                             ManagementResourceAccessView, ManagementResourceIndexView,
+                             ManagementResourceAuditView, ManagementResourceStatisticsView)
 
 from .views import (
     ManagementAnnouncementView,
@@ -18,6 +22,16 @@ from .views import (
 
 
 urlpatterns = [
+    path('resources/operations/', ManagementResourceOperationsView.as_view(), name='management-resource-operations'),
+    path('resources/readme/', ManagementResourceReadmeView.as_view(), name='management-resource-readme'),
+    path('resources/access/', ManagementResourceAccessView.as_view(), name='management-resource-access'),
+    path('resources/index/', ManagementResourceIndexView.as_view(), name='management-resource-index'),
+    path('resources/audit/', ManagementResourceAuditView.as_view(), name='management-resource-audit'),
+    path('resources/statistics/', ManagementResourceStatisticsView.as_view(), name='management-resource-statistics'),
+    path('resources/', ManagementFileListView.as_view(), name='management-resource-files'),
+    path('resources/upload/', ManagementFileUploadView.as_view(), name='management-resource-file-upload'),
+    path('resources/action/', ManagementFileActionView.as_view(), name='management-resource-file-action'),
+    path('resources/trash/', ManagementTrashView.as_view(), name='management-resource-trash'),
     path('session/', ManagementSessionView.as_view(), name='management-session'),
     path('passkeys/authentication/options/', PasskeyAuthenticationOptionsView.as_view(), name='passkey-auth-options'),
     path('passkeys/authentication/verify/', PasskeyAuthenticationVerifyView.as_view(), name='passkey-auth-verify'),

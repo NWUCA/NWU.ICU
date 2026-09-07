@@ -19,7 +19,7 @@ RESULT_PUBLISH_FAILED = 'publish_failed'
 
 def get_resource_public_url(target_path):
     encoded_path = quote(str(target_path).strip(), safe='/')
-    return f'{settings.RESOURCES_WEBSITE_URL.rstrip("/")}/{encoded_path.lstrip("/")}'
+    return f'{settings.FRONTEND_URL.rstrip("/")}/disk/{encoded_path.lstrip("/")}'
 
 
 def get_resource_review_url(upload_request):

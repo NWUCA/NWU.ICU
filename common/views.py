@@ -1,6 +1,6 @@
 import logging
 
-import requests
+from common.file.resource_browser import search_resources
 from captcha.helpers import captcha_image_url
 from captcha.models import CaptchaStore
 from django.utils import timezone
@@ -391,59 +391,6 @@ class CourseTeacherSearchView(APIView):
             page_info = {k: v for k, v in teachers.items() if k != 'results'}
             return page_info, search_result_list
 
-        def resources_search(keyword, scope=0):
-            base_url = settings.RESOURCES_WEBSITE_URL
-            json_data = {
-                'parent': '/',
-                'keywords': keyword,
-                'scope': scope,
-                'page': current_page,
-                'per_page': page_size,
-                'password': '',
-            }
-            empty_page = {
-                'total_pages': 0,
-                'current_page': current_page,
-                'has_next': False,
-                'has_previous': current_page > 1,
-                'total_count': 0,
-            }
-            try:
-                response = requests.post(base_url + '/api/fs/search', json=json_data, timeout=5)
-                response.raise_for_status()
-                search_result_json = response.json()
-            except (requests.RequestException, ValueError):
-                logger.exception('Resource search upstream request failed')
-                return empty_page, []
-            result_data = search_result_json.get('data')
-            if search_result_json.get('code') != 200 or not isinstance(result_data, dict):
-                return empty_page, []
-            total = result_data.get('total')
-            content = result_data.get('content')
-            if not isinstance(total, int) or total < 0 or not isinstance(content, list):
-                return empty_page, []
-            file_list = []
-            for file in content:
-                if not isinstance(file, dict) or not {
-                    'name', 'size', 'parent', 'is_dir'
-                }.issubset(file):
-                    continue
-                file_list.append({
-                    'name': file['name'],
-                    'size': file['size'],
-                    'path': file['parent'],
-                    'type': 'dir' if file['is_dir'] else 'file',
-                    'url': base_url + file['parent']
-                })
-            page_info = {
-                'total_pages': total // page_size + (0 if total % page_size == 0 else 1),
-                'current_page': current_page,
-                'has_next': total > current_page * page_size,
-                'has_previous': current_page > 1,
-                'total_count': total
-            }
-            return page_info, file_list
-
         if serializer.is_valid():
             search_type = serializer.validated_data['type']
             page_size = serializer.validated_data['page_size']
@@ -456,7 +403,7 @@ class CourseTeacherSearchView(APIView):
             elif search_type == 'review':
                 page_info, search_result_list = review_search(search_keyword)
             elif search_type == 'resource':
-                page_info, search_result_list = resources_search(search_keyword)
+                page_info, search_result_list = search_resources(search_keyword, current_page, page_size, request.user)
             else:
                 return return_response(errors=get_err_msg('invalid_type_field'),
                                        status_code=status.HTTP_400_BAD_REQUEST)

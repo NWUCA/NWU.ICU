@@ -32,6 +32,9 @@
 Windows 调试、Debian 生产部署、Docker Compose 与 OpenResty 配置见
 [部署文档](deploy/README.md)。
 
+站内资料页、Windows / WSL 资料目录挂载和 Linux 配置见
+[资料浏览说明](deploy/resource-browser.md)。
+
 ## Roadmap
 
 - [x] 用户站内信

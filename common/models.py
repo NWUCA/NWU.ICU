@@ -148,6 +148,32 @@ class DirectMessage(models.Model):
         ordering = ('id',)
 
 
+class ResourceAccessRule(models.Model):
+    path = models.CharField(max_length=2048, unique=True)
+    mode = models.CharField(max_length=16, choices=[('login', '登录用户'), ('admin', '资料管理员')])
+
+
+class ResourceAuditEvent(models.Model):
+    actor = models.CharField(max_length=150)
+    action = models.CharField(max_length=32, db_index=True)
+    path = models.TextField(blank=True)
+    destination = models.TextField(blank=True)
+    detail = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+
+class ResourceDownloadEvent(models.Model):
+    dedupe_key = models.CharField(max_length=64, unique=True)
+    path = models.TextField()
+    authenticated = models.BooleanField(default=False)
+    ip_address = models.GenericIPAddressField(null=True, blank=True, db_index=True)
+    # Snapshots preserve historical attribution when an account is renamed/deleted.
+    user_id = models.PositiveBigIntegerField(null=True, blank=True, db_index=True)
+    username = models.CharField(max_length=150, blank=True)
+    user_agent = models.CharField(max_length=2048, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+
 class Notification(models.Model):
     KIND_LIKE = 'like'
     KIND_REPLY = 'reply'

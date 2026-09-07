@@ -27,6 +27,7 @@ from .resource_blacklist import (
     resource_upload_blacklist_errors,
 )
 from .resource_notifications import queue_resource_upload_notifications
+from .resource_access import ResourceAccess
 from .serializers import (
     ResourceDirectorySerializer,
     ResourceUploadCreateSerializer,
@@ -194,6 +195,8 @@ class ResourceDirectoryView(APIView):
         if not serializer.is_valid():
             return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
         current_path = serializer.validated_data['path']
+        access = ResourceAccess(request.user)
+        access.require(current_path)
         blacklist = get_resource_upload_blacklist()
         if is_resource_upload_path_blocked(current_path, blacklist):
             raise Http404
@@ -208,6 +211,7 @@ class ResourceDirectoryView(APIView):
         contents['directories'] = [
             directory for directory in contents['directories']
             if not is_resource_upload_path_blocked(directory['path'], blacklist)
+            and access.allowed(directory['path'])
         ]
         response = return_response(contents=contents)
         response['Cache-Control'] = 'no-store'
@@ -264,6 +268,10 @@ class ResourceUploadRequestView(APIView):
         relative_paths = request.data.getlist('relative_paths') if hasattr(request.data, 'getlist') else []
         normalized_paths, validation_errors = validate_resource_upload_files(files, relative_paths)
         if not validation_errors:
+            access = ResourceAccess(request.user)
+            access.require(serializer.validated_data['target_path'])
+            for relative_path in normalized_paths:
+                access.require(serializer.validated_data['target_path'].rstrip('/') + '/' + relative_path)
             validation_errors = resource_upload_blacklist_errors(serializer.validated_data['target_path'], normalized_paths)
         if validation_errors:
             return return_response(
@@ -389,6 +397,10 @@ class ResourceUploadRequestDetailView(APIView):
                 reserved_relative_paths=[upload_file.relative_path for upload_file in kept_files],
             )
             if not validation_errors:
+                access = ResourceAccess(request.user)
+                access.require(path_serializer.validated_data['target_path'])
+                for relative_path in normalized_paths + [upload_file.relative_path for upload_file in kept_files]:
+                    access.require(path_serializer.validated_data['target_path'].rstrip('/') + '/' + relative_path)
                 validation_errors = resource_upload_blacklist_errors(
                     path_serializer.validated_data['target_path'],
                     normalized_paths + [upload_file.relative_path for upload_file in kept_files],

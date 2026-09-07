@@ -59,7 +59,10 @@ class ResourceUploadRequest(models.Model):
 
     class Meta:
         ordering = ('-created_at',)
-        permissions = [('review_resource_uploads', 'Can review resource uploads')]
+        permissions = [
+            ('review_resource_uploads', 'Can review resource uploads'),
+            ('manage_resource_files', 'Can manage published resource files'),
+        ]
 
     def __str__(self):
         return f'#{self.pk} {self.uploaded_by.username} -> {self.target_path}'

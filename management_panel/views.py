@@ -120,6 +120,7 @@ def _permission_flags(user):
         'moderate_reports': user.has_perm('guestbook.moderate_reports'),
         'publish_announcements': user.has_perm('guestbook.publish_announcements'),
         'review_resource_uploads': user.has_perm('common.review_resource_uploads'),
+        'manage_resource_files': user.has_perm('common.manage_resource_files'),
     }
 
 

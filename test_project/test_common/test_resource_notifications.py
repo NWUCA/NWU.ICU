@@ -19,6 +19,7 @@ from common.file.resource_publish import ResourcePublishError
 
 @override_settings(
     RESOURCES_WEBSITE_URL='https://resour.nwu.icu',
+    FRONTEND_URL='https://nwu.icu',
     WEBSITE_NAME='NWU.ICU',
     EMAIL_HOST_USER='notify@nwu.icu',
 )
@@ -41,7 +42,7 @@ class ResourceUploadNotificationTests(SimpleTestCase):
     def test_public_url_is_encoded_but_keeps_directory_separators(self):
         self.assertEqual(
             get_resource_public_url('/考试资料/高等 数学'),
-            'https://resour.nwu.icu/%E8%80%83%E8%AF%95%E8%B5%84%E6%96%99/'
+            'https://nwu.icu/disk/%E8%80%83%E8%AF%95%E8%B5%84%E6%96%99/'
             '%E9%AB%98%E7%AD%89%20%E6%95%B0%E5%AD%A6',
         )
 
@@ -53,7 +54,7 @@ class ResourceUploadNotificationTests(SimpleTestCase):
 
         self.assertIn('已审核通过并成功发布', message)
         self.assertIn('/考试资料/高等数学', message)
-        self.assertIn('https://resour.nwu.icu/', message)
+        self.assertIn('https://nwu.icu/disk/', message)
 
     def test_publish_failure_message_explains_that_request_was_returned(self):
         message = build_resource_upload_result_message(
