@@ -30,14 +30,16 @@ from webauthn.helpers.structs import (
     UserVerificationRequirement,
 )
 
-from common.file.models import ResourceUploadFile, ResourceUploadRequest
+from common.file.models import ResourceUploadDirectoryBlacklist, ResourceUploadFile, ResourceUploadRequest
+from common.file.resource_blacklist import get_resource_upload_blacklist
+from common.file.resource_directories import ResourceDirectoryCacheError, get_cached_child_directories
 from common.file.resource_workflow import (
     ResourceReviewError,
     approve_resource_upload,
     reject_resource_upload,
     retry_resource_publish,
 )
-from common.file.serializers import ResourceUploadRequestSerializer
+from common.file.serializers import ResourceDirectorySerializer, ResourceUploadRequestSerializer
 from guestbook.announcements import publish_announcement
 from guestbook.models import GuestbookEntry, GuestbookReport
 from guestbook.moderation import ReportModerationError, resolve_guestbook_report
@@ -62,6 +64,7 @@ from .serializers import (
     PasskeyRegistrationVerifySerializer,
     ReportResolutionSerializer,
     ResourceReviewSerializer,
+    ResourceUploadBlacklistSerializer,
 )
 from .throttles import AdminPasskeyIPThrottle, AdminPasskeyUserThrottle
 
@@ -434,6 +437,41 @@ class ManagementAnnouncementView(ManagementAPIView):
             contents={'entry': serialize_entry(entry, request), 'created': created},
             status_code=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
         )
+
+
+class ManagementResourceUploadBlacklistView(ManagementAPIView):
+    required_permission = 'common.review_resource_uploads'
+
+    def get(self, request):
+        return return_response(contents={'paths': get_resource_upload_blacklist()})
+
+    def post(self, request):
+        serializer = ResourceUploadBlacklistSerializer(data=request.data)
+        if not serializer.is_valid():
+            return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
+        data = serializer.validated_data
+        if data['action'] == 'add':
+            ResourceUploadDirectoryBlacklist.objects.get_or_create(path=data['path'])
+        else:
+            ResourceUploadDirectoryBlacklist.objects.filter(path=data['path']).delete()
+        return return_response(contents={'paths': get_resource_upload_blacklist()})
+
+
+class ManagementResourceDirectoryView(ManagementAPIView):
+    required_permission = 'common.review_resource_uploads'
+
+    def get(self, request):
+        serializer = ResourceDirectorySerializer(data=request.query_params)
+        if not serializer.is_valid():
+            return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
+        try:
+            contents = get_cached_child_directories(serializer.validated_data['path'])
+        except ResourceDirectoryCacheError:
+            return return_response(
+                errors={'directory': {'err_code': 'resource_service_unavailable', 'err_msg': '目录缓存暂时不可用，请稍后重试'}},
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        return return_response(contents=contents)
 
 
 class ManagementResourceUploadListView(ManagementAPIView):

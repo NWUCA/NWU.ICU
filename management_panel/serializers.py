@@ -1,4 +1,16 @@
 from rest_framework import serializers
+from common.file.serializers import ResourceDirectorySerializer
+
+
+class ResourceUploadBlacklistSerializer(ResourceDirectorySerializer):
+    path = serializers.CharField(max_length=2048)
+    action = serializers.ChoiceField(choices=('add', 'remove'))
+
+    def validate_path(self, value):
+        path = '/' + super().validate_path(value).lstrip('/')
+        if path == '/':
+            raise serializers.ValidationError('请选择要限制投稿的子文件夹')
+        return path
 
 
 class PasskeyRegistrationOptionsSerializer(serializers.Serializer):
@@ -31,4 +43,3 @@ class ResourceReviewSerializer(serializers.Serializer):
         if attrs['action'] == 'reject' and not attrs.get('reason', '').strip():
             raise serializers.ValidationError({'reason': '拒绝投稿时必须填写理由'})
         return attrs
-

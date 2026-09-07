@@ -7,6 +7,8 @@ from .views import (
     ManagementResourceUploadDetailView,
     ManagementResourceUploadFileDownloadView,
     ManagementResourceUploadListView,
+    ManagementResourceUploadBlacklistView,
+    ManagementResourceDirectoryView,
     ManagementSessionView,
     PasskeyAuthenticationOptionsView,
     PasskeyAuthenticationVerifyView,
@@ -25,7 +27,8 @@ urlpatterns = [
     path('reports/<int:report_id>/resolve/', ManagementReportResolveView.as_view(), name='management-report-resolve'),
     path('announcements/', ManagementAnnouncementView.as_view(), name='management-announcements'),
     path('uploads/', ManagementResourceUploadListView.as_view(), name='management-uploads'),
+    path('uploads/blacklist/', ManagementResourceUploadBlacklistView.as_view(), name='management-upload-blacklist'),
+    path('uploads/directories/', ManagementResourceDirectoryView.as_view(), name='management-upload-directories'),
     path('uploads/<int:request_id>/', ManagementResourceUploadDetailView.as_view(), name='management-upload-detail'),
     path('uploads/files/<int:file_id>/download/', ManagementResourceUploadFileDownloadView.as_view(), name='management-upload-file'),
 ]
-

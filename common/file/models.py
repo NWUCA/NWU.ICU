@@ -17,6 +17,16 @@ class UploadedFile(models.Model):
     ref_count = models.IntegerField(default=0)
 
 
+class ResourceUploadDirectoryBlacklist(models.Model):
+    path = models.CharField(max_length=2048, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ('path',)
+        verbose_name = '投稿文件夹黑名单'
+        verbose_name_plural = verbose_name
+
+
 class ResourceUploadRequest(models.Model):
     STATUS_PENDING = 'pending'
     STATUS_PUBLISHING = 'publishing'

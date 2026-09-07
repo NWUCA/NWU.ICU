@@ -21,6 +21,11 @@ from .resource_directories import (
     get_cached_child_directories,
 )
 from .models import ResourceUploadFile, ResourceUploadRequest, UploadedFile
+from .resource_blacklist import (
+    get_resource_upload_blacklist,
+    is_resource_upload_path_blocked,
+    resource_upload_blacklist_errors,
+)
 from .resource_notifications import queue_resource_upload_notifications
 from .serializers import (
     ResourceDirectorySerializer,
@@ -189,6 +194,9 @@ class ResourceDirectoryView(APIView):
         if not serializer.is_valid():
             return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
         current_path = serializer.validated_data['path']
+        blacklist = get_resource_upload_blacklist()
+        if is_resource_upload_path_blocked(current_path, blacklist):
+            raise Http404
         try:
             contents = get_cached_child_directories(current_path)
         except ResourceDirectoryCacheError:
@@ -197,7 +205,13 @@ class ResourceDirectoryView(APIView):
                 errors={'directory': get_err_msg('resource_service_unavailable')},
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
-        return return_response(contents=contents)
+        contents['directories'] = [
+            directory for directory in contents['directories']
+            if not is_resource_upload_path_blocked(directory['path'], blacklist)
+        ]
+        response = return_response(contents=contents)
+        response['Cache-Control'] = 'no-store'
+        return response
 
 
 class ResourceUploadConfigView(APIView):
@@ -249,6 +263,8 @@ class ResourceUploadRequestView(APIView):
             )
         relative_paths = request.data.getlist('relative_paths') if hasattr(request.data, 'getlist') else []
         normalized_paths, validation_errors = validate_resource_upload_files(files, relative_paths)
+        if not validation_errors:
+            validation_errors = resource_upload_blacklist_errors(serializer.validated_data['target_path'], normalized_paths)
         if validation_errors:
             return return_response(
                 errors=validation_errors,
@@ -372,6 +388,11 @@ class ResourceUploadRequestDetailView(APIView):
                 relative_paths,
                 reserved_relative_paths=[upload_file.relative_path for upload_file in kept_files],
             )
+            if not validation_errors:
+                validation_errors = resource_upload_blacklist_errors(
+                    path_serializer.validated_data['target_path'],
+                    normalized_paths + [upload_file.relative_path for upload_file in kept_files],
+                )
             if validation_errors:
                 return return_response(
                     errors=validation_errors,
