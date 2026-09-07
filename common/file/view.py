@@ -9,8 +9,9 @@ from django.db.models import Case, IntegerField, Value, When
 from django.http import Http404, FileResponse
 from rest_framework import status, generics
 from rest_framework.parsers import MultiPartParser, FormParser
-from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
+from management_panel.security import require_management_access
 from settings.log import TelegramBotHandler
 
 from utils.utils import get_err_msg
@@ -111,6 +112,11 @@ class FileDeleteView(generics.DestroyAPIView):
             if instance.created_by != request.user and not request.user.is_staff:
                 return return_response(errors={"auth": get_err_msg('auth_error')},
                                        status_code=status.HTTP_403_FORBIDDEN)
+            if instance.ref_count > 0:
+                return return_response(
+                    errors={"file": {"err_code": "file_in_use", "err_msg": "文件正在被内容引用，不能删除"}},
+                    status_code=status.HTTP_409_CONFLICT,
+                )
             self.perform_destroy(instance)
             return return_response(message="delete success", status_code=status.HTTP_204_NO_CONTENT)
         except Http404:
@@ -149,6 +155,11 @@ class FileUpdateView(generics.UpdateAPIView):
             if instance.created_by != request.user and not request.user.is_staff:
                 return return_response(errors={"auth": get_err_msg('auth_error')},
                                        status_code=status.HTTP_403_FORBIDDEN)
+            if instance.ref_count > 0:
+                return return_response(
+                    errors={"file": {"err_code": "file_in_use", "err_msg": "文件正在被内容引用，不能修改"}},
+                    status_code=status.HTTP_409_CONFLICT,
+                )
 
             if 'file' in request.FILES:
                 file_obj = request.FILES['file']
@@ -423,9 +434,10 @@ class ResourceUploadRequestDetailView(APIView):
 
 
 class ResourceUploadFileDownloadView(APIView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [AllowAny]
 
     def get(self, request, file_id):
+        require_management_access(request, permission='common.review_resource_uploads')
         try:
             upload_file = ResourceUploadFile.objects.get(pk=file_id)
             file_handle = upload_file.file.open('rb')
@@ -434,11 +446,15 @@ class ResourceUploadFileDownloadView(APIView):
                 errors={'file': get_err_msg('file_not_exist')},
                 status_code=status.HTTP_404_NOT_FOUND,
             )
-        return FileResponse(
+        response = FileResponse(
             file_handle,
             as_attachment=True,
             filename=upload_file.original_name,
         )
+        response['Cache-Control'] = 'no-store'
+        response['X-Content-Type-Options'] = 'nosniff'
+        response['X-Frame-Options'] = 'DENY'
+        return response
 
 
 class FileDownloadView(APIView):

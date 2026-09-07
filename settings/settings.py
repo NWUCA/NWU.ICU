@@ -12,8 +12,10 @@ https://docs.djangoproject.com/en/3.1/ref/settings/
 import os
 import uuid
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import environ
+from django.core.exceptions import ImproperlyConfigured
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -28,6 +30,7 @@ INSTALLED_APPS = [
     'guestbook',
     'common',
     'user',
+    'management_panel',
     # below are 3rd apps
     'captcha',
     'rest_framework',
@@ -56,6 +59,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'management_panel.middleware.AdminPasskeyElevationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -249,6 +253,38 @@ FRONTEND_URL = env(
     default='http://localhost:5173' if DEBUG else 'https://nwu.icu',
 )
 ADMIN_PUBLIC_URL = env('ADMIN_PUBLIC_URL', default=FRONTEND_URL)
+WEBAUTHN_RP_ID = env('WEBAUTHN_RP_ID', default='localhost' if DEBUG else 'nwu.icu')
+WEBAUTHN_RP_NAME = env('WEBAUTHN_RP_NAME', default=WEBSITE_NAME)
+WEBAUTHN_EXPECTED_ORIGINS = [
+    origin.strip()
+    for origin in env('WEBAUTHN_EXPECTED_ORIGINS', default=FRONTEND_URL).split(',')
+    if origin.strip()
+]
+if not WEBAUTHN_RP_ID or any(character in WEBAUTHN_RP_ID for character in ('/', ':')):
+    raise ImproperlyConfigured('WEBAUTHN_RP_ID must be a hostname without a scheme, port, or path.')
+if not WEBAUTHN_EXPECTED_ORIGINS:
+    raise ImproperlyConfigured('WEBAUTHN_EXPECTED_ORIGINS must contain at least one exact origin.')
+for webauthn_origin in WEBAUTHN_EXPECTED_ORIGINS:
+    parsed_origin = urlsplit(webauthn_origin)
+    if (
+        parsed_origin.scheme not in ({'http', 'https'} if DEBUG else {'https'})
+        or not parsed_origin.netloc
+        or parsed_origin.path
+        or parsed_origin.query
+        or parsed_origin.fragment
+        or parsed_origin.username
+        or parsed_origin.password
+    ):
+        raise ImproperlyConfigured(
+            'Each WEBAUTHN_EXPECTED_ORIGINS value must be an exact origin; production requires HTTPS.'
+        )
+    origin_hostname = parsed_origin.hostname or ''
+    if parsed_origin.scheme == 'http' and origin_hostname not in {'localhost', '127.0.0.1', '::1'}:
+        raise ImproperlyConfigured('Plain HTTP WebAuthn origins are only allowed for local development hosts.')
+    if origin_hostname != WEBAUTHN_RP_ID and not origin_hostname.endswith(f'.{WEBAUTHN_RP_ID}'):
+        raise ImproperlyConfigured('Each WebAuthn origin hostname must equal or be a subdomain of WEBAUTHN_RP_ID.')
+ADMIN_PASSKEY_USER_THROTTLE = env('ADMIN_PASSKEY_USER_THROTTLE', default='10/minute')
+ADMIN_PASSKEY_IP_THROTTLE = env('ADMIN_PASSKEY_IP_THROTTLE', default='30/minute')
 
 # 默认超级用户设置
 DEFAULT_SUPER_USER_ID = env('DEFAULT_SUPER_USER_ID')

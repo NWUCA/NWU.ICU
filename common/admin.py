@@ -3,6 +3,7 @@ import logging
 from django import forms
 from django.contrib import admin, messages
 from django.contrib.admin.helpers import ActionForm
+from django.core.exceptions import PermissionDenied
 from django.db.models import Sum
 from django.shortcuts import redirect
 from django.template.response import TemplateResponse
@@ -89,6 +90,15 @@ class ResourceUploadRequestAdmin(admin.ModelAdmin):
     )
     date_hierarchy = 'created_at'
 
+    def has_module_permission(self, request):
+        return request.user.has_perm('common.review_resource_uploads')
+
+    def has_view_permission(self, request, obj=None):
+        return request.user.has_perm('common.review_resource_uploads')
+
+    def has_change_permission(self, request, obj=None):
+        return request.user.has_perm('common.review_resource_uploads')
+
     def get_queryset(self, request):
         return super().get_queryset(request).prefetch_related('files')
 
@@ -108,6 +118,8 @@ class ResourceUploadRequestAdmin(admin.ModelAdmin):
         return format_html('<a href="{}">打开审核页</a>', reverse('admin:common_resourceuploadrequest_review', args=(obj.pk,)))
 
     def review_view(self, request, object_id):
+        if not request.user.has_perm('common.review_resource_uploads'):
+            raise PermissionDenied
         upload_request = self.get_queryset(request).filter(pk=object_id).first()
         if upload_request is None:
             self.message_user(request, '投稿不存在', messages.ERROR)

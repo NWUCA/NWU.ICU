@@ -75,6 +75,29 @@ openssl rand -base64 48
 sudo bash ./scripts/deploy-production.sh .env.production
 ```
 
+## 管理员 Passkey
+
+管理员先以普通账号登录，再手动访问 `/manage`。管理操作和 Django Admin 均要求一次
+Passkey 验证，提权固定有效 10 分钟。生产环境需将 `WEBAUTHN_RP_ID` 设为站点域名，
+并在 `WEBAUTHN_EXPECTED_ORIGINS` 中逐项填写精确的 HTTPS origin。
+
+首次绑定或添加设备时，在服务器签发五分钟有效的一次性许可码：
+
+```console
+docker compose exec web python manage.py admin_passkey_enroll <username>
+```
+
+凭据查询与撤销：
+
+```console
+docker compose exec web python manage.py admin_passkey_list <username>
+docker compose exec web python manage.py admin_passkey_revoke <username> --credential-id <id>
+docker compose exec web python manage.py admin_passkey_revoke <username> --all
+```
+
+许可码只显示一次且服务端仅保存摘要。设备全部丢失时，不提供在线降级恢复；通过服务器
+撤销旧凭据后重新签发许可码。建议每位管理员至少绑定两个独立凭据。
+
 脚本会自动：
 
 1. 检查环境变量中是否仍有 `CHANGE_ME`；

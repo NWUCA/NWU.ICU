@@ -74,6 +74,15 @@ def get_user_avatar_info(user):
 
 
 def custom_exception_handler(exc, context):
+    management_error_code = getattr(exc, 'err_code', None)
+    if management_error_code:
+        return return_response(
+            errors={getattr(exc, 'field', 'auth'): {
+                'err_code': management_error_code,
+                'err_msg': getattr(exc, 'err_msg', str(exc)),
+            }},
+            status_code=exc.status_code,
+        )
     response = exception_handler(exc, context)
 
     if isinstance(exc, NotAuthenticated):

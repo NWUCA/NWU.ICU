@@ -41,7 +41,7 @@ class GuestbookApiTests(APITestCase):
         self.assertEqual(entry['author']['nickname'], self.author.nickname)
         self.assertTrue(entry['is_me'])
 
-    def test_announcements_share_entries_but_are_isolated_and_admin_only_to_create(self):
+    def test_announcements_share_entries_but_public_creation_is_disabled(self):
         admin = create_user(username='announcement-admin', email='announcement-admin@example.com')
         admin.is_staff = True
         admin.save(update_fields=('is_staff',))
@@ -51,20 +51,24 @@ class GuestbookApiTests(APITestCase):
 
         self.assertEqual(
             self.author_client.post(announcements_url, {'content': '<p>blocked</p>'}, format='json').status_code,
-            status.HTTP_403_FORBIDDEN,
+            status.HTTP_405_METHOD_NOT_ALLOWED,
         )
-        created = admin_client.post(
-            announcements_url, {'title': 'Important notice', 'content': '<p>notice</p>', 'anonymous': True}, format='json'
-        )
-        self.assertEqual(created.status_code, status.HTTP_201_CREATED)
-        announcement = GuestbookEntry.objects.get(pk=created.data['contents']['entry']['id'])
-        self.assertEqual(announcement.board, GuestbookEntry.BOARD_ANNOUNCEMENT)
-        self.assertEqual(created.data['contents']['entry']['title'], 'Important notice')
-        self.assertFalse(announcement.anonymous)
         self.assertEqual(
-            admin_client.post(announcements_url, {'content': '<p>missing title</p>'}, format='json').status_code,
-            status.HTTP_400_BAD_REQUEST,
+            admin_client.post(
+                announcements_url,
+                {'title': 'Important notice', 'content': '<p>notice</p>', 'anonymous': True},
+                format='json',
+            ).status_code,
+            status.HTTP_405_METHOD_NOT_ALLOWED,
         )
+        announcement = GuestbookEntry.objects.create(
+            author=admin,
+            title='Important notice',
+            content='<p>notice</p>',
+            board=GuestbookEntry.BOARD_ANNOUNCEMENT,
+        )
+        self.assertEqual(announcement.board, GuestbookEntry.BOARD_ANNOUNCEMENT)
+        self.assertFalse(announcement.anonymous)
         self.assertEqual(self.author_client.get(announcements_url).data['contents']['count'], 1)
         self.assertEqual(self.author_client.get(reverse('api:guestbook')).data['contents']['count'], 0)
 
@@ -93,6 +97,10 @@ class GuestbookApiTests(APITestCase):
                 {'reason': 'abuse'}, format='json',
             ).status_code,
             status.HTTP_201_CREATED,
+        )
+        self.assertEqual(
+            admin_client.delete(reverse('api:announcement-detail', kwargs={'entry_id': announcement.id})).status_code,
+            status.HTTP_403_FORBIDDEN,
         )
 
     def test_anonymous_entry_never_exposes_author_identity(self):
@@ -211,6 +219,61 @@ class GuestbookApiTests(APITestCase):
         self.assertEqual(child.parent_id, root.id)
         self.assertIn('content', admin.readonly_fields)
         self.assertIn('parent', admin.readonly_fields)
+
+    def test_admin_entry_queryset_is_scoped_to_each_management_permission(self):
+        from types import SimpleNamespace
+
+        from django.contrib.admin.sites import AdminSite
+
+        from guestbook.admin import GuestbookEntryAdmin
+
+        guestbook_root = GuestbookEntry.objects.create(author=self.author, content='<p>guestbook</p>')
+        announcement_root = GuestbookEntry.objects.create(
+            author=self.author,
+            content='<p>announcement</p>',
+            board=GuestbookEntry.BOARD_ANNOUNCEMENT,
+        )
+        announcement_reply = GuestbookEntry.objects.create(
+            author=self.reader,
+            content='<p>reply</p>',
+            board=GuestbookEntry.BOARD_ANNOUNCEMENT,
+            parent=announcement_root,
+            root=announcement_root,
+        )
+        publisher = SimpleNamespace(
+            has_perm=lambda permission: permission == 'guestbook.publish_announcements',
+        )
+        moderator = SimpleNamespace(
+            has_perm=lambda permission: permission == 'guestbook.moderate_reports',
+        )
+        model_admin = GuestbookEntryAdmin(GuestbookEntry, AdminSite())
+
+        publisher_ids = set(model_admin.get_queryset(SimpleNamespace(user=publisher)).values_list('pk', flat=True))
+        moderator_ids = set(model_admin.get_queryset(SimpleNamespace(user=moderator)).values_list('pk', flat=True))
+
+        self.assertEqual(publisher_ids, {announcement_root.pk})
+        self.assertEqual(moderator_ids, {guestbook_root.pk, announcement_reply.pk})
+        self.assertFalse(model_admin.has_view_permission(SimpleNamespace(user=publisher), guestbook_root))
+        self.assertFalse(model_admin.has_view_permission(SimpleNamespace(user=moderator), announcement_root))
+
+    def test_admin_cannot_rewrite_a_resolved_report_status(self):
+        from types import SimpleNamespace
+        from django.contrib.admin.sites import AdminSite
+        from guestbook.admin import GuestbookReportAdmin
+
+        report = GuestbookReport.objects.create(
+            entry=GuestbookEntry.objects.create(author=self.author, content='<p>reported</p>'),
+            reporter=self.reader,
+            reason=GuestbookReport.REASON_SPAM,
+            status=GuestbookReport.STATUS_DISMISSED,
+            handling_note='already handled',
+        )
+        report.status = GuestbookReport.STATUS_REMOVED
+        admin = GuestbookReportAdmin(GuestbookReport, AdminSite())
+        admin.save_model(SimpleNamespace(user=self.author), report, form=None, change=True)
+        report.refresh_from_db()
+        self.assertEqual(report.status, GuestbookReport.STATUS_DISMISSED)
+        self.assertEqual(report.handling_note, 'already handled')
 
     def test_repeated_and_removed_likes_do_not_reset_read_state(self):
         from django.utils import timezone

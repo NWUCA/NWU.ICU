@@ -71,6 +71,9 @@ from user.views import (
 
 api_patterns = [
 
+    # 管理员面板（普通登录后还需 Passkey 短时提权）
+    path('management/', include('management_panel.urls')),
+
     # 留言板
     path('guestbook/', GuestbookListView.as_view(), name='guestbook'),
     path('guestbook/<int:entry_id>/', GuestbookDetailView.as_view(), name='guestbook-detail'),

@@ -1,8 +1,10 @@
+import time
 from types import SimpleNamespace
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.contrib.auth.models import Permission
 from django.test import SimpleTestCase, override_settings
 from django.urls import reverse
 from rest_framework import status
@@ -13,6 +15,12 @@ from common.file.view import (
     enqueue_resource_upload_telegram_notification,
     resource_upload_notification_executor,
     send_resource_upload_telegram_notification,
+)
+from management_panel.models import AdminPasskeyCredential, AdminPasskeyState
+from management_panel.security import (
+    ELEVATED_CREDENTIAL_KEY,
+    ELEVATED_REVISION_KEY,
+    ELEVATED_UNTIL_KEY,
 )
 from test_project.common import create_user
 
@@ -125,12 +133,33 @@ class ResourceUploadRequestTests(APITestCase):
         url = reverse('api:resource-upload-file-download', args=[upload_file.pk])
 
         response = self.client.get(url)
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
         self.user.is_staff = True
         self.user.save(update_fields=('is_staff',))
         response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+        credential = AdminPasskeyCredential.objects.create(
+            user=self.user,
+            name='Download key',
+            credential_id=b'download-key',
+            public_key=b'public-key',
+        )
+        state, _ = AdminPasskeyState.objects.get_or_create(user=self.user)
+        session = self.client.session
+        session[ELEVATED_UNTIL_KEY] = time.time() + 600
+        session[ELEVATED_CREDENTIAL_KEY] = credential.pk
+        session[ELEVATED_REVISION_KEY] = state.revision
+        session.save()
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+        self.user.user_permissions.add(Permission.objects.get(codename='review_resource_uploads'))
+        response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response['Cache-Control'], 'no-store')
+        self.assertEqual(response['X-Content-Type-Options'], 'nosniff')
         self.assertEqual(
             response['Content-Disposition'],
             'attachment; filename="notes.txt"',

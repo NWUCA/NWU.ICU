@@ -31,6 +31,7 @@ class GuestbookEntry(SoftDeleteModel):
 
     class Meta:
         ordering = ('-created_at', '-id')
+        permissions = [('publish_announcements', 'Can publish announcements from the management panel')]
         constraints = [
             models.UniqueConstraint(fields=('author', 'submission_id'), name='unique_guestbook_submission'),
         ]
@@ -103,6 +104,7 @@ class GuestbookReport(models.Model):
     handled_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
+        permissions = [('moderate_reports', 'Can moderate guestbook reports')]
         constraints = [
             models.UniqueConstraint(fields=('entry', 'reporter'), name='unique_guestbook_report_per_user'),
         ]

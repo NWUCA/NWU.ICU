@@ -270,10 +270,25 @@ class AnnouncementListView(GuestbookListView):
     board = GuestbookEntry.BOARD_ANNOUNCEMENT
     board_label = '公告'
 
+    def post(self, request):
+        return return_response(
+            errors={'auth': {'err_code': 'management_required', 'err_msg': '请通过管理员面板发布公告'}},
+            status_code=status.HTTP_405_METHOD_NOT_ALLOWED,
+        )
+
 
 class AnnouncementDetailView(GuestbookDetailView):
     board = GuestbookEntry.BOARD_ANNOUNCEMENT
     board_label = '公告'
+
+    def delete(self, request, entry_id):
+        entry = get_entry_or_none(entry_id, board=self.board)
+        if entry is not None and entry.is_root:
+            return return_response(
+                errors={'auth': {'err_code': 'management_required', 'err_msg': '公告只能通过管理员后台删除'}},
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+        return super().delete(request, entry_id)
 
 
 class AnnouncementRepliesView(GuestbookRepliesView):
