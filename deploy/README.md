@@ -78,7 +78,8 @@ sudo bash ./scripts/deploy-production.sh .env.production
 ## 管理员 Passkey
 
 管理员先以普通账号登录，再手动访问 `/manage`。管理操作和 Django Admin 均要求一次
-Passkey 验证，提权固定有效 10 分钟。生产环境需将 `WEBAUTHN_RP_ID` 设为站点域名，
+Passkey 验证，提权有效期为 10 分钟，每次通过校验的管理请求都会重新计时；连续 10 分钟
+没有管理请求后需重新验证。生产环境需将 `WEBAUTHN_RP_ID` 设为站点域名，
 并在 `WEBAUTHN_EXPECTED_ORIGINS` 中逐项填写精确的 HTTPS origin。
 
 首次绑定或添加设备时，在服务器签发五分钟有效的一次性许可码：

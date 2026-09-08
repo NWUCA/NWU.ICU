@@ -15,6 +15,7 @@ ELEVATED_UNTIL_KEY = 'admin_elevated_until'
 ELEVATED_CREDENTIAL_KEY = 'admin_elevated_credential_id'
 ELEVATED_REVISION_KEY = 'admin_passkey_revision'
 CEREMONY_KEY = 'admin_passkey_ceremony'
+ELEVATION_DURATION = timedelta(minutes=10)
 
 
 def encode_bytes(value):
@@ -43,12 +44,12 @@ def current_passkey_revision(user):
 
 def elevate_admin_session(request, credential):
     request.session.cycle_key()
-    until = time.time() + timedelta(minutes=10).total_seconds()
+    until = time.time() + ELEVATION_DURATION.total_seconds()
     request.session[ELEVATED_UNTIL_KEY] = until
     request.session[ELEVATED_CREDENTIAL_KEY] = credential.pk
     request.session[ELEVATED_REVISION_KEY] = current_passkey_revision(request.user)
     request.session.modified = True
-    return timezone.now() + timedelta(minutes=10)
+    return timezone.now() + ELEVATION_DURATION
 
 
 def is_admin_elevated(request):
@@ -61,7 +62,8 @@ def is_admin_elevated(request):
     except (TypeError, ValueError):
         clear_admin_elevation(request)
         return False
-    if until <= time.time():
+    now = time.time()
+    if until <= now:
         clear_admin_elevation(request)
         return False
     credential_exists = AdminPasskeyCredential.objects.filter(
@@ -73,6 +75,9 @@ def is_admin_elevated(request):
     if not credential_exists or state_revision != revision:
         clear_admin_elevation(request)
         return False
+    # Only a still-valid elevation may slide; expired or revoked sessions must
+    # complete Passkey verification again before they can be renewed.
+    request.session[ELEVATED_UNTIL_KEY] = now + ELEVATION_DURATION.total_seconds()
     return True
 
 

@@ -107,22 +107,57 @@ class ManagementAccessTests(APITestCase):
         self.staff.save(update_fields=('is_staff',))
         self.assertEqual(self.client.get(url).status_code, status.HTTP_404_NOT_FOUND)
 
-    def test_elevation_expires_without_sliding(self):
+    def test_session_refreshes_elevation_for_ten_minutes(self):
         self.elevate()
         session = self.client.session
-        original_until = time.time() + 1
+        now = time.time()
+        original_until = now + 1
         session[ELEVATED_UNTIL_KEY] = original_until
         session.save()
 
-        response = self.client.get(reverse('api:management-session'))
+        with patch('management_panel.security.time.time', return_value=now):
+            response = self.client.get(reverse('api:management-session'))
         self.assertTrue(response.data['contents']['elevated'])
-        self.assertAlmostEqual(response.data['contents']['elevated_until'], original_until, places=3)
+        self.assertEqual(response.data['contents']['elevated_until'], now + 600)
+        self.assertEqual(self.client.session[ELEVATED_UNTIL_KEY], now + 600)
 
-        session = self.client.session
-        session[ELEVATED_UNTIL_KEY] = time.time() - 1
-        session.save()
-        response = self.client.get(reverse('api:management-session'))
+        with patch('management_panel.security.time.time', return_value=now + 600):
+            response = self.client.get(reverse('api:management-session'))
         self.assertFalse(response.data['contents']['elevated'])
+        self.assertIsNone(response.data['contents']['elevated_until'])
+        self.assertNotIn(ELEVATED_UNTIL_KEY, self.client.session)
+
+    def test_each_management_request_extends_elevation_beyond_initial_expiry(self):
+        self.elevate()
+        self.grant(self.staff, 'moderate_reports')
+        original_until = self.client.session[ELEVATED_UNTIL_KEY]
+        url = reverse('api:management-reports')
+
+        for now in (original_until - 1, original_until + 598):
+            with patch('management_panel.security.time.time', return_value=now):
+                response = self.client.get(url)
+            self.assertEqual(response.status_code, status.HTTP_200_OK)
+            self.assertEqual(self.client.session[ELEVATED_UNTIL_KEY], now + 600)
+
+        with patch('management_panel.security.time.time', return_value=now + 600):
+            response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.data['errors'][0]['err_code'], 'admin_passkey_required')
+        self.assertNotIn(ELEVATED_UNTIL_KEY, self.client.session)
+
+    def test_admin_requests_refresh_elevation_and_redirect_after_inactivity(self):
+        self.elevate()
+        now = self.client.session[ELEVATED_UNTIL_KEY] - 1
+        with patch('management_panel.security.time.time', return_value=now):
+            response = self.client.get('/admin/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(self.client.session[ELEVATED_UNTIL_KEY], now + 600)
+
+        with patch('management_panel.security.time.time', return_value=now + 600):
+            response = self.client.get('/admin/')
+        self.assertEqual(response.status_code, status.HTTP_302_FOUND)
+        self.assertEqual(response.url, '/manage?next=%2Fadmin%2F')
+        self.assertNotIn(ELEVATED_UNTIL_KEY, self.client.session)
 
     def test_admin_pages_redirect_to_manage_until_elevated(self):
         self.client.force_login(self.staff)
