@@ -70,7 +70,7 @@ services:
     env_file:
       - ${ENV_FILE:-.env}
     command: bash -c "
-      printf '0 0 * * * cd /app && python manage.py update_semester\n0 3 * * * cd /app && python scripts/export_resource_tree.py --root /resource-storage --output /app/data/resource_directories.json --source https://resour.nwu.icu\n15 3 * * * cd /app && python manage.py clean_approved_resource_uploads\n30 3 * * * cd /app && python manage.py clean_expired_resource_uploads\n' > /app/crontab &&
+      printf '0 0 * * * cd /app && python manage.py update_semester\n15 3 * * * cd /app && python manage.py clean_approved_resource_uploads\n30 3 * * * cd /app && python manage.py clean_expired_resource_uploads\n' > /app/crontab &&
       supercronic /app/crontab"
     volumes:
       - ${MEDIA_STORAGE_HOST_PATH:-./media}:/app/media

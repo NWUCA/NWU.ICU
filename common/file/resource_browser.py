@@ -11,6 +11,7 @@ from django.utils.http import content_disposition_header, http_date
 from rest_framework.exceptions import APIException, ValidationError
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
+from rest_framework import serializers
 
 from utils.utils import return_response
 from .resource_directories import ResourceDirectoryCacheError, read_resource_directory_cache
@@ -40,7 +41,7 @@ def visible_name(name):
     return not name.startswith('.') and name.casefold() != 'readme.md'
 
 
-def resolve_resource(raw_path, *, allow_readme=False):
+def normalize_resource_path(raw_path, *, allow_readme=False):
     # URL paths always use POSIX separators, regardless of the host filesystem.
     raw = str(raw_path).replace('\\', '/')
     parts = raw.split('/')
@@ -52,8 +53,13 @@ def resolve_resource(raw_path, *, allow_readme=False):
     if any(part.startswith('.') or (not allow_readme and part.casefold() == 'readme.md')
            for part in parts if part):
         raise Http404
+    return '/' + '/'.join(part for part in parts if part)
+
+
+def resolve_resource(raw_path, *, allow_readme=False):
+    path = normalize_resource_path(raw_path, allow_readme=allow_readme)
+    parts = path.split('/')
     root = resource_root()
-    path = '/' + '/'.join(part for part in parts if part)
     target = root
     try:
         # Reject aliases (including Windows junctions), even when they point inside
@@ -144,35 +150,45 @@ class ResourceBrowseView(APIView):
         return response
 
 
-def search_resources(keyword, page, page_size, user=None):
-    """Use the local tree index; revalidate matches against the actual storage."""
-    resource_root()
+def resource_search_entries():
     try:
-        entries = read_resource_directory_cache()['entries']
+        return read_resource_directory_cache()['entries']
     except ResourceDirectoryCacheError as error:
         raise ResourceUnavailable('资料搜索索引暂时不可用，请先按目录浏览。') from error
+
+
+def matching_resources(keyword, user=None, *, entries=None, access=None):
+    """Search indexed metadata with live ACLs; browsing/downloads check disk."""
+    if entries is None:
+        entries = resource_search_entries()
     matches = []
-    access = ResourceAccess(user)
+    access = access or ResourceAccess(user)
+    keyword = keyword.casefold()
     for entry in entries:
         name = entry.get('name', '')
         path = entry.get('path', '')
-        if not access.allowed(path):
-            continue
-        if path == '/' or not visible_name(name) or keyword.casefold() not in name.casefold():
+        if entry.get('type') not in {'file', 'directory'} or path == '/' or not visible_name(name) or keyword not in name.casefold():
             continue
         try:
-            target, path = resolve_resource(path)
-            if not (target.is_file() or target.is_dir()):
+            path = normalize_resource_path(path)
+            if name != posixpath.basename(path) or not access.allowed(path):
                 continue
-            metadata = entry_metadata(target, path)
-        except (Http404, ValidationError, OSError):
+        except (Http404, ValidationError):
             continue
         matches.append({
-            'name': name, 'size': metadata['size'] or 0,
-            'path': posixpath.dirname(path),
+            'name': name, 'path': path, 'type': entry['type'],
+            'size': entry.get('size'), 'modified_at': entry.get('modified_at'),
+        })
+    return matches
+
+
+def search_resources(keyword, page, page_size, user=None):
+    matches = [{
+            'name': metadata['name'], 'size': metadata['size'] or 0,
+            'path': posixpath.dirname(metadata['path']),
             'type': 'dir' if metadata['type'] == 'directory' else 'file',
             'url': '/disk',
-        })
+        } for metadata in matching_resources(keyword, user)]
     matches.sort(key=lambda item: (item['type'] != 'dir', item['path'], item['name'].casefold()))
     total = len(matches)
     return {
@@ -180,6 +196,52 @@ def search_resources(keyword, page, page_size, user=None):
         'current_page': page, 'has_next': total > page * page_size,
         'has_previous': page > 1, 'total_count': total,
     }, matches[(page - 1) * page_size:page * page_size]
+
+
+class ResourceSearchSerializer(serializers.Serializer):
+    q = serializers.CharField(max_length=200)
+    path = serializers.CharField(max_length=4096, default='/', trim_whitespace=False)
+    page = serializers.IntegerField(min_value=1, default=1)
+    sort = serializers.ChoiceField(choices=['name', 'modified', 'size'], default='name')
+    type = serializers.ChoiceField(choices=['all', 'file', 'directory'], default='all')
+
+
+class ResourceSearchView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        serializer = ResourceSearchSerializer(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
+        query = serializer.validated_data
+        path = normalize_resource_path(query['path'])
+        access = ResourceAccess(request.user)
+        access.require(path)
+        entries = resource_search_entries()
+        if path != '/':
+            current = next((entry for entry in entries if entry.get('path') == path), None)
+            if not current or current.get('type') not in {'file', 'directory'}:
+                raise Http404
+            if current['type'] == 'file':
+                path = posixpath.dirname(path)
+        matches = matching_resources(query['q'], entries=entries, access=access)
+        if query['type'] != 'all':
+            matches = [item for item in matches if item['type'] == query['type']]
+        # Stable ties keep paginated results deterministic. Apply locality before
+        # slicing, so current-folder files cannot fall behind remote folders.
+        matches.sort(key=lambda item: (item['name'].casefold(), item['path']))
+        if query['sort'] == 'modified':
+            matches.sort(key=lambda item: item['modified_at'] or '', reverse=True)
+        elif query['sort'] == 'size':
+            matches.sort(key=lambda item: item['size'] or 0, reverse=True)
+        matches.sort(key=lambda item: (posixpath.dirname(item['path']) != path, item['type'] != 'directory'))
+        page_size = 100
+        page = query['page']
+        response = return_response(contents={
+            'entries': matches[(page - 1) * page_size:page * page_size],
+            'total_count': len(matches), 'page': page, 'page_size': page_size,
+        })
+        response['Cache-Control'] = 'private, no-store'
+        return response
 
 
 # Never serve uploaded HTML/SVG as a same-origin active document.

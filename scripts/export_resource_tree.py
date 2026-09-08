@@ -3,6 +3,7 @@ import argparse
 import json
 import os
 import posixpath
+import stat
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -52,6 +53,8 @@ def build_resource_tree(storage_root, source='https://resour.nwu.icu'):
                 continue
             virtual_path = posixpath.join(virtual_directory, child.name)
             stat_result = child.stat(follow_symlinks=False)
+            if getattr(stat_result, 'st_file_attributes', 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT:
+                continue
             if child.is_dir(follow_symlinks=False):
                 directory_paths.add(virtual_path)
                 entries.append({
