@@ -5,7 +5,7 @@ from typing import List
 from django.conf import settings
 from django.core.cache import cache
 from django.db import transaction
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.db.models.functions import TruncDate
 from rest_framework import status
 from rest_framework.generics import GenericAPIView
@@ -21,6 +21,7 @@ from course_assessment.serializer import MyReviewSerializer, AddReviewSerializer
     DeleteReviewReplySerializer, ReviewAndReplyLikeSerializer, AddCourseSerializer, \
     CourseLikeSerializer, AddTeacherSerializer, DeleteReviewSerializer
 from user.models import User
+from common.models import Notification
 from utils.custom_pagination import StandardResultsSetPagination
 from utils.throttle import CaptchaAnonRateThrottle, CaptchaUserRateThrottle
 from utils.utils import return_response, get_err_msg, get_msg_msg, userUtils, get_user_avatar_info
@@ -105,8 +106,10 @@ class CourseView(APIView):
         except Course.DoesNotExist:
             return return_response(errors={'course': get_err_msg('course_not_exist')},
                                    status_code=status.HTTP_404_NOT_FOUND)
-        reviews = (Review.objects.filter(course_id=course_id)
+        reviews = (Review.all_objects.filter(course_id=course_id)
+                   .filter(Q(is_deleted=False) | Q(reviewreply__is_deleted=False))
                    .select_related('created_by', 'semester')
+                   .distinct()
                    .order_by('-create_time'))
         self.preload_user_likes(request.user, reviews=reviews)
         try:
@@ -124,7 +127,8 @@ class CourseView(APIView):
                 'create_time')
             reviews_data.append({
                 'id': review.id,
-                'content': review.content,
+                'is_deleted': review.is_deleted,
+                'content': '内容已被删除' if review.is_deleted else review.content,
                 'rating': review.rating,
                 'modified_time': review.modify_time,
                 'created_time': review.create_time,
@@ -137,7 +141,12 @@ class CourseView(APIView):
                 'homework': review.homework,
                 'reward': review.reward,
                 'semester': review.semester.name,
-                'author': {'id': -1 if (
+                'author': ({
+                    'id': 0,
+                    'nickname': '已删除用户',
+                    'avatar': '',
+                    'anonymous': True,
+                } if review.is_deleted else {'id': -1 if (
                         review.anonymous and review.created_by.id != request.user.id) else review.created_by.id,
                            'nickname': get_msg_msg(
                                'anonymous_user_nickname') if review.anonymous else review.created_by.nickname,
@@ -146,7 +155,7 @@ class CourseView(APIView):
                            **({} if review.anonymous else {
                                'uuid': review.created_by.uuid,
                                'has_avatar': str(review.created_by.avatar_uuid) != str(settings.DEFAULT_USER_AVATAR_UUID),
-                           })},
+                           })}),
                 'reply': [{'id': reviewReply.id,
                            'floor_number': index + 1,
                            'content': reviewReply.content if not reviewReply.is_deleted else "内容已删除",
@@ -346,19 +355,36 @@ class ReviewView(APIView):
         else:
             return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
 
+    @transaction.atomic
     def delete(self, request):
         serializer = DeleteReviewSerializer(data=request.data)
         if serializer.is_valid():
-            review = Review.objects.get(id=serializer.validated_data['review_id'])
+            review = Review.objects.select_for_update().get(id=serializer.validated_data['review_id'])
             if review.created_by == request.user:
-                review_item_model = Review.objects.get(id=review.id)
-                review_item_model.soft_delete()
+                review.soft_delete()
                 review_history_items = self.review_history_model.objects.filter(review_id=review.id)
                 for review_history_item in review_history_items:
                     review_history_item.soft_delete()
-                review_reply_items = ReviewReply.objects.filter(review_id=review.id)
-                for review_reply_item in review_reply_items:
-                    review_reply_item.soft_delete()
+                # Replies belong to their own authors, so deleting the review keeps
+                # the full reply tree. Scrub the deleted text from notification snapshots.
+                notification_keys = [f'like:review:{review.id}:{review.created_by_id}']
+                notification_keys.extend(
+                    f'reply:{reply_id}:{review.created_by_id}'
+                    for reply_id in ReviewReply.all_objects.filter(
+                        review_id=review.id, parent=None,
+                    ).values_list('id', flat=True)
+                )
+                for notification in Notification.objects.select_for_update().filter(
+                        dedupe_key__in=notification_keys):
+                    payload = notification.payload
+                    raw_post = payload.get('raw_post')
+                    if raw_post is None:
+                        raw_post = payload.get('raw_info', {}).get('raw_post')
+                    if (raw_post and raw_post.get('classify') == 'review'
+                            and raw_post.get('id') == review.id):
+                        raw_post['content'] = '内容已被删除'
+                        notification.payload = payload
+                        notification.save(update_fields=('payload', 'updated_at'))
                 return return_response(message=get_msg_msg('delete_review_success'), contents={'review_id': review.id})
             else:
                 return return_response(errors={"auth": get_err_msg('auth_error')},
@@ -499,10 +525,19 @@ class MyReviewView(GenericAPIView):
     def build_reply_list(self, reply_page):
         my_reply_list = []
         for review_reply in reply_page:
+            review_deleted = review_reply.review.is_deleted
             my_reply_list.append({
                 'id': review_reply.id,
-                'review': {'author': userUtils.get_user_info_in_review(review_reply.review),
-                           'content': review_reply.review.content},
+                'review': {
+                    'author': ({
+                        'id': 0,
+                        'nickname': '已删除用户',
+                        'avatar_uuid': '',
+                        'is_student': False,
+                    } if review_deleted else userUtils.get_user_info_in_review(review_reply.review)),
+                    'content': '内容已被删除' if review_deleted else review_reply.review.content,
+                    'is_deleted': review_deleted,
+                },
                 'datetime': review_reply.create_time,
                 'course': {"name": review_reply.review.course.get_name(), "id": review_reply.review.course.id,
                            'semester': review_reply.review.semester.name, },
@@ -568,7 +603,7 @@ class ReviewReplyView(APIView):
 
     def get(self, request, review_id):
         try:
-            review = Review.objects.get(id=review_id)
+            review = Review.all_objects.get(id=review_id)
         except Review.DoesNotExist:
             return return_response(errors={'course': get_err_msg('review_not_exist')},
                                    status_code=status.HTTP_404_NOT_FOUND)
@@ -584,7 +619,7 @@ class ReviewReplyView(APIView):
     def post(self, request):
         serializer = AddReviewReplySerializer(data=request.data)
         if serializer.is_valid():
-            review = Review.objects.get(id=serializer.validated_data['review_id'])
+            review = Review.all_objects.get(id=serializer.validated_data['review_id'])
             parent_id = serializer.validated_data['parent_id']
             parent = None if parent_id == 0 else ReviewReply.objects.get(id=parent_id)
             reply = ReviewReply.objects.create(
@@ -638,7 +673,7 @@ class ReviewAndReplyLikeView(APIView):
     def post(self, request):
         serializer = ReviewAndReplyLikeSerializer(data=request.data)
         if serializer.is_valid():
-            review_object = Review.objects.get(id=serializer.validated_data['review_id'])
+            review_object = Review.all_objects.get(id=serializer.validated_data['review_id'])
             try:
                 review_reply_object = None if serializer.validated_data['reply_id'] == 0 else ReviewReply.objects.get(
                     id=serializer.validated_data['reply_id'], review=review_object)

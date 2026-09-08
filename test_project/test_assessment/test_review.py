@@ -10,8 +10,10 @@ from course_assessment.models import (
     ReviewAndReplyLike,
     ReviewHistory,
     Review,
+    ReviewReply,
     Semeseter,
 )
+from common.models import Notification
 from test_project.common import create_user, login_user
 
 
@@ -108,6 +110,73 @@ class ReviewTests(APITestCase):
             Review.objects.get(id=review_id)
         self.assertEqual(Review.all_objects.get(id=review_id).is_deleted, True)
         self.assertEqual(latest_review_list_response.data['contents']['count'], 0)
+
+    def test_delete_review_keeps_reply_tree_and_redacts_review(self):
+        review_id, _ = self.test_add_review()
+        root = ReviewReply.objects.create(
+            review_id=review_id,
+            created_by=self.user,
+            content='valuable root reply',
+        )
+        child = ReviewReply.objects.create(
+            review_id=review_id,
+            created_by=self.user,
+            parent=root,
+            content='valuable nested reply',
+        )
+        notification = Notification.objects.create(
+            recipient=self.user,
+            kind=Notification.KIND_REPLY,
+            dedupe_key=f'reply:{root.id}:{self.user.id}',
+            payload={
+                'raw_post': {
+                    'id': review_id,
+                    'classify': 'review',
+                    'content': 'test_message',
+                },
+            },
+        )
+
+        response = self.client.delete(self.review_url, data={'review_id': review_id})
+
+        self.assertEqual(response.status_code, 200)
+        notification.refresh_from_db()
+        self.assertEqual(notification.payload['raw_post']['content'], '内容已被删除')
+        self.assertEqual(
+            list(ReviewReply.objects.filter(review_id=review_id).values_list('id', flat=True)),
+            [root.id, child.id],
+        )
+        course_response = self.client.get(reverse('api:course', args=[self.course_id]))
+        reviews = course_response.data['contents']['reviews']
+        self.assertEqual(len(reviews), 1)
+        self.assertTrue(reviews[0]['is_deleted'])
+        self.assertEqual(reviews[0]['content'], '内容已被删除')
+        self.assertEqual(reviews[0]['author']['id'], 0)
+        self.assertNotIn(self.user.nickname, str(reviews[0]['author']))
+        self.assertEqual(
+            [reply['content'] for reply in reviews[0]['reply']],
+            ['valuable root reply', 'valuable nested reply'],
+        )
+
+        top_level_response = self.client.post(reverse('api:add_reply'), {
+            'review_id': review_id,
+            'parent_id': 0,
+            'content': 'new top-level reply',
+        })
+        nested_response = self.client.post(reverse('api:add_reply'), {
+            'review_id': review_id,
+            'parent_id': child.id,
+            'content': 'continue valuable discussion',
+        })
+        self.assertEqual(top_level_response.status_code, 400)
+        self.assertEqual(nested_response.status_code, 201)
+
+        like_response = self.client.post(reverse('api:review_like'), {
+            'review_id': review_id,
+            'reply_id': root.id,
+            'like_or_dislike': 1,
+        })
+        self.assertEqual(like_response.status_code, 200)
 
     def test_edit_review(self):
         review_id, course_id = self.test_add_review()

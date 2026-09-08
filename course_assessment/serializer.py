@@ -71,9 +71,11 @@ class AddReviewReplySerializer(serializers.Serializer):
         parent_id = data.get('parent_id')
         review_id = data.get('review_id')
         try:
-            review = Review.objects.get(id=review_id)
+            review = Review.all_objects.get(id=review_id)
         except Review.DoesNotExist:
             raise serializers.ValidationError({'course': get_err_msg('review_not_exist')})
+        if review.is_deleted and parent_id == 0:
+            raise serializers.ValidationError({'review': get_err_msg('review_not_exist')})
         if parent_id != 0:
             try:
                 review_reply = ReviewReply.objects.get(id=parent_id)
@@ -100,7 +102,7 @@ class ReviewAndReplyLikeSerializer(serializers.Serializer):
             raise serializers.ValidationError({'like_or_dislike': get_err_msg('operation_error')})
         review_id = data.get('review_id')
         try:
-            Review.objects.get(id=review_id)
+            review = Review.all_objects.get(id=review_id)
         except Review.DoesNotExist:
             raise serializers.ValidationError({'review': get_err_msg('review_not_exist')})
         reply_id = data.get('reply_id')
@@ -111,6 +113,8 @@ class ReviewAndReplyLikeSerializer(serializers.Serializer):
                 raise serializers.ValidationError({'reply': get_err_msg('reply_not_exist')})
             if reply.review_id != review_id:
                 raise serializers.ValidationError({'reply': get_err_msg('wrong_parent_id')})
+        elif review.is_deleted:
+            raise serializers.ValidationError({'review': get_err_msg('review_not_exist')})
         return data
 
 
