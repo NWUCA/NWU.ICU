@@ -54,8 +54,10 @@ CSRF_TRUSTED_ORIGINS = [
 ]
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'utils.middleware.RequestBodySizeLimitMiddleware',
     # 'silk.middleware.SilkyMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'utils.middleware.BrowserIdentityMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -72,6 +74,9 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
     ),
+    # Production traffic crosses OpenResty and the internal gateway. Local
+    # direct development keeps this at zero through its environment file.
+    'NUM_PROXIES': env.int('TRUSTED_PROXY_COUNT', default=0),
 }
 # Bound non-file form and JSON payloads before application-level validation.
 DATA_UPLOAD_MAX_MEMORY_SIZE = 2 * 1024 * 1024
@@ -288,6 +293,115 @@ for webauthn_origin in WEBAUTHN_EXPECTED_ORIGINS:
         raise ImproperlyConfigured('Each WebAuthn origin hostname must equal or be a subdomain of WEBAUTHN_RP_ID.')
 ADMIN_PASSKEY_USER_THROTTLE = env('ADMIN_PASSKEY_USER_THROTTLE', default='10/minute')
 ADMIN_PASSKEY_IP_THROTTLE = env('ADMIN_PASSKEY_IP_THROTTLE', default='30/minute')
+
+# All application rate limits live here. Views and throttle classes must not
+# carry their own production rates; environment files may override these
+# explicit defaults without changing application code.
+API_RATE_LIMITS = {
+    'cache_alias': env('THROTTLE_CACHE_ALIAS', default='default'),
+    'browser_cookie': {
+        'name': env('THROTTLE_BROWSER_COOKIE_NAME', default='nwu_client_id'),
+        'max_age': env.int('THROTTLE_BROWSER_COOKIE_MAX_AGE', default=365 * 24 * 60 * 60),
+    },
+    'captcha_proof': {
+        'ttl': env.int('CAPTCHA_PROOF_TTL', default=120),
+        'allowed_scopes': (
+            'login', 'review_write', 'guestbook_write', 'reply_write',
+            'catalog_write', 'resource_download',
+        ),
+    },
+    'login': {
+        'enabled': env.bool('LOGIN_RATE_LIMIT_ENABLED', default=True),
+        'captcha_after_failures': env.int('LOGIN_CAPTCHA_AFTER_FAILURES', default=5),
+        'captcha_attempts': env.int('LOGIN_CAPTCHA_ATTEMPTS', default=3),
+        'captcha_ttl': env.int('LOGIN_CAPTCHA_TTL', default=600),
+        'failure_ttl': env.int('LOGIN_FAILURE_TTL', default=3600),
+        'backoff_seconds': tuple(env.list('LOGIN_BACKOFF_SECONDS', default=['30', '60', '120', '300'], cast=int)),
+        'emergency_ip': env('LOGIN_EMERGENCY_IP_RATE', default='300/minute'),
+        # Compatibility rate used by callers/tests that still instantiate the
+        # legacy username throttle directly.
+        'legacy_username': env('LOGIN_THROTTLE_USERNAME', default='5/minute'),
+    },
+    'register_attempt': {
+        'enabled': env.bool('REGISTER_RATE_LIMIT_ENABLED', default=True),
+        'burst': env('REGISTER_ATTEMPT_RATE', default='10/hour'),
+        'sustained': None,
+        'captcha_on_burst': False,
+    },
+    'register_success': {
+        'enabled': env.bool('REGISTER_RATE_LIMIT_ENABLED', default=True),
+        'burst': env('REGISTER_SUCCESS_RATE', default='3/day'),
+        'sustained': None,
+        'captcha_on_burst': False,
+    },
+    'register_target': {
+        'enabled': env.bool('REGISTER_RATE_LIMIT_ENABLED', default=True),
+        'burst': env('REGISTER_TARGET_RATE', default='5/hour'),
+        'sustained': None,
+        'captcha_on_burst': False,
+    },
+    'review_write': {
+        'enabled': env.bool('REVIEW_WRITE_RATE_LIMIT_ENABLED', default=True),
+        'burst': env('REVIEW_WRITE_BURST_RATE', default='5/minute'),
+        'sustained': env('REVIEW_WRITE_DAILY_RATE', default='30/day'),
+        'captcha_on_burst': True,
+    },
+    'guestbook_write': {
+        'enabled': env.bool('GUESTBOOK_WRITE_RATE_LIMIT_ENABLED', default=True),
+        'burst': env('GUESTBOOK_WRITE_BURST_RATE', default='5/minute'),
+        'sustained': env('GUESTBOOK_WRITE_DAILY_RATE', default='30/day'),
+        'captcha_on_burst': True,
+    },
+    'reply_write': {
+        'enabled': env.bool('REPLY_WRITE_RATE_LIMIT_ENABLED', default=True),
+        'burst': env('REPLY_WRITE_BURST_RATE', default='10/minute'),
+        'sustained': env('REPLY_WRITE_DAILY_RATE', default='100/day'),
+        'captcha_on_burst': True,
+    },
+    'catalog_write': {
+        'enabled': env.bool('CATALOG_WRITE_RATE_LIMIT_ENABLED', default=True),
+        'burst': env('CATALOG_WRITE_BURST_RATE', default='5/minute'),
+        'sustained': env('CATALOG_WRITE_DAILY_RATE', default='20/day'),
+        'captcha_on_burst': True,
+    },
+    'captcha_validation': {
+        'enabled': env.bool('CAPTCHA_VALIDATION_RATE_LIMIT_ENABLED', default=True),
+        'anonymous': env('CAPTCHA_VALIDATION_ANON_RATE', default='30/minute'),
+        'user': env('CAPTCHA_VALIDATION_USER_RATE', default='30/minute'),
+    },
+    'message_write': {
+        'enabled': env.bool('MESSAGE_WRITE_RATE_LIMIT_ENABLED', default=True),
+        'user': env('MESSAGE_WRITE_RATE', default='30/minute'),
+    },
+    'search': {
+        'enabled': env.bool('SEARCH_RATE_LIMIT_ENABLED', default=True),
+        'anonymous': env('SEARCH_ANON_RATE', default='30/minute'),
+        'user': env('SEARCH_USER_RATE', default='30/minute'),
+    },
+    'interaction': {
+        'enabled': env.bool('INTERACTION_RATE_LIMIT_ENABLED', default=True),
+        'anonymous': env('INTERACTION_ANON_RATE', default='30/minute'),
+        'user': env('INTERACTION_USER_RATE', default='30/minute'),
+    },
+    'email': {
+        'enabled': env.bool('EMAIL_RATE_LIMIT_ENABLED', default=True),
+        'anonymous': env('EMAIL_THROTTLE_NOT_LOGIN', default='1/minute'),
+        'user': env('EMAIL_THROTTLE_LOGIN', default='1/minute'),
+        'address': env('EMAIL_THROTTLE_ADDRESS', default='2/minute'),
+    },
+    'admin_passkey': {
+        'enabled': env.bool('ADMIN_PASSKEY_RATE_LIMIT_ENABLED', default=True),
+        'user': ADMIN_PASSKEY_USER_THROTTLE,
+        'ip': ADMIN_PASSKEY_IP_THROTTLE,
+    },
+    'resource_download': {
+        'enabled': env.bool('RESOURCE_DOWNLOAD_GATE_ENABLED', default=False),
+        'anonymous': env('RESOURCE_DOWNLOAD_ANON_RATE', default='10/hour'),
+        'user': env('RESOURCE_DOWNLOAD_USER_RATE', default='50/hour'),
+        'ticket_ttl': env.int('RESOURCE_DOWNLOAD_TICKET_TTL', default=600),
+        'dedupe_ttl': env.int('RESOURCE_DOWNLOAD_DEDUPE_TTL', default=300),
+    },
+}
 
 # 默认超级用户设置
 DEFAULT_SUPER_USER_ID = env('DEFAULT_SUPER_USER_ID')

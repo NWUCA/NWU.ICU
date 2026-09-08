@@ -2,7 +2,7 @@ import logging
 from urllib.parse import urlencode
 
 from django.conf import settings
-from django.contrib.auth import authenticate, login
+from django.contrib.auth import login
 from django.contrib.auth import logout
 from django.contrib.auth.hashers import make_password
 from django.contrib.auth.models import User
@@ -16,8 +16,10 @@ from rest_framework.status import HTTP_200_OK, HTTP_400_BAD_REQUEST, HTTP_403_FO
 from rest_framework.views import APIView
 
 import utils.utils
-from utils.throttle import CaptchaAnonRateThrottle, CaptchaUserRateThrottle, EmailAnonRateThrottle, \
-    EmailUserRateThrottle, EmailAddressRateThrottle, LoginIPRateThrottle, LoginUsernameRateThrottle
+from utils.throttle import EmailAnonRateThrottle, EmailUserRateThrottle, EmailAddressRateThrottle, \
+    LoginIPRateThrottle, RegisterAttemptRateThrottle, browser_identity, check_login_attempt, \
+    clear_login_failures, enforce_policies, \
+    enforce_email_delivery, enforce_policy, record_login_failure, SearchAnonRateThrottle, SearchUserRateThrottle
 from utils.utils import return_response, get_err_msg, get_msg_msg, get_user_avatar_info
 from .models import User
 from .serializers import LoginSerializer, PasswordResetMailRequestSerializer, UsernameDuplicationSerializer, \
@@ -27,6 +29,15 @@ from .serializers import RegisterSerializer
 from .tokens import UserTokenPurpose, check_user_token, consume_user_token, get_user_token_data, issue_user_token
 
 logger = logging.getLogger(__name__)
+
+
+def check_credentials(username, password):
+    """Perform exactly one password hash for existing and missing usernames."""
+    user = User.objects.filter(username=username).first()
+    if user is None:
+        make_password(password)
+        return None, False
+    return user, user.check_password(password)
 
 
 def build_frontend_action_link(path: str, token: str) -> str:
@@ -45,7 +56,7 @@ class RegisterView(APIView):
 
     def get_throttles(self):
         if self.request.method == 'POST':
-            return [CaptchaAnonRateThrottle(), CaptchaUserRateThrottle()]
+            return [LoginIPRateThrottle(), RegisterAttemptRateThrottle()]
         return []
 
     @staticmethod
@@ -81,6 +92,12 @@ class RegisterView(APIView):
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
         if serializer.is_valid():
+            enforce_email_delivery(request, serializer.validated_data['email'])
+            enforce_policies('register_target', (
+                serializer.validated_data['username'],
+                serializer.validated_data['email'],
+            ))
+            enforce_policy('register_success', browser_identity(request), dimension='browser')
             user = serializer.save()
             user.is_active = False
             user.nickname = utils.utils.userUtils.generate_random_nickname()
@@ -114,6 +131,11 @@ class AccountActivationView(APIView):
 
 class UsernameDuplicationView(APIView):
     permission_classes = [AllowAny]
+
+    def get_throttles(self):
+        if self.request.method == 'POST':
+            return [SearchAnonRateThrottle(), SearchUserRateThrottle()]
+        return []
 
     def post(self, request):
         serializer = UsernameDuplicationSerializer(data=request.data)
@@ -246,7 +268,7 @@ class PasswordResetWhenLoginView(APIView):
 class Login(APIView):
     permission_classes = [AllowAny]
 
-    throttle_classes = [LoginIPRateThrottle, LoginUsernameRateThrottle]
+    throttle_classes = [LoginIPRateThrottle]
 
     def post(self, request):
         if request.user.is_authenticated:
@@ -256,9 +278,11 @@ class Login(APIView):
         if serializer.is_valid():
             username = serializer.validated_data['username']
             password = serializer.validated_data['password']
-            user = authenticate(username=username, password=password)
-            if user is not None:
-                login(request, user)
+            check_login_attempt(request, username)
+            user, password_valid = check_credentials(username, password)
+            if user is not None and password_valid and user.is_active:
+                clear_login_failures(request, username)
+                login(request, user, backend=settings.AUTHENTICATION_BACKENDS[0])
                 user_info = {
                     "id": user.id,
                     "username": user.username,
@@ -269,13 +293,13 @@ class Login(APIView):
                 }
                 user_info.update(get_user_avatar_info(user))
                 return return_response(contents=user_info)
-            else:
-                user = User.objects.filter(username=username).first()
-                if user is not None and not user.is_active and user.check_password(password):
-                    return return_response(errors={'user': get_err_msg('not_active')},
-                                           status_code=HTTP_403_FORBIDDEN)
-                return return_response(errors={'credentials': get_err_msg('password_incorrect')},
-                                       status_code=status.HTTP_401_UNAUTHORIZED)
+            if user is not None and password_valid and not user.is_active:
+                clear_login_failures(request, username)
+                return return_response(errors={'user': get_err_msg('not_active')},
+                                       status_code=HTTP_403_FORBIDDEN)
+            record_login_failure(request, username)
+            return return_response(errors={'credentials': get_err_msg('password_incorrect')},
+                                   status_code=status.HTTP_401_UNAUTHORIZED)
 
         return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
 
@@ -283,24 +307,23 @@ class Login(APIView):
 class ActiveUser(APIView):
     permission_classes = [AllowAny]
 
-    throttle_classes = [LoginIPRateThrottle, LoginUsernameRateThrottle]
+    throttle_classes = [LoginIPRateThrottle]
 
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
         if serializer.is_valid():
-            try:
-                user = User.objects.get(username=serializer.validated_data['username'])
-            except User.DoesNotExist:
+            username = serializer.validated_data['username']
+            check_login_attempt(request, username)
+            user, password_valid = check_credentials(username, serializer.validated_data['password'])
+            if user is None or not password_valid:
+                record_login_failure(request, username)
                 return return_response(errors={'credentials': get_err_msg('password_incorrect')},
                                        status_code=status.HTTP_401_UNAUTHORIZED)
+            clear_login_failures(request, username)
             if not user.is_active:
-                if user.check_password(serializer.validated_data['password']):
-                    return RegisterView.send_active_email(user, request)
-                else:
-                    return return_response(errors={'credentials': get_err_msg('password_incorrect')},
-                                           status_code=status.HTTP_401_UNAUTHORIZED)
-            else:
-                return return_response(errors={'user': get_err_msg('has_active')}, status_code=HTTP_204_NO_CONTENT)
+                enforce_email_delivery(request, user.email)
+                return RegisterView.send_active_email(user, request)
+            return return_response(errors={'user': get_err_msg('has_active')}, status_code=HTTP_204_NO_CONTENT)
         return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
 
 
@@ -392,7 +415,9 @@ class BindCollegeEmailView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get_throttles(self):
-        return [EmailAnonRateThrottle(), EmailUserRateThrottle(), EmailAddressRateThrottle()]
+        if self.request.method == 'POST':
+            return [EmailAnonRateThrottle(), EmailUserRateThrottle(), EmailAddressRateThrottle()]
+        return []
 
     def post(self, request):
         serializer = BindCollegeEmailSerializer(data=request.data, context={'request': request})

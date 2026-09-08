@@ -8,10 +8,10 @@ from pathlib import Path
 from django.conf import settings
 from django.http import FileResponse, Http404, HttpResponse, StreamingHttpResponse
 from django.utils.http import content_disposition_header, http_date
+from rest_framework import serializers
 from rest_framework.exceptions import APIException, ValidationError
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
-from rest_framework import serializers
 
 from utils.utils import return_response
 from .resource_directories import (
@@ -21,6 +21,7 @@ from .resource_directories import (
 )
 from .resource_access import ResourceAccess
 from .resource_statistics import record_download
+from .resource_limits import authorize_resource, download_gate_enabled, require_resource_ticket
 
 
 class ResourceUnavailable(APIException):
@@ -126,6 +127,7 @@ class ResourceBrowseView(APIView):
         access.require(path)
         try:
             contents = entry_metadata(target, path)
+            contents['download_gate_enabled'] = download_gate_enabled()
             directory = target if target.is_dir() else target.parent
             contents['readme'], contents['readme_warning'] = read_directory_readme(directory)
             if target.is_dir():
@@ -209,6 +211,30 @@ class ResourceSearchSerializer(serializers.Serializer):
     type = serializers.ChoiceField(choices=['all', 'file', 'directory'], default='all')
 
 
+class ResourceAuthorizeSerializer(serializers.Serializer):
+    path = serializers.CharField(max_length=4096, trim_whitespace=False)
+    inline = serializers.BooleanField(default=False)
+
+
+class ResourceFileAuthorizeView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = ResourceAuthorizeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        path = normalize_resource_path(serializer.validated_data['path'])
+        target, path = resolve_resource(path)
+        ResourceAccess(request.user).require(path)
+        if not target.is_file():
+            raise Http404
+        url, expires_in = authorize_resource(request, path, serializer.validated_data['inline'])
+        return return_response(contents={
+            'url': url,
+            'expires_in': expires_in,
+            'gate_enabled': download_gate_enabled(),
+        })
+
+
 class ResourceSearchView(APIView):
     permission_classes = [AllowAny]
 
@@ -276,13 +302,14 @@ class ResourceFileView(APIView):
         ResourceAccess(request.user).require(path)
         if not target.is_file():
             raise Http404
+        inline = request.query_params.get('inline') == '1' and target.suffix.lower() in INLINE_TYPES
+        require_resource_ticket(request, path, inline)
         try:
             source = target.open('rb')
             stat = target.stat()
         except OSError as error:
             raise Http404 from error
         size = stat.st_size
-        inline = request.query_params.get('inline') == '1' and target.suffix.lower() in INLINE_TYPES
         content_type = INLINE_TYPES[target.suffix.lower()] if inline else (
             mimetypes.guess_type(target.name)[0] or 'application/octet-stream')
         modified = http_date(stat.st_mtime)

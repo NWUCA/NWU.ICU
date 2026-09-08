@@ -101,6 +101,29 @@ class ReviewTests(APITestCase):
         self.assertTrue(course_response.data['contents']['reviews']['results'][0]['author']['anonymous'])
         self.assertEqual(latest_review_list_response.data['contents']['count'], 1)
 
+    def test_reply_from_another_user_serializes_notification_avatar_ids(self):
+        review_id, _ = self.test_add_review()
+        reply_user = create_user(
+            username='reply_user',
+            email='reply@example.com',
+            nickname='reply user',
+        )
+        reply_client = APIClient()
+        reply_client.force_authenticate(user=reply_user)
+
+        response = reply_client.post(reverse('api:add_reply'), {
+            'review_id': review_id,
+            'parent_id': 0,
+            'content': 'reply from another user',
+        })
+
+        self.assertEqual(response.status_code, 201)
+        notification = Notification.objects.get(
+            dedupe_key=f'reply:{response.data["contents"]["reply_id"]}:{self.user.id}',
+        )
+        self.assertEqual(notification.payload['created_by']['uuid'], str(reply_user.uuid))
+        self.assertEqual(notification.payload['created_by']['avatar'], str(reply_user.avatar_uuid))
+
     def test_delete_review(self):
         review_id, _ = self.test_add_review()
         delete_review_response = self.client.delete(self.review_url, data={'review_id': review_id})

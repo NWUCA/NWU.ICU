@@ -30,7 +30,9 @@ from common.file.view import (
     ResourceUploadRequestDetailView,
     ResourceUploadRequestView,
 )
-from common.file.resource_browser import ResourceBrowseView, ResourceFileView, ResourceSearchView
+from common.file.resource_browser import (
+    ResourceBrowseView, ResourceFileAuthorizeView, ResourceFileView, ResourceSearchView,
+)
 from common.views import (
     AboutView,
     CaptchaView,
@@ -165,6 +167,7 @@ api_patterns = [
     path('resources/browse/', ResourceBrowseView.as_view(), name='resource-browse'),
     path('resources/search/', ResourceSearchView.as_view(), name='resource-search'),
     path('resources/file/', ResourceFileView.as_view(), name='resource-file'),
+    path('resources/file/authorize/', ResourceFileAuthorizeView.as_view(), name='resource-file-authorize'),
     path('upload/directories/', ResourceDirectoryView.as_view(), name='resource-upload-directories'),
     path('upload/config/', ResourceUploadConfigView.as_view(), name='resource-upload-config'),
     path('download/<uuid:file_uuid>/', FileDownloadView.as_view(), name='file-download'),

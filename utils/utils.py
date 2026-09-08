@@ -10,6 +10,7 @@ from course_assessment.models import Review
 from settings import settings
 from settings.settings import BASE_DIR
 from utils import constants
+from utils.throttle import CaptchaRequired, InvalidCaptchaProof
 
 
 def format_file_size(size):
@@ -85,12 +86,31 @@ def custom_exception_handler(exc, context):
         )
     response = exception_handler(exc, context)
 
+    if isinstance(exc, CaptchaRequired):
+        response = return_response(
+            errors={'captcha': get_err_msg('captcha_required')},
+            contents={'captcha_scope': exc.scope},
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        )
+        if exc.wait is not None:
+            response['Retry-After'] = str(max(1, int(exc.wait)))
+        return response
+
+    if isinstance(exc, InvalidCaptchaProof):
+        return return_response(
+            errors={'captcha': get_err_msg('invalid_captcha_proof')},
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
     if isinstance(exc, NotAuthenticated):
         return return_response(errors={'login': get_err_msg('not_login')}, status_code=status.HTTP_401_UNAUTHORIZED)
 
     if isinstance(exc, Throttled):
-        return return_response(errors={'throttle': get_err_msg('too_many_requests')},
-                               status_code=status.HTTP_429_TOO_MANY_REQUESTS)
+        response = return_response(errors={'throttle': get_err_msg('too_many_requests')},
+                                   status_code=status.HTTP_429_TOO_MANY_REQUESTS)
+        if exc.wait is not None:
+            response['Retry-After'] = str(max(1, int(exc.wait)))
+        return response
     return response
 
 

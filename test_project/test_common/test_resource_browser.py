@@ -2,15 +2,27 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 from io import StringIO
+from copy import deepcopy
+from urllib.parse import parse_qs, urlparse
 
+from django.conf import settings
+from django.contrib.auth.models import AnonymousUser
+from django.core.cache import cache
 from django.core.management import call_command, CommandError
 from django.test import TestCase, override_settings
 from rest_framework.test import APIRequestFactory
 
-from common.file.resource_browser import ResourceBrowseView, ResourceFileView, ResourceSearchView, search_resources
+from common.file.resource_browser import (
+    ResourceBrowseView,
+    ResourceFileAuthorizeView,
+    ResourceFileView,
+    ResourceSearchView,
+    search_resources,
+)
 from common.models import ResourceAccessRule
 from scripts.export_resource_tree import build_resource_tree
 from common.file.resource_directories import write_resource_directory_cache
+from utils.throttle import issue_captcha_proof
 
 
 class ResourceBrowserTests(TestCase):
@@ -140,6 +152,74 @@ class ResourceBrowserTests(TestCase):
         self.assertEqual(data['readme'], '# 学习资料\n\n**请勿商用**')
         self.assertEqual([entry['name'] for entry in data['entries']], ['课程.2026', '无扩展名'])
         self.assertNotIn(str(self.root), str(data))
+        self.assertFalse(data['download_gate_enabled'])
+
+    def test_enabled_download_gate_issues_bound_reusable_range_ticket(self):
+        config = deepcopy(settings.API_RATE_LIMITS)
+        config['resource_download'].update({
+            'enabled': True,
+            'anonymous': '1/hour',
+            'ticket_ttl': 600,
+            'dedupe_ttl': 300,
+        })
+        path = '/课程.2026/试卷 #1%.pdf'
+        with override_settings(API_RATE_LIMITS=config):
+            authorize = ResourceFileAuthorizeView.as_view()(self.factory.post(
+                '/api/resources/file/authorize/', {'path': path}, format='json',
+            ))
+            self.assertEqual(authorize.status_code, 200)
+            parsed = urlparse(authorize.data['contents']['url'])
+            query = {key: values[0] for key, values in parse_qs(parsed.query).items()}
+
+            response = ResourceFileView.as_view()(self.factory.get(
+                parsed.path, query, HTTP_RANGE='bytes=2-5',
+            ))
+            self.addCleanup(self.close_response, response)
+            self.assertEqual(response.status_code, 206)
+            self.assertEqual(b''.join(response.streaming_content), b'2345')
+
+            wrong_mode = {**query, 'inline': '1'}
+            rejected = ResourceFileView.as_view()(self.factory.get(parsed.path, wrong_mode))
+            self.assertEqual(rejected.status_code, 429)
+            self.assertEqual(rejected.data['contents']['captcha_scope'], 'resource_download')
+
+            repeated = ResourceFileAuthorizeView.as_view()(self.factory.post(
+                '/api/resources/file/authorize/', {'path': path, 'inline': True}, format='json',
+            ))
+            self.assertEqual(repeated.status_code, 200)
+
+    def test_enabled_download_gate_requires_captcha_for_extra_allowance(self):
+        (self.root / '第二份资料.txt').write_text('second', encoding='utf-8')
+        config = deepcopy(settings.API_RATE_LIMITS)
+        config['resource_download'].update({
+            'enabled': True,
+            'anonymous': '1/hour',
+            'ticket_ttl': 600,
+            'dedupe_ttl': 300,
+        })
+        with override_settings(API_RATE_LIMITS=config):
+            cache.clear()
+            first = ResourceFileAuthorizeView.as_view()(self.factory.post(
+                '/api/resources/file/authorize/', {'path': '/课程.2026/试卷 #1%.pdf'}, format='json',
+            ))
+            self.assertEqual(first.status_code, 200)
+            blocked = ResourceFileAuthorizeView.as_view()(self.factory.post(
+                '/api/resources/file/authorize/', {'path': '/第二份资料.txt'}, format='json',
+            ))
+            self.assertEqual(blocked.status_code, 429)
+            self.assertEqual(blocked.data['contents']['captcha_scope'], 'resource_download')
+
+            proof_request = self.factory.post('/api/captcha/')
+            proof_request.user = AnonymousUser()
+            proof, _ = issue_captcha_proof(proof_request, 'resource_download')
+            allowed = ResourceFileAuthorizeView.as_view()(self.factory.post(
+                '/api/resources/file/authorize/',
+                {'path': '/第二份资料.txt'},
+                format='json',
+                HTTP_X_CAPTCHA_PROOF=proof,
+            ))
+            self.assertEqual(allowed.status_code, 200)
+        cache.clear()
 
     def test_subdirectory_readme_is_case_insensitive_and_supports_legacy_encoding(self):
         data = self.browse('/课程.2026').data['contents']

@@ -7,7 +7,7 @@ from rest_framework.generics import GenericAPIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 
 from utils.custom_pagination import StandardResultsSetPagination
-from utils.throttle import CaptchaUserRateThrottle
+from utils.throttle import GuestbookWriteRateThrottle, InteractionUserRateThrottle, ReplyWriteRateThrottle
 from utils.utils import get_user_avatar_info, return_response
 
 from .models import GuestbookEntry, GuestbookLike, GuestbookReport
@@ -129,7 +129,7 @@ class GuestbookListView(GenericAPIView):
         )
 
     def get_throttles(self):
-        return [CaptchaUserRateThrottle()] if self.request.method == 'POST' else []
+        return [GuestbookWriteRateThrottle()] if self.request.method == 'POST' else []
 
 
 class GuestbookDetailView(GenericAPIView):
@@ -192,7 +192,7 @@ class GuestbookRepliesView(GenericAPIView):
         )
 
     def get_throttles(self):
-        return [CaptchaUserRateThrottle()] if self.request.method == 'POST' else []
+        return [ReplyWriteRateThrottle()] if self.request.method == 'POST' else []
 
 
 class GuestbookContextView(GenericAPIView):
@@ -219,6 +219,9 @@ class GuestbookContextView(GenericAPIView):
 class GuestbookLikeView(GenericAPIView):
     permission_classes = [IsAuthenticated]
     board = GuestbookEntry.BOARD_GUESTBOOK
+
+    def get_throttles(self):
+        return [InteractionUserRateThrottle()] if self.request.method == 'PUT' else []
 
     @transaction.atomic
     def put(self, request, entry_id):
@@ -248,6 +251,9 @@ class GuestbookLikeView(GenericAPIView):
 class GuestbookReportView(GenericAPIView):
     permission_classes = [IsAuthenticated]
     board = GuestbookEntry.BOARD_GUESTBOOK
+
+    def get_throttles(self):
+        return [InteractionUserRateThrottle()] if self.request.method == 'POST' else []
 
     def post(self, request, entry_id):
         entry = get_entry_or_none(entry_id, board=self.board)

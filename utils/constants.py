@@ -2,6 +2,8 @@ import settings.settings
 
 errcode_dict = {
     'too_many_requests': '请求过多',
+    'captcha_required': '操作过于频繁，请完成验证码后继续',
+    'invalid_captcha_proof': '验证码凭证无效或已失效',
     'invalid_classify': '非法类别',
     'captcha_error': '验证码错误',
     'captcha_overdue': '验证码已失效',

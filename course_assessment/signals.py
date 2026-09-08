@@ -1,4 +1,5 @@
 from enum import Enum
+from uuid import UUID
 
 from django.contrib.postgres.search import SearchVector
 from django.core.cache import cache
@@ -152,7 +153,10 @@ def update_chat_reply(instance: ReviewReply, operate: Operate):
                 'created_by': {
                     'id': instance.created_by.id,
                     'nickname': instance.created_by.nickname,
-                    **get_user_avatar_info(instance.created_by),
+                    **{
+                        key: str(value) if isinstance(value, UUID) else value
+                        for key, value in get_user_avatar_info(instance.created_by).items()
+                    },
                 },
                 'course': {'id': raw_post_course.id, 'name': raw_post_course.name},
                 'raw_post': {

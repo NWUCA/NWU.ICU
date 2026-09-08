@@ -18,7 +18,14 @@ from course_assessment.models import Course, Review, Teacher
 from settings import settings
 from user.models import User
 from utils.custom_pagination import StandardResultsSetPagination
-from utils.throttle import CaptchaAnonRateThrottle, CaptchaUserRateThrottle
+from utils.throttle import (
+    CaptchaAnonRateThrottle,
+    CaptchaUserRateThrottle,
+    MessageWriteRateThrottle,
+    SearchAnonRateThrottle,
+    SearchUserRateThrottle,
+    issue_captcha_proof,
+)
 from utils.utils import return_response, get_err_msg, userUtils, get_user_avatar_info
 from .messaging import (
     get_conversation,
@@ -57,7 +64,12 @@ class CaptchaView(APIView):
     def post(self, request):
         serializer = CaptchaSerializer(data=request.data)
         if serializer.is_valid():
-            return return_response(message="Captcha validated successfully!")
+            scope = str(request.data.get('scope', '')).strip()
+            contents = {}
+            if scope:
+                proof, ttl = issue_captcha_proof(request, scope)
+                contents = {'captcha_proof': proof, 'expires_in': ttl}
+            return return_response(message="Captcha validated successfully!", contents=contents)
         return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
 
 
@@ -123,7 +135,7 @@ class MessageBoxView(GenericAPIView):
 
     def get_throttles(self):
         if self.request.method == 'POST':
-            return [CaptchaUserRateThrottle()]
+            return [MessageWriteRateThrottle()]
         return []
 
     def get_user_message_list(self, request):
@@ -329,7 +341,7 @@ class CourseTeacherSearchView(APIView):
 
     def get_throttles(self):
         if self.request.method == 'POST':
-            return [CaptchaAnonRateThrottle(), CaptchaUserRateThrottle()]
+            return [SearchAnonRateThrottle(), SearchUserRateThrottle()]
         return []
 
     def post(self, request):

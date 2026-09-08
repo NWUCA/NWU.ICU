@@ -1,3 +1,7 @@
+import copy
+
+from django.conf import settings
+from django.test import override_settings
 from django.urls import reverse
 from django.core.cache import cache
 from rest_framework import status
@@ -123,9 +127,10 @@ class AuthenticationSecurityTests(APITestCase):
         self.assertEqual(responses[1].status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertEqual(responses[2].status_code, status.HTTP_429_TOO_MANY_REQUESTS)
 
-    def test_username_limit_is_case_insensitive_and_applies_across_ips(self):
+    def test_username_risk_is_case_insensitive_and_applies_across_browsers(self):
         LoginIPRateThrottle.rate = '100/minute'
-        LoginUsernameRateThrottle.rate = '2/minute'
+        config = copy.deepcopy(settings.API_RATE_LIMITS)
+        config['login']['captcha_after_failures'] = 2
         login_url = reverse('api:login')
         attempts = (
             ('Rate_Limited_User', '192.0.2.1'),
@@ -133,16 +138,75 @@ class AuthenticationSecurityTests(APITestCase):
             (' RATE_LIMITED_USER ', '192.0.2.3'),
         )
 
-        responses = [
-            APIClient().post(
-                login_url,
-                {'username': username, 'password': 'wrong_password'},
-                format='json',
-                REMOTE_ADDR=ip_address,
-            )
-            for username, ip_address in attempts
-        ]
+        with override_settings(API_RATE_LIMITS=config):
+            responses = [
+                APIClient().post(
+                    login_url,
+                    {'username': username, 'password': 'wrong_password'},
+                    format='json',
+                    REMOTE_ADDR=ip_address,
+                )
+                for username, ip_address in attempts
+            ]
 
         self.assertEqual(responses[0].status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertEqual(responses[1].status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertEqual(responses[2].status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+        self.assertEqual(responses[2].data['contents']['captcha_scope'], 'login')
+
+    def test_captcha_grants_limited_attempts_then_applies_backoff(self):
+        LoginIPRateThrottle.rate = '100/minute'
+        config = copy.deepcopy(settings.API_RATE_LIMITS)
+        config['login'].update({
+            'captcha_after_failures': 2,
+            'captcha_attempts': 2,
+            'backoff_seconds': (30, 60, 120, 300),
+        })
+        login_url = reverse('api:login')
+        credentials = {'username': 'missing_user', 'password': 'wrong_password'}
+
+        with override_settings(API_RATE_LIMITS=config):
+            self.assertEqual(self.client.post(login_url, credentials, format='json').status_code, 401)
+            self.assertEqual(self.client.post(login_url, credentials, format='json').status_code, 401)
+            challenge = self.client.post(login_url, credentials, format='json')
+            self.assertEqual(challenge.status_code, 429)
+            proof_response = self.client.post(reverse('api:captcha'), {
+                'captcha_key': 'test-key',
+                'captcha_value': 'PASSED',
+                'scope': 'login',
+            }, format='json')
+            proof = proof_response.data['contents']['captcha_proof']
+            self.assertEqual(self.client.post(
+                login_url, credentials, format='json', HTTP_X_CAPTCHA_PROOF=proof,
+            ).status_code, 401)
+            self.assertEqual(self.client.post(login_url, credentials, format='json').status_code, 401)
+            backed_off = self.client.post(login_url, credentials, format='json')
+
+        self.assertEqual(backed_off.status_code, 429)
+        self.assertGreaterEqual(int(backed_off['Retry-After']), 1)
+
+    def test_successful_login_clears_progressive_failure_state(self):
+        LoginIPRateThrottle.rate = '100/minute'
+        create_user(is_active=True)
+        config = copy.deepcopy(settings.API_RATE_LIMITS)
+        config['login']['captcha_after_failures'] = 2
+        login_url = reverse('api:login')
+        wrong = {'username': 'test_user', 'password': 'wrong_password'}
+
+        with override_settings(API_RATE_LIMITS=config):
+            self.client.post(login_url, wrong, format='json')
+            self.client.post(login_url, wrong, format='json')
+            proof_response = self.client.post(reverse('api:captcha'), {
+                'captcha_key': 'test-key',
+                'captcha_value': 'PASSED',
+                'scope': 'login',
+            }, format='json')
+            success = self.client.post(login_url, {
+                'username': 'test_user',
+                'password': 'test_password',
+            }, format='json', HTTP_X_CAPTCHA_PROOF=proof_response.data['contents']['captcha_proof'])
+            self.client.logout()
+            after_clear = self.client.post(login_url, wrong, format='json')
+
+        self.assertEqual(success.status_code, 200)
+        self.assertEqual(after_clear.status_code, 401)
