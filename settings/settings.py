@@ -73,6 +73,8 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated',
     ),
 }
+# Bound non-file form and JSON payloads before application-level validation.
+DATA_UPLOAD_MAX_MEMORY_SIZE = 2 * 1024 * 1024
 ROOT_URLCONF = 'settings.urls'
 
 TEMPLATES = [
@@ -212,6 +214,7 @@ CAPTCHA_IMAGE_SIZE = (120, 50)
 FILE_UPLOAD_SIZE_LIMIT = {'avatar': 66 * 1024,
                           'file': 25 * 1024 * 1024,
                           'img': 25 * 1024 * 1024}
+USER_UPLOAD_QUOTA_BYTES = env.int('USER_UPLOAD_QUOTA_BYTES', default=1024 ** 3)
 
 # Windows bind mounts exposed to Linux containers do not consistently support
 # chmod(2). Keep chmod enabled by default for Debian/Linux production, while

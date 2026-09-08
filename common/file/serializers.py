@@ -1,4 +1,3 @@
-import posixpath
 import warnings
 
 from PIL import Image, UnidentifiedImageError
@@ -7,6 +6,7 @@ from rest_framework import serializers
 
 from utils.utils import format_file_size
 from .resource_notifications import get_resource_public_url
+from .resource_directories import normalize_directory_path
 from .models import ResourceUploadFile, ResourceUploadRequest, UploadedFile
 from .resource_workflow import resource_upload_files_expire_at
 
@@ -115,15 +115,21 @@ class ResourceUploadCreateSerializer(serializers.Serializer):
     new_folder_name = serializers.CharField(max_length=255, required=False, allow_blank=True)
 
     def validate(self, attrs):
-        target_path = attrs['target_path'].strip().replace('\\', '/')
-        if not target_path.startswith('/') or any(part == '..' for part in target_path.split('/')):
+        try:
+            target_path = normalize_directory_path(attrs['target_path'])
+        except ValueError:
             raise serializers.ValidationError({'target_path': '目标路径必须是合法的绝对路径'})
-        target_path = posixpath.normpath(target_path)
         new_folder_name = attrs.get('new_folder_name', '').strip()
         if new_folder_name:
-            if new_folder_name in {'.', '..'} or '/' in new_folder_name or '\\' in new_folder_name:
+            if (new_folder_name in {'.', '..'} or '/' in new_folder_name or '\\' in new_folder_name
+                    or any(ord(char) < 32 or ord(char) == 127 for char in new_folder_name)):
                 raise serializers.ValidationError({'new_folder_name': '文件夹名称不合法'})
-            target_path = posixpath.join(target_path, new_folder_name)
+            try:
+                target_path = normalize_directory_path(
+                    ('/' if target_path == '/' else target_path + '/') + new_folder_name
+                )
+            except ValueError:
+                raise serializers.ValidationError({'new_folder_name': '文件夹名称不合法'})
         if target_path == '/':
             raise serializers.ValidationError({'target_path': '禁止直接投稿到根目录，请选择子目录或新建文件夹'})
         attrs['target_path'] = target_path
@@ -134,7 +140,7 @@ class ResourceDirectorySerializer(serializers.Serializer):
     path = serializers.CharField(default='/', max_length=2048)
 
     def validate_path(self, value):
-        value = value.strip().replace('\\', '/')
-        if not value.startswith('/') or any(part == '..' for part in value.split('/')):
+        try:
+            return normalize_directory_path(value)
+        except ValueError:
             raise serializers.ValidationError('目录路径不合法')
-        return posixpath.normpath(value)

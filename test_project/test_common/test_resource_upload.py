@@ -117,6 +117,59 @@ class ResourceUploadRequestTests(APITestCase):
         )
         queue_notification.assert_called_once()
 
+    @override_settings(USER_UPLOAD_QUOTA_BYTES=13)
+    @patch('common.file.view.queue_resource_upload_notifications')
+    def test_resource_upload_allows_exact_quota_and_reports_usage(self, queue_notification):
+        response = self.client.post(
+            self.url,
+            {
+                'target_path': '/course',
+                'files': [SimpleUploadedFile('notes.txt', b'test resource')],
+                'relative_paths': ['notes.txt'],
+            },
+            format='multipart',
+        )
+        rejected = self.client.post(
+            self.url,
+            {
+                'target_path': '/course',
+                'files': [SimpleUploadedFile('extra.txt', b'x')],
+                'relative_paths': ['extra.txt'],
+            },
+            format='multipart',
+        )
+        config = self.client.get(reverse('api:resource-upload-config'))
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(rejected.status_code, status.HTTP_413_REQUEST_ENTITY_TOO_LARGE)
+        self.assertEqual(config.data['contents']['quota'], {
+            'limit': 13,
+            'used': 13,
+            'remaining': 0,
+        })
+
+    @override_settings(USER_UPLOAD_QUOTA_BYTES=20)
+    def test_pending_and_rejected_uploads_count_but_approved_uploads_release_quota(self):
+        for request_status, total_size in (
+            (ResourceUploadRequest.STATUS_PENDING, 6),
+            (ResourceUploadRequest.STATUS_REJECTED, 7),
+            (ResourceUploadRequest.STATUS_APPROVED, 9),
+        ):
+            ResourceUploadRequest.objects.create(
+                uploaded_by=self.user,
+                target_path='/course',
+                status=request_status,
+                total_size=total_size,
+            )
+
+        config = self.client.get(reverse('api:resource-upload-config'))
+
+        self.assertEqual(config.data['contents']['quota'], {
+            'limit': 20,
+            'used': 13,
+            'remaining': 7,
+        })
+
     def test_only_admin_can_download_submitted_file(self):
         upload_request = ResourceUploadRequest.objects.create(
             uploaded_by=self.user,

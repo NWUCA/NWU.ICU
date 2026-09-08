@@ -90,12 +90,60 @@ server {
     ssl_certificate     /path/in/openresty/fullchain.pem;
     ssl_certificate_key /path/in/openresty/privkey.pem;
 
-    # 当前业务允许最多 20 个文件、单文件 100 MiB。
-    # 若应用增加单次投稿总大小限制，应同步降低这里和内部 gateway 的值。
-    client_max_body_size 2g;
+    # 普通页面和 API 默认最多 2 MiB；上传路由在下方单独放宽。
+    client_max_body_size 2m;
 
     # 使用 Docker 内置 DNS，gateway 重建并更换 IP 后无需重启 OpenResty。
     resolver 127.0.0.11 valid=30s ipv6=off;
+
+    location = /api/upload/ {
+        client_max_body_size 26m;
+        set $nwuicu_upstream http://nwuicu-gateway:80;
+        proxy_pass $nwuicu_upstream;
+        proxy_http_version 1.1;
+        proxy_request_buffering off;
+        proxy_connect_timeout 10s;
+        proxy_send_timeout 300s;
+        proxy_read_timeout 300s;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # 同时覆盖新建投稿和 /api/upload/request/<id>/ 编辑投稿。
+    location ^~ /api/upload/request/ {
+        client_max_body_size 1025m;
+        set $nwuicu_upstream http://nwuicu-gateway:80;
+        proxy_pass $nwuicu_upstream;
+        proxy_http_version 1.1;
+        proxy_request_buffering off;
+        proxy_connect_timeout 10s;
+        proxy_send_timeout 300s;
+        proxy_read_timeout 300s;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location = /api/management/resources/upload/ {
+        client_max_body_size 2g;
+        set $nwuicu_upstream http://nwuicu-gateway:80;
+        proxy_pass $nwuicu_upstream;
+        proxy_http_version 1.1;
+        proxy_request_buffering off;
+        proxy_connect_timeout 10s;
+        proxy_send_timeout 300s;
+        proxy_read_timeout 300s;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
 
     location / {
         set $nwuicu_upstream http://nwuicu-gateway:80;
@@ -117,8 +165,8 @@ server {
 }
 ```
 
-OpenResty只需整体代理到 gateway。不要在外层重复拆分 `/api/`、`/static/` 或前端路由；内部
-gateway 已负责这些规则，并且明确拒绝直接访问 `/media/` 中的待审核文件。
+除三个需要放宽请求体限制的上传入口外，OpenResty 只需整体代理到 gateway；内部 gateway
+仍负责 `/api/`、`/static/`、前端路由以及拒绝直接访问 `/media/` 中的待审核文件。
 
 ## 4. 检查与重载
 

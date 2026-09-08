@@ -188,6 +188,13 @@ class ResourceTreeExporterTests(SimpleTestCase):
 
 
 class ResourceUploadPathValidationTests(SimpleTestCase):
+    def test_alias_paths_are_rejected_instead_of_normalized(self):
+        for path in ('//private', '/course//private', '/course/./private', '/course\\private'):
+            with self.subTest(path=path):
+                serializer = ResourceUploadCreateSerializer(data={'target_path': path})
+                self.assertFalse(serializer.is_valid())
+                self.assertIn('target_path', serializer.errors)
+
     def test_direct_upload_to_root_is_rejected(self):
         serializer = ResourceUploadCreateSerializer(data={
             'target_path': '/',

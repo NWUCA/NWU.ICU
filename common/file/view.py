@@ -28,6 +28,13 @@ from .resource_blacklist import (
 )
 from .resource_notifications import queue_resource_upload_notifications
 from .resource_access import ResourceAccess
+from .file_dedup import delete_storage_file_if_unreferenced, lock_file_hash
+from .quota import (
+    get_upload_quota,
+    lock_upload_quota,
+    quota_error_response_data,
+    quota_would_be_exceeded,
+)
 from .serializers import (
     ResourceDirectorySerializer,
     ResourceUploadCreateSerializer,
@@ -59,6 +66,36 @@ def send_resource_upload_telegram_notification(upload_request_id, message):
     handler.handle(logging.LogRecord(__name__, logging.INFO, '', 0, message, (), None))
 
 
+def report_upload_quota_exceeded(user, endpoint, attempted_size):
+    quota = get_upload_quota(user)
+    logger.warning(
+        'upload_quota_exceeded user_id=%s username=%s endpoint=%s used=%s attempted=%s limit=%s',
+        user.pk,
+        user.username,
+        endpoint,
+        quota['used'],
+        attempted_size,
+        quota['limit'],
+    )
+    try:
+        resource_upload_notification_executor.submit(
+            send_resource_upload_telegram_notification,
+            None,
+            (
+                '用户触发上传额度限制\n'
+                f'用户: {user.username} (ID {user.pk})\n'
+                f'入口: {endpoint}\n'
+                f'当前用量: {quota["used"]} bytes\n'
+                f'本次尝试新增: {attempted_size} bytes\n'
+                f'额度上限: {quota["limit"]} bytes'
+            ),
+        )
+    except RuntimeError:
+        # A notification infrastructure failure must not turn a quota rejection
+        # into a 500 response. The warning above remains in the persistent log.
+        logger.exception('failed_to_enqueue_upload_quota_telegram_notification')
+
+
 def enqueue_resource_upload_telegram_notification(upload_request, event='created'):
     """Deprecated compatibility helper retained for existing integrations."""
     file_lines = '\n'.join(
@@ -82,11 +119,18 @@ def validate_resource_upload_files(files, relative_paths, reserved_relative_path
         if PurePosixPath(uploaded_file.name).suffix.lower() not in RESOURCE_UPLOAD_ALLOWED_EXTENSIONS:
             return None, {'files': get_err_msg('resource_upload_file_type_not_allowed')}
 
-        relative_path = relative_paths[index] if relative_paths else uploaded_file.name
-        relative_path = relative_path.strip().replace('\\', '/')
+        relative_path = str(relative_paths[index] if relative_paths else uploaded_file.name)
+        stripped_path = relative_path.strip()
+        if (
+            stripped_path != relative_path
+            or '\\' in relative_path
+            or '//' in relative_path
+            or any(ord(char) < 32 or ord(char) == 127 for char in relative_path)
+        ):
+            return None, {'relative_paths': get_err_msg('resource_upload_invalid_relative_path')}
         normalized_path = posixpath.normpath(relative_path)
         if normalized_path.startswith('/') or normalized_path in {'.', '..'} or any(
-                part == '..' for part in normalized_path.split('/')):
+                part in {'', '.', '..'} for part in relative_path.split('/')) or normalized_path != relative_path:
             return None, {'relative_paths': get_err_msg('resource_upload_invalid_relative_path')}
         normalized_paths.append(normalized_path)
 
@@ -112,9 +156,10 @@ class FileDeleteView(generics.DestroyAPIView):
     permission_classes = [IsAuthenticated]
     lookup_field = 'id'
 
+    @transaction.atomic
     def delete(self, request, *args, **kwargs):
         try:
-            instance = self.get_object()
+            instance = UploadedFile.objects.select_for_update().get(pk=kwargs['id'])
             if instance.created_by != request.user and not request.user.is_staff:
                 return return_response(errors={"auth": get_err_msg('auth_error')},
                                        status_code=status.HTTP_403_FORBIDDEN)
@@ -123,9 +168,16 @@ class FileDeleteView(generics.DestroyAPIView):
                     errors={"file": {"err_code": "file_in_use", "err_msg": "文件正在被内容引用，不能删除"}},
                     status_code=status.HTTP_409_CONFLICT,
                 )
+            file_hash = instance.file_hash
+            file_name = instance.file.name
+            storage = instance.file.storage
+            lock_file_hash(file_hash)
             self.perform_destroy(instance)
+            transaction.on_commit(
+                lambda: delete_storage_file_if_unreferenced(file_hash, file_name, storage)
+            )
             return return_response(message="delete success", status_code=status.HTTP_204_NO_CONTENT)
-        except Http404:
+        except (Http404, UploadedFile.DoesNotExist):
             return return_response(errors={"file": get_err_msg('file_not_exist')},
                                    status_code=status.HTTP_404_NOT_FOUND)
 
@@ -142,7 +194,15 @@ class FileUploadView(generics.CreateAPIView):
             file = serializer.validated_data['file']
             serializer.validated_data['file_name'] = file.name
             file_size = file.size
-            serializer.save(created_by=request.user, file_size=file_size)
+            with transaction.atomic():
+                quota_user = lock_upload_quota(request.user)
+                if quota_would_be_exceeded(quota_user, file_size):
+                    report_upload_quota_exceeded(quota_user, request.path, file_size)
+                    return return_response(
+                        errors=quota_error_response_data(),
+                        status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    )
+                serializer.save(created_by=quota_user, file_size=file_size)
             return return_response(contents={'uuid': serializer.instance.id}, status_code=status.HTTP_201_CREATED)
         return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
 
@@ -157,32 +217,51 @@ class FileUpdateView(generics.UpdateAPIView):
     def update(self, request, *args, **kwargs):
         try:
             partial = kwargs.pop('partial', False)
-            instance = self.get_object()
-            if instance.created_by != request.user and not request.user.is_staff:
-                return return_response(errors={"auth": get_err_msg('auth_error')},
-                                       status_code=status.HTTP_403_FORBIDDEN)
-            if instance.ref_count > 0:
-                return return_response(
-                    errors={"file": {"err_code": "file_in_use", "err_msg": "文件正在被内容引用，不能修改"}},
-                    status_code=status.HTTP_409_CONFLICT,
-                )
+            with transaction.atomic():
+                instance = UploadedFile.objects.select_for_update().get(pk=kwargs['id'])
+                if instance.created_by != request.user and not request.user.is_staff:
+                    return return_response(errors={"auth": get_err_msg('auth_error')},
+                                           status_code=status.HTTP_403_FORBIDDEN)
+                if instance.ref_count > 0:
+                    return return_response(
+                        errors={"file": {"err_code": "file_in_use", "err_msg": "文件正在被内容引用，不能修改"}},
+                        status_code=status.HTTP_409_CONFLICT,
+                    )
+                quota_user = lock_upload_quota(instance.created_by or request.user)
 
-            if 'file' in request.FILES:
-                file_obj = request.FILES['file']
-                file_type = request.data.get('file_type', instance.file_type)
-                limit = settings.FILE_UPLOAD_SIZE_LIMIT.get(file_type, 25 * 1024 * 1024)
-                if file_type in {'avatar', 'img'}:
-                    limit = 25 * 1024 * 1024
-                if file_obj.size > limit:
-                    return return_response(errors={"file": get_err_msg('file_over_size')},
-                                           status_code=status.HTTP_400_BAD_REQUEST)
+                if 'file' in request.FILES:
+                    file_obj = request.FILES['file']
+                    file_type = request.data.get('file_type', instance.file_type)
+                    limit = settings.FILE_UPLOAD_SIZE_LIMIT.get(file_type, 25 * 1024 * 1024)
+                    if file_type in {'avatar', 'img'}:
+                        limit = 25 * 1024 * 1024
+                    if file_obj.size > limit:
+                        return return_response(errors={"file": get_err_msg('file_over_size')},
+                                               status_code=status.HTTP_400_BAD_REQUEST)
+                    if quota_would_be_exceeded(quota_user, file_obj.size - (instance.file_size or 0)):
+                        report_upload_quota_exceeded(
+                            quota_user, request.path, file_obj.size - (instance.file_size or 0),
+                        )
+                        return return_response(
+                            errors=quota_error_response_data(),
+                            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                        )
 
-            serializer = self.get_serializer(instance, data=request.data, partial=partial)
-            serializer.is_valid(raise_exception=True)
-            serializer.save()
+                serializer = self.get_serializer(instance, data=request.data, partial=partial)
+                serializer.is_valid(raise_exception=True)
+                old_file_hash = instance.file_hash
+                old_file_name = instance.file.name
+                old_storage = instance.file.storage
+                serializer.save()
+                if old_file_name != instance.file.name:
+                    transaction.on_commit(
+                        lambda: delete_storage_file_if_unreferenced(
+                            old_file_hash, old_file_name, old_storage,
+                        )
+                    )
 
-            return return_response(contents=serializer.data)
-        except Http404:
+                return return_response(contents=serializer.data)
+        except (Http404, UploadedFile.DoesNotExist):
             return return_response(errors={"file": get_err_msg('file_not_exist')},
                                    status_code=status.HTTP_404_NOT_FOUND)
 
@@ -226,6 +305,7 @@ class ResourceUploadConfigView(APIView):
             'max_file_size': RESOURCE_UPLOAD_MAX_FILE_SIZE,
             'max_file_count': RESOURCE_UPLOAD_MAX_FILE_COUNT,
             'allowed_extensions': sorted(RESOURCE_UPLOAD_ALLOWED_EXTENSIONS),
+            'quota': get_upload_quota(request.user),
         })
 
 
@@ -279,12 +359,20 @@ class ResourceUploadRequestView(APIView):
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
         with transaction.atomic():
+            quota_user = lock_upload_quota(request.user)
+            total_size = sum(uploaded_file.size for uploaded_file in files)
+            if quota_would_be_exceeded(quota_user, total_size):
+                report_upload_quota_exceeded(quota_user, request.path, total_size)
+                return return_response(
+                    errors=quota_error_response_data(),
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                )
             creates_new_folder = bool(serializer.validated_data.get('new_folder_name'))
             upload_request = ResourceUploadRequest.objects.create(
-                uploaded_by=request.user,
+                uploaded_by=quota_user,
                 target_path=serializer.validated_data['target_path'],
                 creates_new_folder=creates_new_folder,
-                total_size=sum(uploaded_file.size for uploaded_file in files),
+                total_size=total_size,
             )
             ResourceUploadFile.objects.bulk_create([
                 ResourceUploadFile(
@@ -333,6 +421,7 @@ class ResourceUploadRequestDetailView(APIView):
             )
 
         with transaction.atomic():
+            quota_user = lock_upload_quota(request.user)
             upload_request = (
                 ResourceUploadRequest.objects
                 .select_for_update()
@@ -411,6 +500,22 @@ class ResourceUploadRequestDetailView(APIView):
                     status_code=status.HTTP_400_BAD_REQUEST,
                 )
 
+            replacement_size = (
+                sum(upload_file.size for upload_file in kept_files)
+                + sum(uploaded_file.size for uploaded_file in files)
+            )
+            if quota_would_be_exceeded(
+                    quota_user, replacement_size - upload_request.total_size):
+                report_upload_quota_exceeded(
+                    quota_user,
+                    request.path,
+                    replacement_size - upload_request.total_size,
+                )
+                return return_response(
+                    errors=quota_error_response_data(),
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                )
+
             if remove_file_ids:
                 ResourceUploadFile.objects.filter(
                     upload_request=upload_request,
@@ -433,10 +538,7 @@ class ResourceUploadRequestDetailView(APIView):
 
             upload_request.target_path = path_serializer.validated_data['target_path']
             upload_request.creates_new_folder = bool(path_serializer.validated_data.get('new_folder_name'))
-            upload_request.total_size = (
-                sum(upload_file.size for upload_file in kept_files)
-                + sum(uploaded_file.size for uploaded_file in files)
-            )
+            upload_request.total_size = replacement_size
             upload_request.status = ResourceUploadRequest.STATUS_PENDING
             upload_request.reviewed_at = None
             upload_request.reviewed_by = None

@@ -4,10 +4,12 @@ from pathlib import Path
 
 from PIL import Image
 from django.core.files.uploadedfile import InMemoryUploadedFile
+from django.db import connection
 from django.db.models.signals import pre_save
 from django.dispatch import receiver
 
 from common.file.models import UploadedFile
+from common.file.file_dedup import lock_file_hash
 from settings import settings
 
 
@@ -53,6 +55,8 @@ def calculate_file_hash(file, chunk_size=8192):
 
 def compare_file_hash(file_hash):
     uploaded_files = UploadedFile.objects.filter(file_hash=file_hash).order_by('uploaded_at')
+    if connection.in_atomic_block:
+        uploaded_files = uploaded_files.select_for_update()
     if len(uploaded_files) > 0:
         exist_file = uploaded_files.first()
         return exist_file
@@ -72,6 +76,7 @@ def file_handler(sender, instance: UploadedFile, **kwargs):
     file_hash = calculate_file_hash(instance.file)
     instance.file.seek(0)
     instance.file_hash = file_hash
+    lock_file_hash(file_hash)
     exist_file = compare_file_hash(file_hash)
     if exist_file is not None:
         instance.file = exist_file.file

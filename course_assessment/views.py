@@ -4,6 +4,7 @@ from typing import List
 
 from django.conf import settings
 from django.core.cache import cache
+from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Count, Q
 from django.db.models.functions import TruncDate
@@ -109,22 +110,88 @@ class CourseView(APIView):
         reviews = (Review.all_objects.filter(course_id=course_id)
                    .filter(Q(is_deleted=False) | Q(reviewreply__is_deleted=False))
                    .select_related('created_by', 'semester')
-                   .distinct()
-                   .order_by('-create_time'))
+                   .distinct())
+        semester_filter = request.query_params.get('semester')
+        rating_filter = request.query_params.get('rating')
+        if semester_filter:
+            try:
+                reviews = reviews.filter(semester_id=int(semester_filter), is_deleted=False)
+            except ValueError:
+                return return_response(errors={'semester': '学期参数不合法'}, status_code=400)
+        if rating_filter:
+            try:
+                rating_value = int(rating_filter)
+            except ValueError:
+                rating_value = 0
+            if rating_value not in range(1, 6):
+                return return_response(errors={'rating': '评分参数不合法'}, status_code=400)
+            reviews = reviews.filter(rating=rating_value, is_deleted=False)
+
+        sort = request.query_params.get('sort', 'liked')
+        ordering = {
+            'liked': ('-like_count', '-create_time', '-id'),
+            'newest': ('-create_time', '-id'),
+            'oldest': ('create_time', 'id'),
+            'highest': ('-rating', '-create_time', '-id'),
+            'lowest': ('rating', '-create_time', '-id'),
+        }.get(sort)
+        if ordering is None:
+            return return_response(errors={'sort': '排序参数不合法'}, status_code=400)
+        reviews = reviews.order_by(*ordering)
+
+        try:
+            page_size = max(1, min(int(request.query_params.get('pageSize', 10)), 50))
+            page_number = max(1, int(request.query_params.get('page', 1)))
+        except ValueError:
+            return return_response(errors={'page': '分页参数不合法'}, status_code=400)
+        focus_review_id = request.query_params.get('focus_review_id')
+        focus_reply_id = request.query_params.get('focus_reply_id')
+        if focus_reply_id and not focus_review_id:
+            try:
+                focus_review_id = ReviewReply.all_objects.filter(
+                    id=int(focus_reply_id), review__course_id=course_id,
+                ).values_list('review_id', flat=True).first()
+            except ValueError:
+                return return_response(errors={'focus_reply_id': '回复参数不合法'}, status_code=400)
+        if focus_review_id:
+            try:
+                focus_review_id = int(focus_review_id)
+                ordered_ids = list(reviews.values_list('id', flat=True))
+                if focus_review_id in ordered_ids:
+                    page_number = ordered_ids.index(focus_review_id) // page_size + 1
+            except ValueError:
+                return return_response(errors={'focus_review_id': '评价参数不合法'}, status_code=400)
+        paginator = Paginator(reviews, page_size)
+        review_page = paginator.get_page(page_number)
+        reviews = list(review_page.object_list)
         self.preload_user_likes(request.user, reviews=reviews)
         try:
             if not request.user.is_anonymous:
                 request_user_review = Review.objects.get(course_id=course_id, created_by=request.user)
                 request_user_review_id = request_user_review.id
+                request_user_review_data = {
+                    'id': request_user_review.id,
+                    'content': request_user_review.content,
+                    'rating': request_user_review.rating,
+                    'anonymous': request_user_review.anonymous,
+                    'difficulty': request_user_review.difficulty,
+                    'grade': request_user_review.grade,
+                    'homework': request_user_review.homework,
+                    'reward': request_user_review.reward,
+                    'semester': request_user_review.semester_id,
+                }
             else:
                 request_user_review_id = None
+                request_user_review_data = None
         except Review.DoesNotExist:
             request_user_review_id = None
+            request_user_review_data = None
         reviews_data = []
         for review in reviews:
-            review_replies: List[ReviewReply] = ReviewReply.all_objects.filter(review=review).select_related(
-                'created_by', 'parent').order_by(
-                'create_time')
+            reply_queryset = ReviewReply.all_objects.filter(review=review).select_related(
+                'created_by', 'parent').order_by('id')
+            reply_count = reply_queryset.count()
+            review_replies: List[ReviewReply] = list(reply_queryset[:20])
             reviews_data.append({
                 'id': review.id,
                 'is_deleted': review.is_deleted,
@@ -170,9 +237,10 @@ class CourseView(APIView):
                                     'user_option': self.get_user_option(
                                         review=review, reply=reviewReply, user=request.user)},
                            'is_deleted': reviewReply.is_deleted, }
-                          for index, reviewReply in enumerate(review_replies)]
+                          for index, reviewReply in enumerate(review_replies)],
+                'reply_count': reply_count,
+                'reply_next_cursor': review_replies[-1].id if reply_count > len(review_replies) else None,
             })
-            reviews_data.sort(key=lambda x: x['created_time'])
         teachers_data = []
         for teacher in course.teachers.all():
             teachers_data.append({
@@ -196,7 +264,25 @@ class CourseView(APIView):
             'rating_avg': f"{course.average_rating:.1f}",
             'normalized_rating_avg': f"{course.normalized_rating:.1f}",
             'request_user_review_id': request_user_review_id,
-            'reviews': reviews_data,
+            'request_user_review': request_user_review_data,
+            'total_review_count': Review.objects.filter(course_id=course_id).count(),
+            'reviews': {
+                'page': review_page.number,
+                'max_page': paginator.num_pages,
+                'count': paginator.count,
+                'results': reviews_data,
+                'facets': {
+                    'semesters': list(
+                        Review.objects.filter(course_id=course_id)
+                        .values('semester_id', 'semester__name')
+                        .annotate(count=Count('id')).order_by('-semester__name')
+                    ),
+                    'ratings': list(
+                        Review.objects.filter(course_id=course_id)
+                        .values('rating').annotate(count=Count('id')).order_by('-rating')
+                    ),
+                },
+            },
             'other_dup_name_course': [
                 {'course_id': course.id, 'teacher_name': course.get_teachers(), 'rating': course.normalized_rating} for
                 course in
@@ -591,14 +677,32 @@ class ReviewReplyView(APIView):
             return [CaptchaAnonRateThrottle(), CaptchaUserRateThrottle()]
         return []
 
-    def get_reply_info(self, reply):
+    def get_reply_info(self, reply, user):
+        user_option = 0
+        if user.is_authenticated:
+            user_option = (ReviewAndReplyLike.objects.filter(
+                created_by=user, review_reply=reply,
+            ).values_list('like', flat=True).first() or 0)
         return {
             "id": reply.id,
-            "create_time": reply.create_time,
-            "content": reply.content,
-            'author': {"id": reply.created_by.id, 'nickname': reply.created_by.nickname},
-            'like': {'like': reply.like_count, 'dislike': reply.dislike_count},
-            'parent_id': 0 if reply.parent is None else reply.parent.id,
+            'floor_number': ReviewReply.all_objects.filter(
+                review_id=reply.review_id, id__lte=reply.id,
+            ).count(),
+            "created_time": reply.create_time,
+            "content": '内容已删除' if reply.is_deleted else reply.content,
+            'created_by': ({'id': 0, 'name': '未知用户', 'avatar': ''}
+                           if reply.is_deleted else {
+                               'id': reply.created_by.id,
+                               'name': reply.created_by.nickname,
+                               **get_user_avatar_info(reply.created_by),
+                           }),
+            'like': {
+                'like': reply.like_count,
+                'dislike': reply.dislike_count,
+                'user_option': user_option,
+            },
+            'parent': 0 if reply.parent is None else reply.parent.id,
+            'is_deleted': reply.is_deleted,
         }
 
     def get(self, request, review_id):
@@ -607,14 +711,46 @@ class ReviewReplyView(APIView):
         except Review.DoesNotExist:
             return return_response(errors={'course': get_err_msg('review_not_exist')},
                                    status_code=status.HTTP_404_NOT_FOUND)
-        reply_list = []
-        try:
-            review_replies = ReviewReply.objects.order_by('id').filter(review=review)
-            for review_reply in review_replies:
-                reply_list.append(self.get_reply_info(review_reply))
-        except ReviewReply.DoesNotExist:
-            pass
-        return return_response(message='课程评价获取成功', contents=reply_list)
+        replies = ReviewReply.all_objects.filter(review=review).select_related(
+            'created_by', 'parent',
+        ).order_by('id')
+        target = request.query_params.get('target')
+        if target:
+            try:
+                current = replies.get(id=int(target))
+            except (ValueError, ReviewReply.DoesNotExist):
+                return return_response(
+                    errors={'reply': get_err_msg('reply_not_exist')},
+                    status_code=status.HTTP_404_NOT_FOUND,
+                )
+            lineage = []
+            seen = set()
+            while current is not None and current.id not in seen:
+                seen.add(current.id)
+                lineage.append(current)
+                current = current.parent
+            lineage.reverse()
+            return return_response(message='课程评价获取成功', contents={
+                'count': replies.count(),
+                'next_cursor': None,
+                'results': [self.get_reply_info(reply, request.user) for reply in lineage],
+            })
+
+        after = request.query_params.get('after')
+        if after:
+            try:
+                replies = replies.filter(id__gt=int(after))
+            except ValueError:
+                return return_response(errors={'after': '游标参数不合法'}, status_code=400)
+        total_count = ReviewReply.all_objects.filter(review=review).count()
+        batch = list(replies[:21])
+        has_more = len(batch) > 20
+        batch = batch[:20]
+        return return_response(message='课程评价获取成功', contents={
+            'count': total_count,
+            'next_cursor': batch[-1].id if has_more else None,
+            'results': [self.get_reply_info(reply, request.user) for reply in batch],
+        })
 
     def post(self, request):
         serializer = AddReviewReplySerializer(data=request.data)

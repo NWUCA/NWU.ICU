@@ -18,6 +18,7 @@ from django.contrib import admin
 from django.urls import include
 from django.urls import path
 from django.views.generic import RedirectView
+from settings.admin_login import throttled_admin_login
 
 from common.file.view import (
     FileDownloadView,
@@ -174,6 +175,7 @@ api_patterns = [
     path('search/', CourseTeacherSearchView.as_view(), name='search'),
 ]
 urlpatterns = [
+    path('admin/login/', throttled_admin_login, name='admin-login'),
     path(
         'admin/upload/',
         RedirectView.as_view(pattern_name='admin:common_resourceuploadrequest_changelist', permanent=False),

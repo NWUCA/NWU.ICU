@@ -63,7 +63,7 @@ class ResourceUploadBlacklistTests(APITestCase):
         for path in ['/course/private', '/course/private/sub', '//course/private', '/course//private/.']:
             with self.subTest(path=path):
                 response = self.client.get('/api/upload/directories/', {'path': path})
-                self.assertEqual(response.status_code, 404)
+                self.assertEqual(response.status_code, 400 if '//' in path or '/.' in path else 404)
                 self.assertNotIn('directories', response.data.get('contents', {}))
 
     def test_upload_rejects_blocked_targets_and_folder_upload_bypasses(self):
@@ -125,8 +125,12 @@ class ResourceUploadBlacklistTests(APITestCase):
         response = self.client.get(self.directories_url, {'path': '/course'})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.data['contents']['directories']), 2)
+        response = self.client.post(
+            self.blacklist_url, {'path': '//course/private/sub/', 'action': 'add'}, format='json'
+        )
+        self.assertEqual(response.status_code, 400)
         for _ in range(2):
-            response = self.client.post(self.blacklist_url, {'path': '//course/private/sub/', 'action': 'add'}, format='json')
+            response = self.client.post(self.blacklist_url, {'path': '/course/private/sub', 'action': 'add'}, format='json')
             self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data['contents']['paths'], ['/course/private', '/course/private/sub'])
         response = self.client.post(self.blacklist_url, {'path': '/course/private', 'action': 'remove'}, format='json')

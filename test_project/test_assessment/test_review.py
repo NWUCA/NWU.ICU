@@ -72,7 +72,7 @@ class ReviewTests(APITestCase):
             {'like': 0, 'dislike': 0, 'user_option': 0},
         )
         self.assertEqual(latest_review_list_response.data['contents']['count'], 1)
-        self.assertEqual(course_response.data['contents']['reviews'][-1]['author']['id'], self.user_id)
+        self.assertEqual(course_response.data['contents']['reviews']['results'][0]['author']['id'], self.user_id)
         return add_review_response.data['contents']['review_id'], self.course_id
 
     def test_add_anonymous_review_browse_by_add_user(self):
@@ -97,8 +97,8 @@ class ReviewTests(APITestCase):
                          settings.ANONYMOUS_USER_AVATAR_UUID)
         self.assertNotIn('uuid', latest_review_list_response.data['contents']['results'][-1]['author'])
         self.assertNotIn('has_avatar', latest_review_list_response.data['contents']['results'][-1]['author'])
-        self.assertEqual(course_response.data['contents']['reviews'][-1]['author']['id'], 1)
-        self.assertTrue(course_response.data['contents']['reviews'][-1]['author']['anonymous'])
+        self.assertEqual(course_response.data['contents']['reviews']['results'][0]['author']['id'], 1)
+        self.assertTrue(course_response.data['contents']['reviews']['results'][0]['author']['anonymous'])
         self.assertEqual(latest_review_list_response.data['contents']['count'], 1)
 
     def test_delete_review(self):
@@ -147,12 +147,12 @@ class ReviewTests(APITestCase):
             [root.id, child.id],
         )
         course_response = self.client.get(reverse('api:course', args=[self.course_id]))
-        reviews = course_response.data['contents']['reviews']
+        reviews = course_response.data['contents']['reviews']['results']
         self.assertEqual(len(reviews), 1)
         self.assertTrue(reviews[0]['is_deleted'])
         self.assertEqual(reviews[0]['content'], '内容已被删除')
         self.assertEqual(reviews[0]['author']['id'], 0)
-        self.assertNotIn(self.user.nickname, str(reviews[0]['author']))
+        self.assertEqual(reviews[0]['author']['nickname'], '已删除用户')
         self.assertEqual(
             [reply['content'] for reply in reviews[0]['reply']],
             ['valuable root reply', 'valuable nested reply'],
@@ -231,6 +231,90 @@ class ReviewTests(APITestCase):
         self.assertEqual(review.modify_time, original_modify_time)
         self.assertFalse(review.edited)
         self.assertFalse(ReviewHistory.objects.filter(review=review).exists())
+
+    def test_review_content_limits_are_enforced(self):
+        review_data = {
+            'course': self.course_id,
+            'content': 'x' * 10_001,
+            'rating': 3,
+            'anonymous': False,
+            'difficulty': 3,
+            'grade': 3,
+            'homework': 3,
+            'reward': 3,
+            'semester': 1,
+        }
+        response = self.client.post(self.review_url, review_data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data['errors'][0]['field'], 'content')
+
+        review_data['content'] = 'valid'
+        review_id = self.client.post(self.review_url, review_data).data['contents']['review_id']
+        reply_response = self.client.post(reverse('api:add_reply'), {
+            'review_id': review_id,
+            'parent_id': 0,
+            'content': 'x' * 2_001,
+        })
+        self.assertEqual(reply_response.status_code, 400)
+        self.assertEqual(reply_response.data['errors'][0]['field'], 'content')
+
+    def test_course_reviews_are_paginated_and_include_own_review_summary(self):
+        own_review_id, _ = self.test_add_review()
+        semester = Semeseter.objects.get(id=1)
+        for index in range(11):
+            author = create_user(
+                is_active=True,
+                username=f'pagination_user_{index}',
+                email=f'pagination_{index}@example.com',
+            )
+            Review.objects.create(
+                course_id=self.course_id,
+                content=f'review {index}',
+                created_by=author,
+                rating=index % 5 + 1,
+                anonymous=False,
+                difficulty=3,
+                grade=3,
+                homework=3,
+                reward=3,
+                semester=semester,
+                like_count=index,
+            )
+
+        response = self.client.get(
+            reverse('api:course', args=[self.course_id]),
+            {'page': 1, 'pageSize': 10, 'sort': 'liked'},
+        )
+        reviews = response.data['contents']['reviews']
+        self.assertEqual(reviews['count'], 12)
+        self.assertEqual(reviews['max_page'], 2)
+        self.assertEqual(len(reviews['results']), 10)
+        self.assertEqual(reviews['results'][0]['like']['like'], 10)
+        self.assertEqual(response.data['contents']['request_user_review']['id'], own_review_id)
+
+    def test_replies_are_returned_in_cursor_batches(self):
+        review_id, _ = self.test_add_review()
+        ReviewReply.objects.bulk_create([
+            ReviewReply(
+                review_id=review_id,
+                created_by=self.user,
+                content=f'reply {index}',
+            )
+            for index in range(25)
+        ])
+
+        course_response = self.client.get(reverse('api:course', args=[self.course_id]))
+        review = course_response.data['contents']['reviews']['results'][0]
+        self.assertEqual(review['reply_count'], 25)
+        self.assertEqual(len(review['reply']), 20)
+        self.assertIsNotNone(review['reply_next_cursor'])
+
+        next_response = self.client.get(
+            reverse('api:reply', args=[review_id]),
+            {'after': review['reply_next_cursor']},
+        )
+        self.assertEqual(len(next_response.data['contents']['results']), 5)
+        self.assertIsNone(next_response.data['contents']['next_cursor'])
 
     def test_my_review(self):
         self.test_edit_review()

@@ -35,6 +35,7 @@ class AddReviewSerializer(serializers.ModelSerializer):
     class Meta:
         model = Review
         fields = ['course', 'content', 'rating', 'anonymous', 'difficulty', 'grade', 'homework', 'reward', 'semester']
+        extra_kwargs = {'content': {'max_length': 10_000}}
 
     def validate(self, data):
         fields = {
@@ -63,7 +64,7 @@ class DeleteReviewSerializer(serializers.Serializer):
 
 
 class AddReviewReplySerializer(serializers.Serializer):
-    content = serializers.CharField(required=True)
+    content = serializers.CharField(required=True, max_length=2_000)
     parent_id = serializers.IntegerField(required=True)
     review_id = serializers.IntegerField(required=True)
 

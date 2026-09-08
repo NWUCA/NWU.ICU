@@ -44,12 +44,16 @@ def _get_storage_root():
 
 
 def _normalize_relative_file_path(path):
-    raw_path = str(path).strip().replace('\\', '/')
+    raw_path = str(path).strip()
     normalized_path = posixpath.normpath(raw_path)
     if (
-        normalized_path.startswith('/')
+        '\\' in raw_path
+        or '//' in raw_path
+        or any(ord(char) < 32 or ord(char) == 127 for char in raw_path)
+        or normalized_path.startswith('/')
         or normalized_path in {'', '.', '..'}
-        or any(part == '..' for part in normalized_path.split('/'))
+        or any(part in {'', '.', '..'} for part in raw_path.split('/'))
+        or normalized_path != raw_path
     ):
         raise ResourcePublishError(f'投稿文件路径不合法：{path}')
     return normalized_path

@@ -31,6 +31,20 @@ class RegisterTests(APITestCase):
         response = self.client.post(self.dup_username_url, {"username": self.register_data['username']}, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
+    @override_settings(DEBUG=False, DATA_UPLOAD_MAX_MEMORY_SIZE=128)
+    def test_oversized_json_is_rejected_before_serializer_validation(self):
+        response = self.client.post(
+            self.dup_username_url,
+            {"username": "x" * 512},
+            format='json',
+        )
+
+        # Django maps RequestDataTooBig to a generic 400 response. The reverse
+        # proxy returns 413 first in production; this verifies the app boundary
+        # still rejects the body when it is reached directly.
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertNotIn(b'username_not_match_length', response.content)
+
     def test_create_account_password_must_contain_one_number(self):
         register_data_copy = self.register_data.copy()
         for password in ['password', 'PASSWORD', 'passWORD', '12345678', '123password', '123PASSWORD']:

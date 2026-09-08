@@ -14,7 +14,11 @@ from rest_framework.views import APIView
 from rest_framework import serializers
 
 from utils.utils import return_response
-from .resource_directories import ResourceDirectoryCacheError, read_resource_directory_cache
+from .resource_directories import (
+    ResourceDirectoryCacheError,
+    normalize_directory_path,
+    read_resource_directory_cache,
+)
 from .resource_access import ResourceAccess
 from .resource_statistics import record_download
 
@@ -42,13 +46,12 @@ def visible_name(name):
 
 
 def normalize_resource_path(raw_path, *, allow_readme=False):
-    # URL paths always use POSIX separators, regardless of the host filesystem.
-    raw = str(raw_path).replace('\\', '/')
+    try:
+        raw = normalize_directory_path(raw_path)
+    except ValueError:
+        raise ValidationError({'path': '资料路径不合法。'})
     parts = raw.split('/')
-    if not raw.startswith('/') or raw.startswith('//') or any(
-        part in {'.', '..'} or ':' in part or any(ord(char) < 32 for char in part)
-        or part.endswith((' ', '.')) for part in parts if part
-    ):
+    if any(':' in part or part.endswith((' ', '.')) for part in parts if part):
         raise ValidationError({'path': '资料路径不合法。'})
     if any(part.startswith('.') or (not allow_readme and part.casefold() == 'readme.md')
            for part in parts if part):

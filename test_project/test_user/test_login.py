@@ -1,12 +1,17 @@
+from unittest.mock import patch
+
 from django.test import override_settings
+from django.core.cache import cache
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
+from utils.throttle import LoginUsernameRateThrottle
 
 
 @override_settings(DEBUG=True)
 class LoginTests(APITestCase):
     def setUp(self):
+        cache.clear()
         self.register_data = {
             "username": "testUser",
             "password": "testPassword1",
@@ -88,3 +93,26 @@ class LoginTests(APITestCase):
             self.activation_url, {'token': token[::-1]}, format='json'
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    @patch.object(LoginUsernameRateThrottle, 'rate', '5/minute')
+    def test_api_and_admin_login_share_username_throttle(self):
+        self.create_account_with_active()
+        wrong_login = {**self.login_data, 'password': 'wrong'}
+        for _ in range(4):
+            self.client.post(self.login_url, wrong_login, format='json')
+
+        admin_page = self.client.get('/admin/login/')
+        csrf_token = admin_page.cookies['csrftoken'].value
+        fifth = self.client.post(
+            '/admin/login/',
+            wrong_login,
+            HTTP_X_CSRFTOKEN=csrf_token,
+        )
+        sixth = self.client.post(
+            '/admin/login/',
+            wrong_login,
+            HTTP_X_CSRFTOKEN=csrf_token,
+        )
+
+        self.assertNotEqual(fifth.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+        self.assertEqual(sixth.status_code, status.HTTP_429_TOO_MANY_REQUESTS)

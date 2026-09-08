@@ -18,10 +18,25 @@ class ResourceDirectoryCacheError(Exception):
 
 
 def normalize_directory_path(path):
-    raw_path = str(path).strip().replace('\\', '/')
-    if not raw_path.startswith('/') or any(part == '..' for part in raw_path.split('/')):
+    untrimmed_path = str(path)
+    raw_path = untrimmed_path.strip()
+    if (
+        raw_path != untrimmed_path
+        or not raw_path.startswith('/')
+        or raw_path.startswith('//')
+        or '\\' in raw_path
+        or any(ord(char) < 32 or ord(char) == 127 for char in raw_path)
+    ):
         raise ValueError('目录路径不合法')
-    return posixpath.normpath(raw_path)
+    if raw_path == '/':
+        return '/'
+    parts = raw_path[1:].split('/')
+    if any(part in {'', '.', '..'} for part in parts):
+        raise ValueError('目录路径不合法')
+    normalized_path = posixpath.normpath(raw_path)
+    if normalized_path != raw_path or not normalized_path.startswith('/'):
+        raise ValueError('目录路径不合法')
+    return normalized_path
 
 
 def get_resource_directory_cache_file():
@@ -172,7 +187,10 @@ def add_resource_directory_paths(paths):
             current_path = requested_path
             while current_path != '/':
                 cached_paths.add(current_path)
-                current_path = posixpath.dirname(current_path) or '/'
+                parent_path = posixpath.dirname(current_path) or '/'
+                if parent_path == current_path:
+                    raise ResourceDirectoryCacheError('目录路径无法安全遍历')
+                current_path = parent_path
         for directory_path in sorted(cached_paths):
             if directory_path in existing_entry_paths:
                 continue
@@ -232,7 +250,10 @@ def add_resource_file_entries(file_entries, directory_paths=(), storage_root=Non
             current_path = requested_path
             while current_path != '/':
                 cached_paths.add(current_path)
-                current_path = posixpath.dirname(current_path) or '/'
+                parent_path = posixpath.dirname(current_path) or '/'
+                if parent_path == current_path:
+                    raise ResourceDirectoryCacheError('目录路径无法安全遍历')
+                current_path = parent_path
         cached_paths.add('/')
 
         entries_by_path = {

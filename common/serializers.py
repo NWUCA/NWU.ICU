@@ -1,5 +1,7 @@
 from captcha.models import CaptchaStore
 from django.conf import settings
+from django.db import transaction
+from django.utils import timezone
 from rest_framework import serializers
 
 from utils.utils import get_err_msg
@@ -15,14 +17,23 @@ class CaptchaSerializer(serializers.Serializer):
         captcha_value = data.get('captcha_value')
         if settings.CAPTCHA_TEST_MODE:
             return data
-        try:
-            captcha = CaptchaStore.objects.get(hashkey=captcha_key)
-            if captcha.response != captcha_value.lower():
+        validation_error = None
+        with transaction.atomic():
+            try:
+                captcha = CaptchaStore.objects.select_for_update().get(hashkey=captcha_key)
+            except CaptchaStore.DoesNotExist:
+                validation_error = {'captcha': get_err_msg('captcha_overdue')}
+                captcha = None
+            if captcha is not None and captcha.expiration <= timezone.now():
                 captcha.delete()
-                raise serializers.ValidationError({'captcha': get_err_msg('captcha_error')})
-        except CaptchaStore.DoesNotExist:
-            raise serializers.ValidationError({'captcha': get_err_msg('captcha_overdue')})
-        captcha.delete()
+                validation_error = {'captcha': get_err_msg('captcha_overdue')}
+            elif captcha is not None and captcha.response != captcha_value.lower():
+                captcha.delete()
+                validation_error = {'captcha': get_err_msg('captcha_error')}
+            elif captcha is not None:
+                captcha.delete()
+        if validation_error:
+            raise serializers.ValidationError(validation_error)
         return data
 
 

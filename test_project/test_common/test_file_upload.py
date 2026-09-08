@@ -1,4 +1,5 @@
 import tempfile
+from unittest.mock import patch
 from io import BytesIO
 
 from PIL import Image
@@ -8,7 +9,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
-from common.file.models import UploadedFile
+from common.file.models import ResourceUploadRequest, UploadedFile
 from test_project.common import create_user, login_user
 
 
@@ -100,6 +101,59 @@ class FileUploadSecurityTests(APITestCase):
 
         self.assertEqual(accepted.status_code, status.HTTP_201_CREATED)
         self.assertEqual(rejected.status_code, status.HTTP_400_BAD_REQUEST)
+
+    @override_settings(USER_UPLOAD_QUOTA_BYTES=10)
+    @patch('common.file.view.resource_upload_notification_executor.submit')
+    def test_ordinary_and_resource_uploads_share_quota(self, submit_notification):
+        ResourceUploadRequest.objects.create(
+            uploaded_by=self.user,
+            target_path='/course',
+            status=ResourceUploadRequest.STATUS_PENDING,
+            total_size=7,
+        )
+
+        accepted = self.client.post(
+            self.upload_url,
+            {'file': SimpleUploadedFile('three.txt', b'123'), 'file_type': 'file'},
+            format='multipart',
+        )
+        with self.assertLogs('common.file.view', level='WARNING') as logs:
+            rejected = self.client.post(
+                self.upload_url,
+                {'file': SimpleUploadedFile('one.txt', b'1'), 'file_type': 'file'},
+                format='multipart',
+            )
+
+        self.assertEqual(accepted.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(rejected.status_code, status.HTTP_413_REQUEST_ENTITY_TOO_LARGE)
+        self.assertEqual(
+            rejected.data['errors'][0]['err_code'],
+            'upload_quota_exceeded',
+        )
+        self.assertIn('upload_quota_exceeded', logs.output[0])
+        submit_notification.assert_called_once()
+
+    def test_deleting_last_deduplicated_reference_removes_physical_file(self):
+        first = self.client.post(
+            self.upload_url,
+            {'file': SimpleUploadedFile('first.txt', b'same'), 'file_type': 'file'},
+            format='multipart',
+        )
+        second = self.client.post(
+            self.upload_url,
+            {'file': SimpleUploadedFile('second.txt', b'same'), 'file_type': 'file'},
+            format='multipart',
+        )
+        first_file = UploadedFile.objects.get(pk=first.data['contents']['uuid'])
+        second_file = UploadedFile.objects.get(pk=second.data['contents']['uuid'])
+        self.assertEqual(first_file.file.name, second_file.file.name)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            self.client.delete(reverse('api:file-delete', args=[first_file.pk]))
+        self.assertTrue(second_file.file.storage.exists(second_file.file.name))
+        with self.captureOnCommitCallbacks(execute=True):
+            self.client.delete(reverse('api:file-delete', args=[second_file.pk]))
+        self.assertFalse(second_file.file.storage.exists(second_file.file.name))
 
     def test_only_owner_can_select_uploaded_avatar(self):
         own_upload = self.client.post(

@@ -173,7 +173,10 @@ def update_chat_reply(instance: ReviewReply, operate: Operate):
 
 @receiver(post_save, sender=ReviewReply)
 def reply_saved(sender, instance, **kwargs):
-    update_chat_reply(instance, operate=Operate.ADD)
+    update_chat_reply(
+        instance,
+        operate=Operate.DELETE if instance.is_deleted else Operate.ADD,
+    )
 
 
 # @receiver(post_delete, sender=ReviewReply)
