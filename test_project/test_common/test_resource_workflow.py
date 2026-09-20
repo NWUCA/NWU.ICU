@@ -1,9 +1,11 @@
+from datetime import timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
+from django.utils import timezone
 
 from common.file.models import (
     ResourceNotificationOutbox,
@@ -12,6 +14,7 @@ from common.file.models import (
     ResourceUploadRequest,
 )
 from common.file.resource_directories import write_resource_directory_cache
+from common.file.resource_notifications import queue_resource_upload_notifications
 from common.file.resource_tasks import process_one_notification, process_one_publish_job
 from common.file.resource_workflow import (
     ResourceReviewError,
@@ -81,6 +84,60 @@ class ResourceUploadWorkflowTests(TestCase):
         self.assertFalse(bool(upload_file.file))
         self.assertEqual(upload_file.published_path, '/courses/new-course/notes.txt')
         self.assertEqual((self.storage_root / 'courses' / 'new-course' / 'notes.txt').read_bytes(), b'content')
+
+        notifications = ResourceNotificationOutbox.objects.filter(upload_request=request)
+        self.assertEqual(notifications.count(), 2)
+        self.assertTrue(all(notification.available_at > timezone.now() for notification in notifications))
+        self.assertFalse(process_one_notification())
+
+    @patch('common.file.resource_tasks.send_mail')
+    @patch('common.file.resource_tasks.send_direct_message')
+    def test_approvals_for_same_user_are_batched_per_channel(self, send_direct_message, send_mail):
+        first = self.create_request()
+        second = self.create_request()
+        first.target_path = '/courses/first'
+        second.target_path = '/courses/second'
+        first.save(update_fields=('target_path', 'updated_at'))
+        second.save(update_fields=('target_path', 'updated_at'))
+
+        queue_resource_upload_notifications(first, event='approved', reviewer=self.reviewer)
+        queue_resource_upload_notifications(second, event='approved', reviewer=self.reviewer)
+        ResourceNotificationOutbox.objects.update(available_at=timezone.now() - timedelta(seconds=1))
+
+        self.assertTrue(process_one_notification())
+        self.assertTrue(process_one_notification())
+        self.assertFalse(process_one_notification())
+        self.assertEqual(send_direct_message.call_count, 1)
+        self.assertEqual(send_mail.call_count, 1)
+        site_message = send_direct_message.call_args.args[2]
+        email_subject, email_body = send_mail.call_args.args[:2]
+        self.assertIn('2 份资料投稿', site_message)
+        self.assertIn(f'投稿 #{first.pk}', site_message)
+        self.assertIn(f'投稿 #{second.pk}', site_message)
+        self.assertIn('批量发布', email_subject)
+        self.assertEqual(site_message, email_body)
+        self.assertEqual(
+            ResourceNotificationOutbox.objects.filter(status=ResourceNotificationOutbox.STATUS_SENT).count(),
+            4,
+        )
+
+    def test_new_approval_joins_existing_ten_minute_window(self):
+        first = self.create_request()
+        second = self.create_request()
+        initial_time = timezone.now()
+        later_time = initial_time + timedelta(minutes=5)
+
+        with patch('common.file.resource_notifications.timezone.now', return_value=initial_time):
+            queue_resource_upload_notifications(first, event='approved', reviewer=self.reviewer)
+        with patch('common.file.resource_notifications.timezone.now', return_value=later_time):
+            queue_resource_upload_notifications(second, event='approved', reviewer=self.reviewer)
+
+        notifications = ResourceNotificationOutbox.objects.order_by('pk')
+        self.assertEqual(notifications.count(), 4)
+        self.assertTrue(all(
+            notification.available_at == initial_time + timedelta(minutes=10)
+            for notification in notifications
+        ))
 
     def test_stale_review_version_is_rejected(self):
         request = self.create_request()

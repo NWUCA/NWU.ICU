@@ -1,16 +1,21 @@
 import logging
+from datetime import timedelta
 from urllib.parse import quote
 
 from django.conf import settings
 from django.core.mail import send_mail
+from django.db import transaction
 from django.urls import reverse
 from django.utils import timezone
 
 from .models import ResourceNotificationOutbox
 from common.messaging import send_direct_message
+from user.models import User
 
 
 logger = logging.getLogger(__name__)
+
+APPROVAL_NOTIFICATION_DELAY = timedelta(minutes=10)
 
 RESULT_APPROVED = 'approved'
 RESULT_REJECTED = 'rejected'
@@ -54,8 +59,10 @@ def get_resource_upload_result_subject(result):
     return f'{settings.WEBSITE_NAME} {labels[result]}'
 
 
-def _create_outbox(*, event_key, upload_request, channel, body, reviewer=None, subject=''):
-    ResourceNotificationOutbox.objects.get_or_create(
+def _create_outbox(
+        *, event_key, upload_request, channel, body, reviewer=None, subject='',
+        available_at=None, aggregation_key=''):
+    notification, _ = ResourceNotificationOutbox.objects.get_or_create(
         event_key=event_key,
         defaults={
             'upload_request': upload_request,
@@ -64,9 +71,11 @@ def _create_outbox(*, event_key, upload_request, channel, body, reviewer=None, s
             'channel': channel,
             'subject': subject,
             'body': body,
-            'available_at': timezone.now(),
+            'available_at': available_at or timezone.now(),
+            'aggregation_key': aggregation_key,
         },
     )
+    return notification
 
 
 def queue_resource_upload_notifications(upload_request, *, event, reviewer=None):
@@ -99,11 +108,50 @@ def queue_resource_upload_notifications(upload_request, *, event, reviewer=None)
     result = RESULT_APPROVED if event == 'approved' else RESULT_REJECTED
     body = build_resource_upload_result_message(upload_request, result)
     subject = get_resource_upload_result_subject(result)
+    if result == RESULT_APPROVED:
+        with transaction.atomic():
+            # Serializing per recipient makes the first approval define a
+            # stable ten-minute collection window even with multiple workers.
+            User.objects.select_for_update().get(pk=upload_request.uploaded_by_id)
+            batch_now = timezone.now()
+            for channel in (ResourceNotificationOutbox.CHANNEL_SITE_MESSAGE, ResourceNotificationOutbox.CHANNEL_EMAIL):
+                aggregation_key = f'resource-upload:approved:{upload_request.uploaded_by_id}:{channel}'
+                available_at = (
+                    ResourceNotificationOutbox.objects.filter(
+                        aggregation_key=aggregation_key,
+                        status=ResourceNotificationOutbox.STATUS_PENDING,
+                        available_at__gt=batch_now,
+                    )
+                    .order_by('available_at')
+                    .values_list('available_at', flat=True)
+                    .first()
+                    or batch_now + APPROVAL_NOTIFICATION_DELAY
+                )
+                _create_outbox(
+                    event_key=f'{base_key}:{channel}', upload_request=upload_request,
+                    channel=channel, body=body, subject=subject, reviewer=reviewer,
+                    available_at=available_at, aggregation_key=aggregation_key,
+                )
+        return
+
     for channel in (ResourceNotificationOutbox.CHANNEL_SITE_MESSAGE, ResourceNotificationOutbox.CHANNEL_EMAIL):
         _create_outbox(
             event_key=f'{base_key}:{channel}', upload_request=upload_request,
             channel=channel, body=body, subject=subject, reviewer=reviewer,
         )
+
+
+def build_approved_batch_message(notifications):
+    upload_requests = [notification.upload_request for notification in notifications]
+    if len(upload_requests) == 1:
+        return notifications[0].subject, notifications[0].body
+    lines = [f'你的 {len(upload_requests)} 份资料投稿已审核通过并成功发布：']
+    for upload_request in upload_requests:
+        lines.extend((
+            f'- 投稿 #{upload_request.pk}：{upload_request.target_path}',
+            f'  查看资料：{get_resource_public_url(upload_request.target_path)}',
+        ))
+    return f'{settings.WEBSITE_NAME} 资料投稿已批量发布', '\n'.join(lines)
 
 
 def notify_resource_upload_result(reviewer, upload_request, result):

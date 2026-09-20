@@ -9,9 +9,10 @@ from django.utils import timezone
 
 from common.messaging import send_direct_message
 from settings.log import TelegramBotHandler
+from user.models import User
 
 from .models import ResourceNotificationOutbox, ResourcePublishJob, ResourceUploadRequest
-from .resource_notifications import queue_resource_upload_notifications
+from .resource_notifications import build_approved_batch_message, queue_resource_upload_notifications
 from .resource_publish import (
     ResourcePublishError,
     delete_resource_upload_staging_files,
@@ -120,7 +121,7 @@ def claim_notification():
             available_at=timezone.now(),
         )
         notification = (
-            ResourceNotificationOutbox.objects.select_for_update(skip_locked=True)
+            ResourceNotificationOutbox.objects
             .filter(
                 status__in=(ResourceNotificationOutbox.STATUS_PENDING, ResourceNotificationOutbox.STATUS_RETRY),
                 available_at__lte=timezone.now(),
@@ -130,24 +131,49 @@ def claim_notification():
         )
         if not notification:
             return None
-        notification.status = ResourceNotificationOutbox.STATUS_PROCESSING
-        notification.locked_at = timezone.now()
-        notification.save(update_fields=('status', 'locked_at', 'updated_at'))
-        return notification.pk
+        if notification.aggregation_key:
+            # Serialize claims for a recipient before locking any outbox rows.
+            # This prevents two workers from each locking one row in the same
+            # batch and then deadlocking (or sending two partial batches).
+            User.objects.select_for_update().get(pk=notification.recipient_id)
+            claimed = ResourceNotificationOutbox.objects.select_for_update().filter(
+                aggregation_key=notification.aggregation_key,
+                status__in=(ResourceNotificationOutbox.STATUS_PENDING, ResourceNotificationOutbox.STATUS_RETRY),
+                available_at__lte=timezone.now(),
+            )
+        else:
+            claimed = ResourceNotificationOutbox.objects.select_for_update(skip_locked=True).filter(
+                pk=notification.pk,
+                status__in=(ResourceNotificationOutbox.STATUS_PENDING, ResourceNotificationOutbox.STATUS_RETRY),
+                available_at__lte=timezone.now(),
+            )
+        notification_ids = tuple(claimed.order_by('pk').values_list('pk', flat=True))
+        if not notification_ids:
+            return None
+        ResourceNotificationOutbox.objects.filter(pk__in=notification_ids).update(
+            status=ResourceNotificationOutbox.STATUS_PROCESSING,
+            locked_at=timezone.now(),
+        )
+        return notification_ids
 
 
-def _deliver(notification):
+def _deliver(notifications):
+    notification = notifications[0]
+    subject = notification.subject
+    body = notification.body
+    if notification.aggregation_key:
+        subject, body = build_approved_batch_message(notifications)
     if notification.channel == ResourceNotificationOutbox.CHANNEL_TELEGRAM:
         if not settings.TELEGRAM_BOT_API_TOKEN or not settings.TELEGRAM_CHAT_ID:
             raise RuntimeError('Telegram bot token or chat id is not configured')
         handler = TelegramBotHandler(send_timeout=10)
         handler.setFormatter(logging.Formatter('%(message)s'))
-        handler.handle(logging.LogRecord(__name__, logging.INFO, '', 0, notification.body, (), None))
+        handler.handle(logging.LogRecord(__name__, logging.INFO, '', 0, body, (), None))
         return
     if notification.channel == ResourceNotificationOutbox.CHANNEL_SITE_MESSAGE:
         if not notification.sender or not notification.recipient:
             raise ValueError('站内信缺少发送者或接收者')
-        send_direct_message(notification.sender, notification.recipient, notification.body)
+        send_direct_message(notification.sender, notification.recipient, body)
         return
     if notification.channel == ResourceNotificationOutbox.CHANNEL_EMAIL:
         if not notification.recipient:
@@ -155,35 +181,42 @@ def _deliver(notification):
         recipient = notification.recipient.email or notification.recipient.college_email
         if not recipient:
             raise ValueError('用户没有可用邮箱')
-        send_mail(notification.subject, notification.body, settings.EMAIL_HOST_USER, [recipient], fail_silently=False)
+        send_mail(subject, body, settings.EMAIL_HOST_USER, [recipient], fail_silently=False)
         return
     raise ValueError('未知通知渠道')
 
 
 def process_one_notification():
-    notification_id = claim_notification()
-    if not notification_id:
+    notification_ids = claim_notification()
+    if not notification_ids:
         return False
-    notification = ResourceNotificationOutbox.objects.select_related('recipient', 'sender').get(pk=notification_id)
+    notifications = list(
+        ResourceNotificationOutbox.objects
+        .select_related('recipient', 'sender', 'upload_request')
+        .filter(pk__in=notification_ids)
+        .order_by('pk')
+    )
     try:
-        _deliver(notification)
+        _deliver(notifications)
     except Exception as error:
         with transaction.atomic():
-            notification = ResourceNotificationOutbox.objects.select_for_update().get(pk=notification_id)
-            notification.attempts += 1
-            notification.last_error = str(error)
-            notification.locked_at = None
-            if notification.attempts >= MAX_ATTEMPTS:
-                notification.status = ResourceNotificationOutbox.STATUS_FAILED
-            else:
-                notification.status = ResourceNotificationOutbox.STATUS_RETRY
-                notification.available_at = _next_retry(notification.attempts)
-            notification.save(update_fields=(
-                'attempts', 'last_error', 'locked_at', 'status', 'available_at', 'updated_at',
-            ))
-        logger.exception('Resource notification %s failed', notification_id)
+            claimed_notifications = ResourceNotificationOutbox.objects.select_for_update().filter(pk__in=notification_ids)
+            retry_at = _next_retry(max(notification.attempts for notification in claimed_notifications) + 1)
+            for notification in claimed_notifications:
+                notification.attempts += 1
+                notification.last_error = str(error)
+                notification.locked_at = None
+                if notification.attempts >= MAX_ATTEMPTS:
+                    notification.status = ResourceNotificationOutbox.STATUS_FAILED
+                else:
+                    notification.status = ResourceNotificationOutbox.STATUS_RETRY
+                    notification.available_at = retry_at
+                notification.save(update_fields=(
+                    'attempts', 'last_error', 'locked_at', 'status', 'available_at', 'updated_at',
+                ))
+        logger.exception('Resource notifications %s failed', notification_ids)
         return True
-    ResourceNotificationOutbox.objects.filter(pk=notification_id).update(
+    ResourceNotificationOutbox.objects.filter(pk__in=notification_ids).update(
         status=ResourceNotificationOutbox.STATUS_SENT,
         sent_at=timezone.now(),
         locked_at=None,
