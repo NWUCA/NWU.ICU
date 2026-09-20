@@ -54,7 +54,7 @@ class ResourceUploadNotificationTests(SimpleTestCase):
 
         self.assertIn('已审核通过并成功发布', message)
         self.assertIn('/考试资料/高等数学', message)
-        self.assertIn('https://nwu.icu/disk/', message)
+        self.assertNotIn('查看资料', message)
 
     def test_publish_failure_message_explains_that_request_was_returned(self):
         message = build_resource_upload_result_message(

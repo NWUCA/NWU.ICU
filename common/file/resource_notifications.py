@@ -28,6 +28,10 @@ def get_resource_public_url(target_path):
     return f'{settings.FRONTEND_URL.rstrip("/")}/disk/{encoded_path.lstrip("/")}'
 
 
+def get_resource_upload_url():
+    return f'{settings.FRONTEND_URL.rstrip("/")}/upload'
+
+
 def get_resource_review_url(upload_request):
     path = reverse('admin:common_resourceuploadrequest_review', args=(upload_request.pk,))
     return f'{settings.ADMIN_PUBLIC_URL.rstrip("/")}{path}'
@@ -35,10 +39,9 @@ def get_resource_review_url(upload_request):
 
 def build_resource_upload_result_message(upload_request, result):
     if result == RESULT_APPROVED:
-        resource_url = get_resource_public_url(upload_request.target_path)
         return (
             f'你的资料投稿 #{upload_request.pk} 已审核通过并成功发布到 '
-            f'{upload_request.target_path}。 查看资料：{resource_url}'
+            f'{upload_request.target_path}。'
         )
     if result == RESULT_PUBLISH_FAILED:
         return (
@@ -146,12 +149,18 @@ def build_resource_upload_result_batch(notifications):
     plain_sections = []
     html_sections = []
     if rejected:
-        plain_sections.append('[审核拒绝]\n' + '\n'.join(
-            build_resource_upload_result_message(upload_request, RESULT_REJECTED)
-            for upload_request in rejected
-        ))
+        upload_url = get_resource_upload_url()
+        plain_sections.append(
+            f'[审核拒绝]\n可在{upload_url}修改/撤回投稿\n'
+            + '\n'.join(
+                build_resource_upload_result_message(upload_request, RESULT_REJECTED)
+                for upload_request in rejected
+            )
+        )
         html_sections.append(
             '<h2 style="font-size: 20px; margin: 24px 0 12px;">[审核拒绝]</h2>'
+            '<p style="font-size: 14px; line-height: 1.7; margin: 8px 0;">'
+            f'可在<a href="{escape(upload_url, quote=True)}">{escape(upload_url)}</a>修改/撤回投稿</p>'
             + ''.join(
                 '<p style="font-size: 14px; line-height: 1.7; margin: 8px 0;">'
                 f'你的资料投稿 #{upload_request.pk} 未通过审核，已退回修改。'
@@ -169,9 +178,8 @@ def build_resource_upload_result_batch(notifications):
             + ''.join(
                 '<p style="font-size: 14px; line-height: 1.7; margin: 8px 0;">'
                 f'你的资料投稿 #{upload_request.pk} 已审核通过并成功发布到 '
-                f'{escape(upload_request.target_path)}。 查看资料：'
                 f'<a href="{escape(get_resource_public_url(upload_request.target_path), quote=True)}">'
-                f'{escape(get_resource_public_url(upload_request.target_path))}</a></p>'
+                f'{escape(upload_request.target_path)}</a>。</p>'
                 for upload_request in approved
             )
         )

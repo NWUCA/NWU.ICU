@@ -40,6 +40,7 @@ class ResourceUploadWorkflowTests(TestCase):
             RESOURCE_DIRECTORY_CACHE_FILE=self.cache_file,
             MEDIA_ROOT=self.media_root,
             ADMIN_PUBLIC_URL='https://nwu.icu',
+            FRONTEND_URL='https://nwu.icu',
             RESOURCES_WEBSITE_URL='https://resour.nwu.icu',
         )
         self.settings_override.enable()
@@ -114,6 +115,7 @@ class ResourceUploadWorkflowTests(TestCase):
         email_subject, email_body = send_mail.call_args.args[:2]
         html_body = send_mail.call_args.kwargs['html_message']
         self.assertTrue(site_message.startswith('[审核拒绝]\n'))
+        self.assertIn('可在https://nwu.icu/upload修改/撤回投稿', site_message)
         self.assertLess(site_message.index('[审核拒绝]'), site_message.index('[审核通过]'))
         self.assertEqual(site_message.count('未通过审核'), 2)
         self.assertEqual(site_message.count('已审核通过'), 10)
@@ -124,9 +126,12 @@ class ResourceUploadWorkflowTests(TestCase):
         self.assertIn('font-size: 20px', html_body)
         self.assertIn('>[审核拒绝]</h2>', html_body)
         self.assertIn('>[审核通过]</h2>', html_body)
+        self.assertIn('>https://nwu.icu/upload</a>修改/撤回投稿', html_body)
         self.assertLess(html_body.index('审核拒绝'), html_body.index('审核通过'))
         self.assertIn('<a href="', html_body)
         self.assertIn('/disk/', html_body)
+        self.assertNotIn('查看资料', html_body)
+        self.assertIn('>/courses/approved-1</a>。', html_body)
         self.assertEqual(
             ResourceNotificationOutbox.objects.filter(status=ResourceNotificationOutbox.STATUS_SENT).count(),
             24,
