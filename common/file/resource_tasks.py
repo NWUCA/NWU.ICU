@@ -12,7 +12,7 @@ from settings.log import TelegramBotHandler
 from user.models import User
 
 from .models import ResourceNotificationOutbox, ResourcePublishJob, ResourceUploadRequest
-from .resource_notifications import build_approved_batch_message, queue_resource_upload_notifications
+from .resource_notifications import build_resource_upload_result_batch, queue_resource_upload_notifications
 from .resource_publish import (
     ResourcePublishError,
     delete_resource_upload_staging_files,
@@ -161,8 +161,9 @@ def _deliver(notifications):
     notification = notifications[0]
     subject = notification.subject
     body = notification.body
+    html_body = None
     if notification.aggregation_key:
-        subject, body = build_approved_batch_message(notifications)
+        subject, body, html_body = build_resource_upload_result_batch(notifications)
     if notification.channel == ResourceNotificationOutbox.CHANNEL_TELEGRAM:
         if not settings.TELEGRAM_BOT_API_TOKEN or not settings.TELEGRAM_CHAT_ID:
             raise RuntimeError('Telegram bot token or chat id is not configured')
@@ -181,7 +182,10 @@ def _deliver(notifications):
         recipient = notification.recipient.email or notification.recipient.college_email
         if not recipient:
             raise ValueError('用户没有可用邮箱')
-        send_mail(subject, body, settings.EMAIL_HOST_USER, [recipient], fail_silently=False)
+        send_mail(
+            subject, body, settings.EMAIL_HOST_USER, [recipient],
+            fail_silently=False, html_message=html_body,
+        )
         return
     raise ValueError('未知通知渠道')
 
