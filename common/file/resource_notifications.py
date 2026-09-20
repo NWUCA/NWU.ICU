@@ -6,12 +6,12 @@ from urllib.parse import quote
 from django.conf import settings
 from django.core.mail import send_mail
 from django.db import transaction
-from django.urls import reverse
 from django.utils import timezone
 
 from .models import ResourceNotificationOutbox
 from common.messaging import send_direct_message
 from user.models import User
+from utils.utils import format_file_size
 
 
 logger = logging.getLogger(__name__)
@@ -30,11 +30,6 @@ def get_resource_public_url(target_path):
 
 def get_resource_upload_url():
     return f'{settings.FRONTEND_URL.rstrip("/")}/upload'
-
-
-def get_resource_review_url(upload_request):
-    path = reverse('admin:common_resourceuploadrequest_review', args=(upload_request.pk,))
-    return f'{settings.ADMIN_PUBLIC_URL.rstrip("/")}{path}'
 
 
 def build_resource_upload_result_message(upload_request, result):
@@ -90,8 +85,7 @@ def queue_resource_upload_notifications(upload_request, *, event, reviewer=None)
             f'{"收到新的" if event == "created" else "资料投稿已更新"}资料上传请求 #{upload_request.pk}\n'
             f'用户: {upload_request.uploaded_by.username} (ID: {upload_request.uploaded_by_id})\n'
             f'目标路径: {upload_request.target_path}\n'
-            f'总大小: {upload_request.total_size_display if hasattr(upload_request, "total_size_display") else upload_request.total_size}\n'
-            f'审核链接: {get_resource_review_url(upload_request)}'
+            f'总大小: {format_file_size(upload_request.total_size)}'
         )
         _create_outbox(
             event_key=f'{base_key}:telegram', upload_request=upload_request,
@@ -104,7 +98,7 @@ def queue_resource_upload_notifications(upload_request, *, event, reviewer=None)
             channel=ResourceNotificationOutbox.CHANNEL_TELEGRAM,
             body=(
                 f'资料投稿 #{upload_request.pk} 发布失败，请在后台处理。\n'
-                f'错误：{upload_request.publish_error}\n审核链接: {get_resource_review_url(upload_request)}'
+                f'错误：{upload_request.publish_error}'
             ),
         )
         return

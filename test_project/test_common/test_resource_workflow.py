@@ -64,6 +64,37 @@ class ResourceUploadWorkflowTests(TestCase):
         )
         return request
 
+    def test_created_telegram_notification_has_readable_size_without_review_link(self):
+        request = self.create_request()
+        request.total_size = 116761
+        request.save(update_fields=('total_size', 'updated_at'))
+
+        queue_resource_upload_notifications(request, event='created')
+
+        notification = ResourceNotificationOutbox.objects.get(upload_request=request)
+        self.assertEqual(
+            notification.body,
+            f'收到新的资料上传请求 #{request.pk}\n'
+            f'用户: {self.user.username} (ID: {self.user.pk})\n'
+            '目标路径: /suggested\n'
+            '总大小: 114.02 KB',
+        )
+        self.assertNotIn('审核链接', notification.body)
+
+    def test_publish_failed_telegram_notification_has_no_review_link(self):
+        request = self.create_request()
+        request.publish_error = '目标文件已存在'
+        request.save(update_fields=('publish_error', 'updated_at'))
+
+        queue_resource_upload_notifications(request, event='publish_failed')
+
+        notification = ResourceNotificationOutbox.objects.get(upload_request=request)
+        self.assertEqual(
+            notification.body,
+            f'资料投稿 #{request.pk} 发布失败，请在后台处理。\n错误：目标文件已存在',
+        )
+        self.assertNotIn('审核链接', notification.body)
+
     def test_approval_queues_and_worker_publishes_then_removes_staging_file(self):
         request = self.create_request()
 
