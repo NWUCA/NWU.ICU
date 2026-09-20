@@ -1,3 +1,4 @@
+import copy
 from urllib.parse import parse_qs, urlparse
 
 from django.conf import settings
@@ -18,6 +19,23 @@ class BindCollegeEmailTest(APITestCase):
         self.user = create_user(is_active=True)
         self.bind_email = reverse('api:bind-college-email-bind')
         self.bind_college_email = {"college_email": "test@" + settings.UNIVERSITY_MAIL_SUFFIX}
+
+    def test_resending_bind_email_is_rate_limited(self):
+        config = copy.deepcopy(settings.API_RATE_LIMITS)
+        config['email'].update({
+            'user': '1/minute',
+            'address': '10/minute',
+        })
+        login_user(self.client)
+
+        with override_settings(API_RATE_LIMITS=config):
+            first = self.client.post(self.bind_email, self.bind_college_email, format='json')
+            second = self.client.post(self.bind_email, self.bind_college_email, format='json')
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 429)
+        self.assertEqual(second.data['errors'][0]['err_code'], 'too_many_requests')
+        self.assertIn('Retry-After', second)
 
     def test_bind_college_email_get_token_success(self):
         login_user(self.client)
