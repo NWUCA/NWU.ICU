@@ -144,6 +144,7 @@ class ResourceNotificationOutbox(models.Model):
     channel = models.CharField(max_length=24, choices=CHANNEL_CHOICES)
     subject = models.CharField(max_length=255, blank=True)
     body = models.TextField()
+    result_snapshot = models.JSONField(default=dict, blank=True)
     aggregation_key = models.CharField(max_length=255, blank=True, db_index=True)
     status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=STATUS_PENDING, db_index=True)
     attempts = models.PositiveIntegerField(default=0)

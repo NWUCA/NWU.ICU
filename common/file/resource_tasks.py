@@ -5,6 +5,7 @@ from datetime import timedelta
 from django.conf import settings
 from django.core.mail import send_mail
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from common.messaging import send_direct_message
@@ -12,6 +13,7 @@ from settings.log import TelegramBotHandler
 from user.models import User
 
 from .models import ResourceNotificationOutbox, ResourcePublishJob, ResourceUploadRequest
+from .resource_locks import lock_resource_upload_request
 from .resource_notifications import build_resource_upload_result_batch, queue_resource_upload_notifications
 from .resource_publish import (
     ResourcePublishError,
@@ -72,8 +74,8 @@ def process_one_publish_job():
     except Exception as error:
         message = str(error)
         with transaction.atomic():
+            upload_request = lock_resource_upload_request(job.upload_request_id)
             job = ResourcePublishJob.objects.select_for_update().get(pk=job_id)
-            upload_request = ResourceUploadRequest.objects.select_for_update().get(pk=job.upload_request_id)
             job.attempts += 1
             job.last_error = message
             job.locked_at = None
@@ -94,8 +96,8 @@ def process_one_publish_job():
 
     staging_files_deleted = delete_resource_upload_staging_files(upload_request)
     with transaction.atomic():
+        upload_request = lock_resource_upload_request(job.upload_request_id)
         job = ResourcePublishJob.objects.select_for_update().get(pk=job_id)
-        upload_request = ResourceUploadRequest.objects.select_for_update().get(pk=job.upload_request_id)
         now = timezone.now()
         job.status = ResourcePublishJob.STATUS_SUCCEEDED
         job.locked_at = None
@@ -111,21 +113,17 @@ def process_one_publish_job():
 
 def claim_notification():
     with transaction.atomic():
-        stale_before = timezone.now() - timedelta(minutes=15)
-        ResourceNotificationOutbox.objects.filter(
+        now = timezone.now()
+        claimable = Q(
+            status__in=(ResourceNotificationOutbox.STATUS_PENDING, ResourceNotificationOutbox.STATUS_RETRY),
+            available_at__lte=now,
+        ) | Q(
             status=ResourceNotificationOutbox.STATUS_PROCESSING,
-            locked_at__lt=stale_before,
-        ).update(
-            status=ResourceNotificationOutbox.STATUS_RETRY,
-            locked_at=None,
-            available_at=timezone.now(),
+            locked_at__lt=now - timedelta(minutes=15),
         )
         notification = (
             ResourceNotificationOutbox.objects
-            .filter(
-                status__in=(ResourceNotificationOutbox.STATUS_PENDING, ResourceNotificationOutbox.STATUS_RETRY),
-                available_at__lte=timezone.now(),
-            )
+            .filter(claimable)
             .order_by('available_at', 'pk')
             .first()
         )
@@ -137,15 +135,13 @@ def claim_notification():
             # batch and then deadlocking (or sending two partial batches).
             User.objects.select_for_update().get(pk=notification.recipient_id)
             claimed = ResourceNotificationOutbox.objects.select_for_update().filter(
+                claimable,
                 aggregation_key=notification.aggregation_key,
-                status__in=(ResourceNotificationOutbox.STATUS_PENDING, ResourceNotificationOutbox.STATUS_RETRY),
-                available_at__lte=timezone.now(),
             )
         else:
             claimed = ResourceNotificationOutbox.objects.select_for_update(skip_locked=True).filter(
+                claimable,
                 pk=notification.pk,
-                status__in=(ResourceNotificationOutbox.STATUS_PENDING, ResourceNotificationOutbox.STATUS_RETRY),
-                available_at__lte=timezone.now(),
             )
         notification_ids = tuple(claimed.order_by('pk').values_list('pk', flat=True))
         if not notification_ids:

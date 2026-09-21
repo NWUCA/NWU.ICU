@@ -5,6 +5,7 @@ from django.conf import settings
 from django.core.management.base import BaseCommand
 
 from common.file.models import UploadedFile
+from common.file.references import file_lifecycle
 
 
 class Command(BaseCommand):
@@ -48,7 +49,7 @@ class Command(BaseCommand):
                     self.stdout.write(self.style.WARNING('Operation cancelled.'))
                     return
 
-            with open(file_path, 'rb') as file:
+            with file_lifecycle(), open(file_path, 'rb') as file:
                 if is_file_exist:
                     UploadedFile.objects.get(id=uuid).delete()
                 new_file = UploadedFile(

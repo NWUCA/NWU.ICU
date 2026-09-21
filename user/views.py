@@ -15,6 +15,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.status import HTTP_200_OK, HTTP_400_BAD_REQUEST, HTTP_403_FORBIDDEN, HTTP_204_NO_CONTENT
 from rest_framework.views import APIView
 
+from common.file.references import file_lifecycle
 import utils.utils
 from utils.throttle import EmailAnonRateThrottle, EmailUserRateThrottle, EmailAddressRateThrottle, \
     LoginIPRateThrottle, RegisterAttemptRateThrottle, browser_identity, check_login_attempt, \
@@ -357,8 +358,9 @@ class ProfileView(APIView):
             })
         return return_response(contents=user_info)
 
+    @file_lifecycle()
     def post(self, request):
-        user = User.objects.get(pk=request.user.id)
+        user = User.objects.select_for_update().get(pk=request.user.id)
         serializer = UpdateProfileSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             for key, value in serializer.validated_data.items():

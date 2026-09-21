@@ -372,6 +372,7 @@ class CourseTeacherSearchView(APIView):
         def review_search(search_keyword):
             try:
                 reviews = Review.objects.search(search_keyword, page_size=page_size,
+                                                current_page=current_page,
                                                 select_related_fields=['course', 'semester', 'created_by'])
             except SearchModuleErrorException:
                 return return_response(errors={'module': get_err_msg('invalid_search_type')}, )

@@ -12,6 +12,7 @@ from django.utils import timezone
 from django.utils.html import format_html, format_html_join
 
 from common.file.models import ResourceUploadFile, ResourceUploadRequest
+from common.file.admin import AttachmentReferenceAdminMixin
 from common.file.resource_workflow import (
     ResourceReviewError,
     approve_resource_upload,
@@ -255,20 +256,20 @@ class ResourceUploadRequestAdmin(admin.ModelAdmin):
 
 
 @admin.register(Announcement)
-class AnnouncementAdmin(admin.ModelAdmin):
+class AnnouncementAdmin(AttachmentReferenceAdminMixin, admin.ModelAdmin):
     list_display = ('content', 'type', 'update_time', 'enabled')
     list_filter = ('enabled',)
     readonly_fields = ('create_time', 'update_time')
 
 
 @admin.register(Bulletin)
-class BulletinsAdmin(admin.ModelAdmin):
+class BulletinsAdmin(AttachmentReferenceAdminMixin, admin.ModelAdmin):
     list_display = ('content', 'title', 'update_time', 'enabled')
     list_filter = ('enabled',)
     readonly_fields = ('create_time', 'update_time')
 
 
 @admin.register(About)
-class AboutAdmin(admin.ModelAdmin):
+class AboutAdmin(AttachmentReferenceAdminMixin, admin.ModelAdmin):
     list_display = ('content', 'update_time', 'create_time')
     readonly_fields = ('create_time', 'update_time')

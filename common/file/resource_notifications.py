@@ -1,6 +1,7 @@
 import logging
 from datetime import timedelta
 from html import escape
+from types import SimpleNamespace
 from urllib.parse import quote
 
 from django.conf import settings
@@ -60,7 +61,7 @@ def get_resource_upload_result_subject(result):
 
 def _create_outbox(
         *, event_key, upload_request, channel, body, reviewer=None, subject='',
-        available_at=None, aggregation_key=''):
+        available_at=None, aggregation_key='', result_snapshot=None):
     notification, _ = ResourceNotificationOutbox.objects.get_or_create(
         event_key=event_key,
         defaults={
@@ -70,6 +71,7 @@ def _create_outbox(
             'channel': channel,
             'subject': subject,
             'body': body,
+            'result_snapshot': result_snapshot or {},
             'available_at': available_at or timezone.now(),
             'aggregation_key': aggregation_key,
         },
@@ -106,6 +108,13 @@ def queue_resource_upload_notifications(upload_request, *, event, reviewer=None)
     result = RESULT_APPROVED if event == 'approved' else RESULT_REJECTED
     body = build_resource_upload_result_message(upload_request, result)
     subject = get_resource_upload_result_subject(result)
+    snapshot = {
+        'id': upload_request.pk,
+        'revision': upload_request.revision,
+        'result': result,
+        'target_path': upload_request.target_path,
+        'rejection_reason': upload_request.rejection_reason,
+    }
     with transaction.atomic():
         # Serializing per recipient makes the first review result define a
         # stable ten-minute collection window even with multiple workers.
@@ -128,58 +137,62 @@ def queue_resource_upload_notifications(upload_request, *, event, reviewer=None)
                 event_key=f'{base_key}:{channel}', upload_request=upload_request,
                 channel=channel, body=body, subject=subject, reviewer=reviewer,
                 available_at=available_at, aggregation_key=aggregation_key,
+                result_snapshot=snapshot,
             )
 
 
 def build_resource_upload_result_batch(notifications):
-    rejected = []
-    approved = []
-    for notification in notifications:
-        if ':rejected:' in notification.event_key:
-            rejected.append(notification.upload_request)
-        elif ':approved:' in notification.event_key:
-            approved.append(notification.upload_request)
-
     plain_sections = []
     html_sections = []
-    if rejected:
-        upload_url = get_resource_upload_url()
-        plain_sections.append(
-            f'[审核拒绝]\n可在{upload_url}修改/撤回投稿\n'
-            + '\n'.join(
-                build_resource_upload_result_message(upload_request, RESULT_REJECTED)
-                for upload_request in rejected
-            )
+    previous_result = None
+    # Preserve event order: a later revision must not appear before its earlier
+    # rejection simply because notifications are grouped by outcome.
+    for notification in sorted(notifications, key=lambda item: item.pk):
+        snapshot = notification.result_snapshot
+        result = snapshot.get('result') if snapshot else (
+            RESULT_REJECTED if ':rejected:' in notification.event_key else RESULT_APPROVED
         )
+        if result != previous_result:
+            label = '[审核拒绝]' if result == RESULT_REJECTED else '[审核通过]'
+            plain_sections.append(label)
+            html_sections.append(f'<h2 style="font-size: 20px; margin: 24px 0 12px;">{label}</h2>')
+            if result == RESULT_REJECTED:
+                upload_url = get_resource_upload_url()
+                plain_sections.append(f'可在{upload_url}修改/撤回投稿')
+                html_sections.append(
+                    '<p style="font-size: 14px; line-height: 1.7; margin: 8px 0;">'
+                    f'可在<a href="{escape(upload_url, quote=True)}">{escape(upload_url)}</a>修改/撤回投稿</p>'
+                )
+            previous_result = result
+
+        if snapshot:
+            request_snapshot = SimpleNamespace(
+                pk=f'{snapshot["id"]}（第 {snapshot["revision"]} 版）',
+                target_path=snapshot['target_path'],
+                rejection_reason=snapshot['rejection_reason'],
+            )
+            body = build_resource_upload_result_message(request_snapshot, result)
+            if result == RESULT_APPROVED:
+                html_body = (
+                    f'你的资料投稿 #{escape(str(request_snapshot.pk))} 已审核通过并成功发布到 '
+                    f'<a href="{escape(get_resource_public_url(request_snapshot.target_path), quote=True)}">'
+                    f'{escape(request_snapshot.target_path)}</a>。'
+                )
+            else:
+                html_body = escape(body)
+        else:
+            # Rows queued before snapshots were added already retain the exact
+            # event text. Never reconstruct old results from the mutable request.
+            body = notification.body
+            html_body = escape(body)
+        plain_sections.append(body)
         html_sections.append(
-            '<h2 style="font-size: 20px; margin: 24px 0 12px;">[审核拒绝]</h2>'
             '<p style="font-size: 14px; line-height: 1.7; margin: 8px 0;">'
-            f'可在<a href="{escape(upload_url, quote=True)}">{escape(upload_url)}</a>修改/撤回投稿</p>'
-            + ''.join(
-                '<p style="font-size: 14px; line-height: 1.7; margin: 8px 0;">'
-                f'你的资料投稿 #{upload_request.pk} 未通过审核，已退回修改。'
-                f'理由：{escape(upload_request.rejection_reason)}</p>'
-                for upload_request in rejected
-            )
-        )
-    if approved:
-        plain_sections.append('[审核通过]\n' + '\n'.join(
-            build_resource_upload_result_message(upload_request, RESULT_APPROVED)
-            for upload_request in approved
-        ))
-        html_sections.append(
-            '<h2 style="font-size: 20px; margin: 24px 0 12px;">[审核通过]</h2>'
-            + ''.join(
-                '<p style="font-size: 14px; line-height: 1.7; margin: 8px 0;">'
-                f'你的资料投稿 #{upload_request.pk} 已审核通过并成功发布到 '
-                f'<a href="{escape(get_resource_public_url(upload_request.target_path), quote=True)}">'
-                f'{escape(upload_request.target_path)}</a>。</p>'
-                for upload_request in approved
-            )
+            f'{html_body}</p>'
         )
     return (
         f'{settings.WEBSITE_NAME} 资料投稿审核结果',
-        '\n\n'.join(plain_sections),
+        '\n'.join(plain_sections),
         ''.join(html_sections),
     )
 

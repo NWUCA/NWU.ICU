@@ -186,6 +186,58 @@ class ResourceUploadWorkflowTests(TestCase):
             for notification in notifications
         ))
 
+    @patch('common.file.resource_tasks.send_mail')
+    @patch('common.file.resource_tasks.send_direct_message')
+    def test_result_snapshots_survive_resubmission_and_preserve_revision_order(self, send_direct_message, send_mail):
+        request = self.create_request()
+        reject_resource_upload(
+            upload_request_id=request.pk, reviewer=self.reviewer,
+            expected_revision=1, reason='补充 <script>课程</script> 信息',
+        )
+        request.refresh_from_db()
+        request.revision = 2
+        request.rejection_reason = ''
+        request.target_path = '/courses/approved & original'
+        request.save()
+        queue_resource_upload_notifications(request, event='approved', reviewer=self.reviewer)
+        request.revision = 3
+        request.target_path = '/changed-after-review'
+        request.rejection_reason = '新的拒绝理由'
+        request.save()
+        queue_resource_upload_notifications(request, event='rejected', reviewer=self.reviewer)
+        ResourceNotificationOutbox.objects.update(available_at=timezone.now() - timedelta(seconds=1))
+
+        self.assertTrue(process_one_notification())
+        self.assertTrue(process_one_notification())
+        body = send_direct_message.call_args.args[2]
+        html = send_mail.call_args.kwargs['html_message']
+        self.assertIn('补充 <script>课程</script> 信息', body)
+        self.assertIn('/courses/approved & original', body)
+        self.assertLess(body.index('第 1 版'), body.index('第 2 版'))
+        self.assertLess(body.index('第 2 版'), body.index('第 3 版'))
+        self.assertIn('补充 &lt;script&gt;课程&lt;/script&gt; 信息', html)
+        self.assertNotIn('<script>', html)
+        self.assertIn('/disk/courses/approved%20%26%20original', html)
+        self.assertEqual(ResourceNotificationOutbox.objects.filter(status='sent').count(), 6)
+
+    @patch('common.file.resource_tasks.send_mail')
+    @patch('common.file.resource_tasks.send_direct_message')
+    def test_legacy_pending_results_use_saved_body_after_request_changes(self, send_direct_message, send_mail):
+        request = self.create_request()
+        request.rejection_reason = '旧理由 <课程>'
+        queue_resource_upload_notifications(request, event='rejected', reviewer=self.reviewer)
+        ResourceNotificationOutbox.objects.update(
+            result_snapshot={}, available_at=timezone.now() - timedelta(seconds=1),
+        )
+        request.rejection_reason = ''
+        request.revision += 1
+        request.save()
+
+        self.assertTrue(process_one_notification())
+        self.assertTrue(process_one_notification())
+        self.assertIn('旧理由 <课程>', send_direct_message.call_args.args[2])
+        self.assertIn('旧理由 &lt;课程&gt;', send_mail.call_args.kwargs['html_message'])
+
     def test_stale_review_version_is_rejected(self):
         request = self.create_request()
         request.revision += 1

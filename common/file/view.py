@@ -29,6 +29,7 @@ from .resource_blacklist import (
 from .resource_notifications import queue_resource_upload_notifications
 from .resource_access import ResourceAccess
 from .file_dedup import delete_storage_file_if_unreferenced, lock_file_hash
+from .references import file_is_referenced, file_lifecycle
 from .quota import (
     get_upload_quota,
     lock_upload_quota,
@@ -156,14 +157,14 @@ class FileDeleteView(generics.DestroyAPIView):
     permission_classes = [IsAuthenticated]
     lookup_field = 'id'
 
-    @transaction.atomic
+    @file_lifecycle()
     def delete(self, request, *args, **kwargs):
         try:
             instance = UploadedFile.objects.select_for_update().get(pk=kwargs['id'])
             if instance.created_by != request.user and not request.user.is_staff:
                 return return_response(errors={"auth": get_err_msg('auth_error')},
                                        status_code=status.HTTP_403_FORBIDDEN)
-            if instance.ref_count > 0:
+            if file_is_referenced(instance.pk):
                 return return_response(
                     errors={"file": {"err_code": "file_in_use", "err_msg": "文件正在被内容引用，不能删除"}},
                     status_code=status.HTTP_409_CONFLICT,
@@ -188,6 +189,7 @@ class FileUploadView(generics.CreateAPIView):
     parser_classes = (MultiPartParser, FormParser)
     permission_classes = [IsAuthenticated]
 
+    @file_lifecycle()
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
@@ -214,6 +216,7 @@ class FileUpdateView(generics.UpdateAPIView):
     parser_classes = (MultiPartParser, FormParser)
     lookup_field = 'id'
 
+    @file_lifecycle()
     def update(self, request, *args, **kwargs):
         try:
             partial = kwargs.pop('partial', False)
@@ -222,7 +225,7 @@ class FileUpdateView(generics.UpdateAPIView):
                 if instance.created_by != request.user and not request.user.is_staff:
                     return return_response(errors={"auth": get_err_msg('auth_error')},
                                            status_code=status.HTTP_403_FORBIDDEN)
-                if instance.ref_count > 0:
+                if file_is_referenced(instance.pk):
                     return return_response(
                         errors={"file": {"err_code": "file_in_use", "err_msg": "文件正在被内容引用，不能修改"}},
                         status_code=status.HTTP_409_CONFLICT,

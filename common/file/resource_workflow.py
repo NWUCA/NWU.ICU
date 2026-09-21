@@ -6,6 +6,7 @@ from django.utils import timezone
 
 from .models import ResourcePublishJob, ResourceUploadRequest
 from .resource_directories import normalize_directory_path
+from .resource_locks import lock_resource_upload_request
 from .resource_notifications import queue_resource_upload_notifications
 
 
@@ -29,7 +30,7 @@ def approve_resource_upload(*, upload_request_id, reviewer, expected_revision, t
     """Queue a publish job after verifying the review page is still current."""
     target_path = normalize_review_target_path(target_path)
     with transaction.atomic():
-        upload_request = ResourceUploadRequest.objects.select_for_update().get(pk=upload_request_id)
+        upload_request = lock_resource_upload_request(upload_request_id)
         if upload_request.status != ResourceUploadRequest.STATUS_PENDING:
             raise ResourceReviewError('只有待审核投稿可以通过')
         if upload_request.revision != expected_revision:
@@ -60,7 +61,7 @@ def reject_resource_upload(*, upload_request_id, reviewer, expected_revision, re
     if not reason:
         raise ResourceReviewError('拒绝投稿时必须填写理由')
     with transaction.atomic():
-        upload_request = ResourceUploadRequest.objects.select_for_update().get(pk=upload_request_id)
+        upload_request = lock_resource_upload_request(upload_request_id)
         if upload_request.status not in {
             ResourceUploadRequest.STATUS_PENDING,
             ResourceUploadRequest.STATUS_PUBLISH_FAILED,
@@ -83,7 +84,7 @@ def reject_resource_upload(*, upload_request_id, reviewer, expected_revision, re
 def retry_resource_publish(*, upload_request_id, reviewer, expected_revision, target_path):
     target_path = normalize_review_target_path(target_path)
     with transaction.atomic():
-        upload_request = ResourceUploadRequest.objects.select_for_update().get(pk=upload_request_id)
+        upload_request = lock_resource_upload_request(upload_request_id)
         if upload_request.status != ResourceUploadRequest.STATUS_PUBLISH_FAILED:
             raise ResourceReviewError('当前投稿不需要重新发布')
         if upload_request.revision != expected_revision:

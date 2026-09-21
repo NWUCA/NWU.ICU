@@ -1,7 +1,8 @@
-from django.db import connection, transaction
+from django.db import connection
 from django.db.models import Q
 
 from .models import UploadedFile
+from .references import file_lifecycle
 
 
 def lock_file_hash(file_hash):
@@ -22,7 +23,7 @@ def lock_file_hash(file_hash):
 def delete_storage_file_if_unreferenced(file_hash, file_name, storage):
     if not file_name:
         return
-    with transaction.atomic():
+    with file_lifecycle():
         lock_file_hash(file_hash)
         reference_filter = Q(file=file_name)
         if file_hash:

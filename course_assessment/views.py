@@ -22,6 +22,7 @@ from course_assessment.serializer import MyReviewSerializer, AddReviewSerializer
     DeleteReviewReplySerializer, ReviewAndReplyLikeSerializer, AddCourseSerializer, \
     CourseLikeSerializer, AddTeacherSerializer, DeleteReviewSerializer
 from user.models import User
+from common.file.references import ensure_file_references, file_lifecycle
 from common.models import Notification
 from utils.custom_pagination import StandardResultsSetPagination
 from utils.throttle import (
@@ -392,13 +393,14 @@ class ReviewView(APIView):
             return [ReviewWriteRateThrottle()]
         return []
 
+    @file_lifecycle()
     def put(self, request):
         serializer = AddReviewSerializer(data=request.data)
         if serializer.is_valid():
             course = Course.objects.get(id=serializer.data['course'])
             semester = Semeseter.objects.get(id=serializer.data['semester'])
             try:
-                review = Review.objects.get(course=course, created_by=request.user)
+                review = Review.objects.select_for_update().get(course=course, created_by=request.user)
             except Review.DoesNotExist:
                 return return_response(contents={'review': get_err_msg('review_not_exist')},
                                        status_code=HTTP_404_NOT_FOUND)
@@ -408,6 +410,7 @@ class ReviewView(APIView):
             if all(getattr(review, field) == value for field, value in new_values.items()):
                 return return_response(message=get_msg_msg('review_update_success'), contents={'review_id': review.id})
 
+            ensure_file_references(new_values['content'], previous_content=review.content)
             ReviewHistory.objects.create(review=review, content=review.content, is_deleted=False)
             for field in fields_to_update:
                 setattr(review, field, new_values[field])
@@ -418,6 +421,7 @@ class ReviewView(APIView):
         else:
             return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
 
+    @file_lifecycle()
     def post(self, request):
         serializer = AddReviewSerializer(data=request.data)
         if serializer.is_valid():
@@ -426,6 +430,7 @@ class ReviewView(APIView):
             try:
                 review = Review.objects.get(course=course, created_by=request.user)
             except Review.DoesNotExist:
+                ensure_file_references(serializer.validated_data['content'])
                 review = Review.objects.create(
                     course=course,
                     content=serializer.data['content'],
@@ -447,7 +452,7 @@ class ReviewView(APIView):
         else:
             return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
 
-    @transaction.atomic
+    @file_lifecycle()
     def delete(self, request):
         serializer = DeleteReviewSerializer(data=request.data)
         if serializer.is_valid():
@@ -595,10 +600,12 @@ class MyReviewView(GenericAPIView):
             if view_type == 'review':
                 query_set = (
                     Review.objects.filter(created_by=lookup_user_id)
-                    .order_by(('-' if desc == '1' else '') + 'modify_time')
+                    .order_by(('-' if desc == '1' else '') + 'modify_time', 'pk')
                     .select_related('created_by', 'course', 'semester')
                     .prefetch_related('course__teachers')
                 )
+                if not is_me:
+                    query_set = query_set.filter(anonymous=False)
             else:
                 query_set = (
                     ReviewReply.objects.filter(created_by=lookup_user_id)
@@ -781,7 +788,7 @@ class ReviewReplyView(APIView):
         serializer = DeleteReviewReplySerializer(data=request.data)
         if serializer.is_valid():
             try:
-                review = Review.objects.get(id=serializer.validated_data['review_id'])
+                review = Review.all_objects.get(id=serializer.validated_data['review_id'])
             except Review.DoesNotExist:
                 return return_response(errors={'review': get_err_msg('review_not_exist')},
                                        status_code=status.HTTP_404_NOT_FOUND)

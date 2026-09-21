@@ -15,5 +15,4 @@ class UserAdmin(admin.ModelAdmin):
         'is_superuser',
         'is_staff',
         'name',
-        'cookie_last_update',
     )

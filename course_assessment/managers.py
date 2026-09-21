@@ -78,7 +78,7 @@ class SearchQuerySet(models.QuerySet):
         ).annotate(
             rank=TrigramSimilarity(query_table_name, query) +
                  TrigramSimilarity('pinyin', pinyin_query)
-        ).order_by('-rank')
+        ).order_by('-rank', 'pk')
 
         if select_related_fields:
             queryset = queryset.select_related(*select_related_fields)

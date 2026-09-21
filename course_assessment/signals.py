@@ -1,9 +1,10 @@
 from enum import Enum
+from functools import partial
 from uuid import UUID
 
 from django.contrib.postgres.search import SearchVector
 from django.core.cache import cache
-from django.db.models import Avg, Sum, Count
+from django.db import transaction
 from django.db.models.signals import post_save, post_delete, pre_save
 from django.dispatch import receiver
 from pypinyin import lazy_pinyin
@@ -12,39 +13,16 @@ from common.models import Notification
 from common.signals import soft_delete_signal
 from utils.utils import get_cache_key, get_user_avatar_info
 from .models import Review, Course, ReviewAndReplyLike, CourseLike, Teacher, ReviewReply
+from .ratings import recalculate_course_ratings
 
 
 @receiver([post_save, post_delete], sender=Review)
-def update_course_average_rating(sender, instance, **kwargs):
-    course = instance.course
-    reviews = Review.objects.filter(course=course)
-    average_rating = reviews.aggregate(Avg('rating'))['rating__avg'] or 0.0
-    course.average_rating = average_rating
-    course.save()
-
-
-@receiver([post_save, post_delete], sender=Review)
-def update_course_normalized_avg_rating(sender, instance, **kwargs):
-    course = instance.course
-    reviews = Review.objects.filter(course=course)
-    average_rating = reviews.aggregate(Avg('rating'))['rating__avg'] or 0.0
-
-    # 计算归一化平均分
-    total_courses = Course.objects.filter(review__isnull=False).distinct().count()
-    site_avg_rating = Review.objects.aggregate(Avg('rating'))['rating__avg'] or 0.0
-    site_avg_reviews_count = Review.objects.values('course').annotate(count=Count('id')).aggregate(Avg('count'))[
-                                 'count__avg'] or 0.0
-
-    if total_courses > 0 and site_avg_reviews_count > 0:
-        normalized_rating = (((reviews.aggregate(Sum('rating'))['rating__sum'] or 0) +
-                              (site_avg_rating * site_avg_reviews_count)) /
-                             (reviews.count() + site_avg_reviews_count))
-    else:
-        normalized_rating = average_rating  # 如果没有全站数据，用课程自身平均分
-
-    course.average_rating = average_rating
-    course.normalized_rating = normalized_rating
-    course.save()
+def update_course_ratings(sender, instance, using, raw=False, **kwargs):
+    if not raw:
+        # Soft deletion/restoration call save(), so they use this same path.
+        # Waiting for commit avoids locking course rows while another review
+        # transaction still owns them and ensures every callback sees committed data.
+        transaction.on_commit(partial(recalculate_course_ratings, using=using), using=using)
 
 
 def update_review_reply_like_dislike_counts(instance):
@@ -75,7 +53,7 @@ def update_course_like_dislike_counts(instance):
     course = instance.course
     course.like_count = CourseLike.objects.filter(course=course, like=1).count()
     course.dislike_count = CourseLike.objects.filter(course=course, like=-1).count()
-    course.save()
+    course.save(update_fields=('like_count', 'dislike_count'))
 
 
 def update_chat_like_counts(instance: ReviewAndReplyLike, sender):
@@ -210,7 +188,7 @@ def review_created(sender, instance, **kwargs):
     course.semester.set(semesters)
     course.review_count = Review.objects.filter(course=course).count()
     course.last_review_time = instance.modify_time
-    course.save()
+    course.save(update_fields=('review_count', 'last_review_time'))
 
 
 @receiver(pre_save, sender=Teacher)
