@@ -189,3 +189,35 @@ class FileUploadSecurityTests(APITestCase):
         self.assertEqual(accepted.data['contents']['avatar'], own_uuid)
         self.assertTrue(accepted.data['contents']['has_avatar'])
         self.assertEqual(rejected.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_uploaded_images_are_cached_as_immutable_but_generic_files_are_not(self):
+        for file_type in ('avatar', 'img'):
+            with self.subTest(file_type=file_type):
+                upload = self.client.post(
+                    self.upload_url,
+                    {'file': self.png_file(f'{file_type}.png'), 'file_type': file_type},
+                    format='multipart',
+                )
+                response = self.client.get(
+                    reverse('api:file-download', args=[upload.data['contents']['uuid']])
+                )
+                self.addCleanup(response.close)
+
+                self.assertEqual(response.status_code, status.HTTP_200_OK)
+                self.assertEqual(
+                    response['Cache-Control'],
+                    'public, max-age=31536000, immutable',
+                )
+
+        upload = self.client.post(
+            self.upload_url,
+            {'file': SimpleUploadedFile('notes.txt', b'plain text'), 'file_type': 'file'},
+            format='multipart',
+        )
+        response = self.client.get(
+            reverse('api:file-download', args=[upload.data['contents']['uuid']])
+        )
+        self.addCleanup(response.close)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertNotIn('Cache-Control', response)
