@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+umask 077
+
+readonly remote_host="root@resour.nwu.icu"
+readonly remote_root="/root/nwuicuBack/daily"
+readonly local_root="/opt/nwuicu-db-backups"
+readonly backup_root="${local_root}/backups"
+readonly identity_file="/root/.ssh/id_rsa_nwu"
+
+readonly -a ssh_options=(
+    -i "${identity_file}"
+    -o BatchMode=yes
+    -o ConnectTimeout=20
+    -o StrictHostKeyChecking=yes
+)
+
+install -d -m 700 "${local_root}" "${backup_root}" "${local_root}/logs"
+
+exec 9>"${local_root}/download.lock"
+if ! flock -n 9; then
+    echo "Another NWU.ICU backup download is already running; skipping." >&2
+    exit 0
+fi
+
+echo "Looking for the latest production database backup at $(date --iso-8601=seconds)."
+
+latest="$({
+    ssh "${ssh_options[@]}" "${remote_host}" \
+        'find /root/nwuicuBack/daily -mindepth 1 -maxdepth 1 -type d -printf "%f\n" | grep -v "^\.incomplete_" | sort | tail -n 1'
+} | tr -d '\r')"
+
+if [[ ! "${latest}" =~ ^[0-9]{8}_[0-9]{6}$ ]]; then
+    echo "The production server did not return a valid backup timestamp: ${latest:-<empty>}" >&2
+    exit 1
+fi
+
+final_dir="${backup_root}/${latest}"
+if [[ -d "${final_dir}" ]]; then
+    (
+        cd "${final_dir}"
+        sha256sum --quiet -c SHA256SUMS
+    )
+    echo "Latest backup ${latest} is already present and valid; nothing to download."
+    exit 0
+fi
+
+work_dir="$(mktemp -d "${backup_root}/.incoming_${latest}.XXXXXX")"
+cleanup() {
+    if [[ -n "${work_dir:-}" && -d "${work_dir}" ]]; then
+        rm -rf -- "${work_dir}"
+    fi
+}
+trap cleanup EXIT
+
+scp "${ssh_options[@]}" -rp \
+    "${remote_host}:${remote_root}/${latest}/." \
+    "${work_dir}/"
+
+test -s "${work_dir}/SHA256SUMS"
+test "$(find "${work_dir}" -maxdepth 1 -type f -name '*.dump' | wc -l)" -eq 1
+test "$(find "${work_dir}" -maxdepth 1 -type f -name '*.list' | wc -l)" -eq 1
+
+(
+    cd "${work_dir}"
+    sha256sum -c SHA256SUMS
+)
+
+chmod -R go-rwx "${work_dir}"
+mv -- "${work_dir}" "${final_dir}"
+work_dir=""
+
+echo "Downloaded and verified production backup ${latest} at ${final_dir}."

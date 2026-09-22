@@ -370,6 +370,34 @@ docker compose --env-file /etc/nwuicu/production.env \
   up -d --no-deps --no-build cron
 ```
 
+数据库全量备份由宿主机的 `nwuicu-db-backup.timer` 管理，每天 04:00（`Asia/Shanghai`）
+执行。备份写入 `/root/nwuicuBack/daily/<timestamp>/`，每次包含 PostgreSQL 自定义格式
+dump、`pg_restore --list` 对象清单、元数据和 `SHA256SUMS`。timer 使用
+`Persistent=true`，服务器错过执行时间时会在下次启动后补跑；它不会自动删除历史备份。
+
+安装或更新任务：
+
+```bash
+install -m 0755 deploy/nwuicu-db-backup /usr/local/sbin/nwuicu-db-backup
+install -m 0644 deploy/systemd/nwuicu-db-backup.service \
+  /etc/systemd/system/nwuicu-db-backup.service
+install -m 0644 deploy/systemd/nwuicu-db-backup.timer \
+  /etc/systemd/system/nwuicu-db-backup.timer
+systemctl daemon-reload
+systemctl enable --now nwuicu-db-backup.timer
+```
+
+安装后先手工执行并验证一次：
+
+```bash
+systemctl start nwuicu-db-backup.service
+systemctl status --no-pager nwuicu-db-backup.service
+systemctl list-timers --all nwuicu-db-backup.timer
+latest=$(find /root/nwuicuBack/daily -mindepth 1 -maxdepth 1 -type d \
+  ! -name '.incomplete_*' -printf '%f\n' | sort | tail -1)
+(cd "/root/nwuicuBack/daily/$latest" && sha256sum -c SHA256SUMS)
+```
+
 ## 11. 验收与观察
 
 至少检查：
@@ -423,6 +451,21 @@ test -z "$(swapon --show=NAME --noheadings)"
 - 不自动删除旧发布目录、旧镜像和备份。
 
 ## 13. 当前发布记录
+
+2026-09-22 collation 维护：
+
+```text
+处理前快照：/root/nwuicuBack/daily/20260922_190303
+NAS 副本：/opt/nwuicu-db-backups/backups/20260922_190303
+维护记录：/root/nwuicuBack/collation_20260922_190836
+```
+
+生产 PostgreSQL 17.11 的 glibc collation 从 2.36 变为 2.41。处理前完整读取并校验
+自定义格式快照，且 NAS 副本的 `SHA256SUMS` 文件哈希与服务器一致。维护期间两个域名返回
+503，停止 `web`、`cron` 和 `resource-worker`，保持 `pgsql` 运行；随后执行
+`REINDEX DATABASE mynwuicu`，并刷新 `mynwuicu`、`postgres` 与 `template1` 的 collation
+版本。验收时三个数据库的记录版本和实际版本均为 2.41，应用库无无效索引，所有容器
+重启次数为 0，OpenResty 配置已恢复且与维护前备份一致。
 
 2026-09-22 发布：
 

@@ -1,0 +1,4 @@
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+30 4 * * * root /opt/nwuicu-db-backups/download-latest.sh >> /opt/nwuicu-db-backups/logs/download-$(date +\%F).log 2>&1

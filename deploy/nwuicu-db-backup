@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+umask 077
+
+readonly container_name="pgsql"
+readonly backup_root="/root/nwuicuBack/daily"
+readonly timestamp="$(date +%Y%m%d_%H%M%S)"
+readonly work_dir="${backup_root}/.incomplete_${timestamp}"
+readonly final_dir="${backup_root}/${timestamp}"
+readonly dump_name="nwuicu_full_${timestamp}.dump"
+readonly list_name="nwuicu_full_${timestamp}.list"
+
+exec 9>/run/lock/nwuicu-db-backup.lock
+if ! flock -n 9; then
+    echo "Another NWU.ICU database backup is already running; skipping." >&2
+    exit 0
+fi
+
+install -d -m 700 "${backup_root}"
+install -d -m 700 "${work_dir}"
+
+db_user="$(docker exec "${container_name}" printenv POSTGRES_USER)"
+db_name="$(docker exec "${container_name}" printenv POSTGRES_DB)"
+test -n "${db_user}"
+test -n "${db_name}"
+
+echo "Starting full PostgreSQL backup for ${db_name} at $(date --iso-8601=seconds)."
+
+docker exec "${container_name}" \
+    pg_dump -U "${db_user}" -d "${db_name}" \
+    -Fc --no-owner --no-privileges \
+    > "${work_dir}/${dump_name}"
+test -s "${work_dir}/${dump_name}"
+
+docker exec -i "${container_name}" pg_restore --list \
+    < "${work_dir}/${dump_name}" \
+    > "${work_dir}/${list_name}"
+test -s "${work_dir}/${list_name}"
+
+cat > "${work_dir}/metadata.txt" <<EOF
+created_at=$(date --iso-8601=seconds)
+container=${container_name}
+database=${db_name}
+format=PostgreSQL custom archive
+EOF
+
+(
+    cd "${work_dir}"
+    sha256sum "${dump_name}" "${list_name}" metadata.txt > SHA256SUMS
+    sha256sum -c SHA256SUMS
+)
+
+mv -- "${work_dir}" "${final_dir}"
+echo "Completed full PostgreSQL backup at ${final_dir}."

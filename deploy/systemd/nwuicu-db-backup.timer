@@ -1,0 +1,12 @@
+[Unit]
+Description=Create a full NWU.ICU PostgreSQL backup every day at 04:00
+
+[Timer]
+OnCalendar=*-*-* 04:00:00
+Persistent=true
+AccuracySec=1min
+RandomizedDelaySec=0
+Unit=nwuicu-db-backup.service
+
+[Install]
+WantedBy=timers.target
