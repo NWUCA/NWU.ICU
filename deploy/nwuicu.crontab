@@ -1,0 +1,3 @@
+0 0 * * * cd /app && python manage.py update_semester
+15 3 * * * cd /app && python manage.py clean_approved_resource_uploads
+30 3 * * * cd /app && python manage.py clean_expired_resource_uploads

@@ -7,6 +7,7 @@ x-backend-service: &backend-service
     - ${ENV_FILE:-.env.production}
   environment:
     DJANGO_SETTINGS_MODULE: settings.settings
+    TZ: ${TZ:-Asia/Shanghai}
     DB_HOST: db
     DB_PORT: 5432
     RESOURCE_DIRECTORY_CACHE_FILE: /app/data/resource_directories.json
@@ -62,7 +63,7 @@ services:
         - CMD
         - python
         - -c
-        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/user/csrf/', timeout=3)"
+        - "import urllib.request; request = urllib.request.Request('http://127.0.0.1:8000/api/user/csrf/', headers={'Host': 'nwu.icu', 'X-Forwarded-Proto': 'https'}); urllib.request.urlopen(request, timeout=3)"
       interval: 15s
       timeout: 5s
       retries: 10
@@ -70,8 +71,7 @@ services:
 
   cron:
     <<: *backend-service
-    command: >-
-      bash -c "printf '0 0 * * * cd /app && python manage.py update_semester\n15 3 * * * cd /app && python manage.py clean_approved_resource_uploads\n30 3 * * * cd /app && python manage.py clean_expired_resource_uploads\n' > /app/crontab && supercronic /app/crontab"
+    command: ["supercronic", "/app/deploy/nwuicu.crontab"]
 
   resource-worker:
     <<: *backend-service
