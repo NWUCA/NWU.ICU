@@ -610,7 +610,10 @@ class FileDownloadView(APIView):
             return return_response(errors={"file": get_err_msg('file_not_exist')},
                                    status_code=status.HTTP_404_NOT_FOUND)
         response['Content-Disposition'] = f'attachment; filename="{file_instance.file.name}"'
-        if file_instance.file_type in {'avatar', 'img'}:
+        if (
+            file_instance.file_type in {'avatar', 'img'}
+            or response.get('Content-Type', '').startswith('image/')
+        ):
             # Image URLs are UUID-based and a replacement gets a new UUID, so
             # clients can safely keep these immutable resources long-term.
             response['Cache-Control'] = 'public, max-age=31536000, immutable'

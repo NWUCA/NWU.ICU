@@ -209,6 +209,22 @@ class FileUploadSecurityTests(APITestCase):
                     'public, max-age=31536000, immutable',
                 )
 
+        legacy_image = self.client.post(
+            self.upload_url,
+            {'file': self.png_file('legacy.png'), 'file_type': 'file'},
+            format='multipart',
+        )
+        legacy_image_response = self.client.get(
+            reverse('api:file-download', args=[legacy_image.data['contents']['uuid']])
+        )
+        self.addCleanup(legacy_image_response.close)
+
+        self.assertEqual(legacy_image_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            legacy_image_response['Cache-Control'],
+            'public, max-age=31536000, immutable',
+        )
+
         upload = self.client.post(
             self.upload_url,
             {'file': SimpleUploadedFile('notes.txt', b'plain text'), 'file_type': 'file'},
