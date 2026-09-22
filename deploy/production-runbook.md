@@ -56,6 +56,7 @@ Docker 只发布以下回环端口，不要改成 `0.0.0.0`：
 5. `/media/` 在 gateway 层固定返回 404。
 
 因此前端更新需要重建 gateway 镜像，不要把 `dist/` 手工复制到 1Panel 站点目录。
+gateway 构建时必须注入本次前后端完整提交号，页脚据此显示实际构建版本。
 
 ## 3. 每次更新前的本地准备
 
@@ -82,7 +83,9 @@ git rev-parse HEAD
 RELEASE_ID=$(date +%Y%m%d_%H%M%S)
 BACKEND_COMMIT=<完整后端提交号>
 FRONTEND_COMMIT=<完整前端提交号>
-RELEASE=/opt/nwuicu/releases/$RELEASE_ID
+BACKEND_TAG=$(printf '%s' "$BACKEND_COMMIT" | cut -c1-8)
+FRONTEND_TAG=$(printf '%s' "$FRONTEND_COMMIT" | cut -c1-8)
+RELEASE=/opt/nwuicu/releases/${RELEASE_ID}_${BACKEND_TAG}_${FRONTEND_TAG}
 ```
 
 从现有仓库读取 origin，但把代码检出到新目录：
@@ -141,6 +144,7 @@ server override；不要临时关闭 `SECURE_SSL_REDIRECT`。
 
 ```bash
 cd "$RELEASE/NWU.ICU"
+export ENV_FILE=/etc/nwuicu/production.env
 docker compose \
   --env-file /etc/nwuicu/production.env \
   -f docker-compose.production.yaml \
@@ -158,19 +162,30 @@ docker compose \
 ```bash
 export COMPOSE_PARALLEL_LIMIT=1
 
+test ! -e /swapfile
+fallocate -l 4G /swapfile
+chmod 600 /swapfile
+mkswap /swapfile
+swapon /swapfile
+swapon --show
+
 docker compose --env-file /etc/nwuicu/production.env \
   -f docker-compose.production.yaml -f ../docker-compose.server.yaml \
   build web
 
 docker compose --env-file /etc/nwuicu/production.env \
   -f docker-compose.production.yaml -f ../docker-compose.server.yaml \
-  build gateway
+  build \
+  --build-arg FRONTEND_COMMIT="$FRONTEND_COMMIT" \
+  --build-arg BACKEND_COMMIT="$BACKEND_COMMIT" \
+  gateway
 ```
 
 构建失败时不要进入维护状态。网络下载失败可以只重试失败的镜像。
 
-不要长期保留 Swap。只有确有内存压力时才临时创建，并在发布稳定后执行 `swapoff` 再删除；
-不要写入 `/etc/fstab`。
+不要把 Swap 写入 `/etc/fstab`。发布稳定且 `free -h` 显示的 available 内存足以容纳
+`swapon --show` 的 used 数量后，执行 `swapoff /swapfile`，删除 `/swapfile` 并再次确认
+`swapon --show` 为空。
 
 ## 7. 进入维护与制作快照
 
@@ -183,8 +198,11 @@ docker compose --env-file /etc/nwuicu/production.env \
 BACKUP_DIR=/root/nwuicuBack/predeploy_$RELEASE_ID
 install -d -m 700 "$BACKUP_DIR"
 
-docker exec pgsql sh -lc \
-  'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc --no-owner --no-privileges' \
+DB_USER=$(docker exec pgsql printenv POSTGRES_USER)
+DB_NAME=$(docker exec pgsql printenv POSTGRES_DB)
+
+docker exec pgsql pg_dump -U "$DB_USER" -d "$DB_NAME" \
+  -Fc --no-owner --no-privileges \
   > "$BACKUP_DIR/nwuicu_full_pre_migration_$RELEASE_ID.dump"
 
 docker exec -i pgsql pg_restore --list \
@@ -305,6 +323,9 @@ location ^~ /media/ {
 }
 ```
 
+`/etc/nwuicu/production.env` 的 `ALLOWED_HOSTS` 必须包含 `api.nwu.icu`；修改前将该文件以
+`0600` 权限复制到本次备份目录。环境文件内容变化后要重建 `web` 容器才能生效。
+
 修改前先备份四个文件。每次必须先检查、后重载：
 
 ```bash
@@ -372,7 +393,26 @@ docker compose --env-file /etc/nwuicu/production.env \
 docker compose --env-file /etc/nwuicu/production.env \
   -f docker-compose.production.yaml -f ../docker-compose.server.yaml \
   logs --since 15m web gateway resource-worker cron
+
+docker inspect nwuicu-web-1 nwuicu-gateway-1 nwuicu-resource-worker-1 nwuicu-cron-1 \
+  --format '{{.Name}} restarts={{.RestartCount}} image={{.Config.Image}}'
+
+docker exec nwuicu-gateway-1 sh -lc \
+  "grep -R -q '$FRONTEND_COMMIT' /usr/share/nginx/html/assets && \
+   grep -R -q '$BACKEND_COMMIT' /usr/share/nginx/html/assets"
+
+curl -fsS https://nwu.icu/api/user/csrf/ > /dev/null
+curl -fsS https://api.nwu.icu/api/user/csrf/ > /dev/null
+
+free -h
+swapon --show
+swapoff /swapfile
+rm -f /swapfile
+test -z "$(swapon --show=NAME --noheadings)"
 ```
+
+确认四个容器的重启次数均为 0、gateway 静态资源包含两个完整提交号、两个域名的 CSRF
+接口均为 200，并且临时 Swap 已移除。
 
 ## 12. 回滚边界
 
@@ -383,6 +423,21 @@ docker compose --env-file /etc/nwuicu/production.env \
 - 不自动删除旧发布目录、旧镜像和备份。
 
 ## 13. 当前发布记录
+
+2026-09-22 发布：
+
+```text
+发布目录：/opt/nwuicu/releases/20260922_2f450fe_944a505
+后端：2f450fe02d3ded383e7f0d87d2efe68b74ef5fa1
+前端：944a5058c58b4458240da91cfe5698df8cd029ea
+后端镜像：nwuicu-web:2f450fe0
+gateway 镜像：nwuicu-gateway:2f450fe0-944a5058
+数据库卷：nwuicu_pgdata
+数据库快照：/root/nwuicuBack/update_20260922_180901
+```
+
+本次发布应用了 `management_panel.0002_telegramnotificationsettings`，并在备份生产环境文件后
+将 `api.nwu.icu` 加入 `ALLOWED_HOSTS`。构建使用 4GB 临时 Swap，验收后已关闭并删除。
 
 2026-09-08 发布：
 
