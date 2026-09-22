@@ -2,6 +2,7 @@ from django.conf import settings
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
+from unittest.mock import patch
 
 from guestbook.models import GuestbookEntry, GuestbookLike, GuestbookReport
 from common.models import Notification
@@ -31,11 +32,13 @@ class GuestbookApiTests(APITestCase):
             status.HTTP_401_UNAUTHORIZED,
         )
 
-        response = self.author_client.post(reverse('api:guestbook'), {
-            'content': '<p><strong>hello</strong><script>discarded</script></p>',
-            'anonymous': False,
-        }, format='json')
+        with patch('guestbook.views.notify_guestbook_entry_telegram') as notify:
+            response = self.author_client.post(reverse('api:guestbook'), {
+                'content': '<p><strong>hello</strong><script>discarded</script></p>',
+                'anonymous': False,
+            }, format='json')
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        notify.assert_called_once()
         entry = response.data['contents']['entry']
         self.assertEqual(entry['content'], '<p><strong>hello</strong></p>')
         self.assertEqual(entry['author']['nickname'], self.author.nickname)
@@ -113,8 +116,10 @@ class GuestbookApiTests(APITestCase):
 
     def test_reply_tree_context_and_soft_deletion(self):
         root = GuestbookEntry.objects.create(author=self.author, content='<p>root</p>')
-        first = self.reader_client.post(self.replies_url(root), {'content': '<p>first</p>'}, format='json')
+        with patch('guestbook.views.notify_guestbook_reply_telegram') as notify:
+            first = self.reader_client.post(self.replies_url(root), {'content': '<p>first</p>'}, format='json')
         self.assertEqual(first.status_code, status.HTTP_201_CREATED)
+        notify.assert_called_once()
         first_entry = GuestbookEntry.objects.get(id=first.data['contents']['entry']['id'])
         second = self.author_client.post(self.replies_url(first_entry), {'content': '<p>second</p>'}, format='json')
         self.assertEqual(second.status_code, status.HTTP_201_CREATED)

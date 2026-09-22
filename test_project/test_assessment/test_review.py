@@ -5,6 +5,7 @@ from django.db import IntegrityError, transaction
 from django.test import override_settings
 from django.urls import reverse
 from rest_framework.test import APITestCase, APIClient
+from unittest.mock import patch
 
 from course_assessment.models import (
     ReviewAndReplyLike,
@@ -59,7 +60,9 @@ class ReviewTests(APITestCase):
             "reward": 1,
             "semester": 1
         }
-        add_review_response = self.client.post(self.review_url, review_data)
+        with patch('course_assessment.views.notify_course_review') as notify:
+            add_review_response = self.client.post(self.review_url, review_data)
+        notify.assert_called_once()
         latest_review_list_response = self.client.get(self.review_list_url)
         course_response = self.client.get(reverse('api:course', args=[self.course_id]))
         self.assertEqual(add_review_response.data['contents']['review_id'],
@@ -111,13 +114,15 @@ class ReviewTests(APITestCase):
         reply_client = APIClient()
         reply_client.force_authenticate(user=reply_user)
 
-        response = reply_client.post(reverse('api:add_reply'), {
-            'review_id': review_id,
-            'parent_id': 0,
-            'content': 'reply from another user',
-        })
+        with patch('course_assessment.views.notify_course_review_reply') as notify:
+            response = reply_client.post(reverse('api:add_reply'), {
+                'review_id': review_id,
+                'parent_id': 0,
+                'content': 'reply from another user',
+            })
 
         self.assertEqual(response.status_code, 201)
+        notify.assert_called_once()
         notification = Notification.objects.get(
             dedupe_key=f'reply:{response.data["contents"]["reply_id"]}:{self.user.id}',
         )

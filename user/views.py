@@ -16,6 +16,7 @@ from rest_framework.status import HTTP_200_OK, HTTP_400_BAD_REQUEST, HTTP_403_FO
 from rest_framework.views import APIView
 
 from common.file.references import file_lifecycle
+from management_panel.telegram_notifications import notify_user_registered, send_mail_with_telegram_alert
 import utils.utils
 from utils.throttle import EmailAnonRateThrottle, EmailUserRateThrottle, EmailAddressRateThrottle, \
     LoginIPRateThrottle, RegisterAttemptRateThrottle, browser_identity, check_login_attempt, \
@@ -81,12 +82,14 @@ class RegisterView(APIView):
                 contents={"email": email, 'token': token, 'link': active_link})
         else:
             logger.info(f'send activation email to {user.id}:{user.email}')
-            send_mail(
+            send_mail_with_telegram_alert(
+                send_mail,
                 subject=mail_subject,
                 message=f'Hello {user.username}, 请访问以下页面来完成账号激活: {active_link}',
                 from_email=settings.EMAIL_HOST_USER,
                 recipient_list=[email],
                 html_message=html_message,
+                alert_context='用户注册激活邮件',
             )
         return return_response(message=get_msg_msg('has_sent_email'))
 
@@ -104,6 +107,7 @@ class RegisterView(APIView):
             user.nickname = utils.utils.userUtils.generate_random_nickname()
             user.avatar_uuid = settings.DEFAULT_USER_AVATAR_UUID
             user.save()
+            notify_user_registered(user)
             return self.send_active_email(user, request)
         else:
             return return_response(errors=serializer.errors, status_code=HTTP_400_BAD_REQUEST)
@@ -182,12 +186,14 @@ class PasswordResetView(APIView):
                 )
             else:
                 logger.info(f"send reset password email to {user.id}:{user.email}")
-                send_mail(
+                send_mail_with_telegram_alert(
+                    send_mail,
                     subject=mail_subject,
                     message=f'Hello {user.nickname}, 请访问以下页面来设置一个新密码: {reset_link}',
                     from_email=settings.EMAIL_HOST_USER,
                     recipient_list=[user.email],
                     html_message=html_message,
+                    alert_context='密码重置邮件',
                 )
                 return return_response(message=get_msg_msg('password_reset_email_sent'))
         logger.error(get_err_msg('send_reset_password_email_error') + str(serializer.errors))
@@ -444,12 +450,14 @@ class BindCollegeEmailView(APIView):
                 return return_response(message="You are in debug mode, so do not send email",
                                        contents={"email": college_email, 'token': token, 'link': bind_link})
             else:
-                send_mail(
+                send_mail_with_telegram_alert(
+                    send_mail,
                     subject=mail_subject,
                     message=f'Hello {user.username}, 请访问以下页面来完成邮箱绑定: {bind_link}',
                     from_email=settings.EMAIL_HOST_USER,
                     recipient_list=[college_email],
                     html_message=html_message,
+                    alert_context='绑定学校邮箱邮件',
                 )
             return return_response(message=get_msg_msg('has_sent_email'), status_code=HTTP_200_OK)
         else:

@@ -24,6 +24,7 @@ from course_assessment.serializer import MyReviewSerializer, AddReviewSerializer
 from user.models import User
 from common.file.references import ensure_file_references, file_lifecycle
 from common.models import Notification
+from management_panel.telegram_notifications import notify_course_review, notify_course_review_reply
 from utils.custom_pagination import StandardResultsSetPagination
 from utils.throttle import (
     InteractionAnonRateThrottle,
@@ -446,6 +447,7 @@ class ReviewView(APIView):
                 )
                 if semester not in course.semester.all():
                     course.semester.add(semester)
+                notify_course_review(review)
                 return return_response(message=get_msg_msg('review_create_success'), contents={'review_id': review.id})
             return return_response(contents={'review': review.id}, errors={'review': get_err_msg('review_has_exist')},
                                    status_code=HTTP_404_NOT_FOUND)
@@ -778,6 +780,7 @@ class ReviewReplyView(APIView):
                 content=serializer.validated_data['content'],
                 created_by=request.user
             )
+            notify_course_review_reply(reply)
             return return_response(message='成功创建课程评价回复', contents={'reply_id': reply.id},
                                    status_code=status.HTTP_201_CREATED)
         else:

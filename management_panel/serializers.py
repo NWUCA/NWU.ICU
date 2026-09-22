@@ -43,3 +43,10 @@ class ResourceReviewSerializer(serializers.Serializer):
         if attrs['action'] == 'reject' and not attrs.get('reason', '').strip():
             raise serializers.ValidationError({'reason': '拒绝投稿时必须填写理由'})
         return attrs
+
+
+class TelegramNotificationSettingsSerializer(serializers.Serializer):
+    user_registration_enabled = serializers.BooleanField()
+    guestbook_entry_enabled = serializers.BooleanField()
+    course_review_enabled = serializers.BooleanField()
+    reply_enabled = serializers.BooleanField()

@@ -49,7 +49,12 @@ from utils.custom_pagination import StandardResultsSetPagination
 from utils.utils import return_response
 
 from .exceptions import PasskeyCeremonyError, PasskeyNotEnrolled
-from .models import AdminPasskeyCredential, AdminPasskeyEnrollment, AdminPasskeyState
+from .models import (
+    AdminPasskeyCredential,
+    AdminPasskeyEnrollment,
+    AdminPasskeyState,
+    TelegramNotificationSettings,
+)
 from .security import (
     CEREMONY_KEY,
     decode_bytes,
@@ -65,6 +70,7 @@ from .serializers import (
     ReportResolutionSerializer,
     ResourceReviewSerializer,
     ResourceUploadBlacklistSerializer,
+    TelegramNotificationSettingsSerializer,
 )
 from .throttles import AdminPasskeyIPThrottle, AdminPasskeyUserThrottle
 
@@ -121,6 +127,9 @@ def _permission_flags(user):
         'publish_announcements': user.has_perm('guestbook.publish_announcements'),
         'review_resource_uploads': user.has_perm('common.review_resource_uploads'),
         'manage_resource_files': user.has_perm('common.manage_resource_files'),
+        'manage_telegram_notifications': user.has_perm(
+            'management_panel.change_telegramnotificationsettings'
+        ),
     }
 
 
@@ -164,6 +173,29 @@ class ManagementSessionView(ManagementAPIView):
             'elevated_until': until,
             'permissions': _permission_flags(request.user),
         })
+
+
+class ManagementTelegramNotificationSettingsView(ManagementAPIView):
+    required_permission = 'management_panel.change_telegramnotificationsettings'
+
+    @staticmethod
+    def _contents(instance):
+        return TelegramNotificationSettingsSerializer(instance).data
+
+    def get(self, request):
+        instance, _ = TelegramNotificationSettings.objects.get_or_create(pk=1)
+        return return_response(contents=self._contents(instance))
+
+    @transaction.atomic
+    def post(self, request):
+        serializer = TelegramNotificationSettingsSerializer(data=request.data)
+        if not serializer.is_valid():
+            return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
+        instance, _ = TelegramNotificationSettings.objects.select_for_update().get_or_create(pk=1)
+        for field, value in serializer.validated_data.items():
+            setattr(instance, field, value)
+        instance.save(update_fields=(*serializer.validated_data.keys(), 'updated_at'))
+        return return_response(message='Telegram 通知设置已保存', contents=self._contents(instance))
 
 
 class PasskeyAuthenticationOptionsView(PasskeyAPIView):

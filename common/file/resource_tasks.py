@@ -9,6 +9,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from common.messaging import send_direct_message
+from management_panel.telegram_notifications import send_mail_with_telegram_alert
 from settings.log import TelegramBotHandler
 from user.models import User
 
@@ -178,9 +179,12 @@ def _deliver(notifications):
         recipient = notification.recipient.email or notification.recipient.college_email
         if not recipient:
             raise ValueError('用户没有可用邮箱')
-        send_mail(
+        send_mail_with_telegram_alert(
+            send_mail,
             subject, body, settings.EMAIL_HOST_USER, [recipient],
             fail_silently=False, html_message=html_body,
+            alert_context=f'资料投稿审核结果邮件（通知 {notification.pk}）',
+            alert_on_failure=notification.attempts == 0,
         )
         return
     raise ValueError('未知通知渠道')

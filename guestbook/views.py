@@ -9,6 +9,10 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from utils.custom_pagination import StandardResultsSetPagination
 from utils.throttle import GuestbookWriteRateThrottle, InteractionUserRateThrottle, ReplyWriteRateThrottle
 from utils.utils import get_user_avatar_info, return_response
+from management_panel.telegram_notifications import (
+    notify_guestbook_entry as notify_guestbook_entry_telegram,
+    notify_guestbook_reply as notify_guestbook_reply_telegram,
+)
 
 from .models import GuestbookEntry, GuestbookLike, GuestbookReport
 from .notifications import notify_guestbook_like, notify_guestbook_reply
@@ -123,7 +127,9 @@ class GuestbookListView(GenericAPIView):
         data = serializer.validated_data
         if self.board == GuestbookEntry.BOARD_ANNOUNCEMENT:
             data = {**data, 'anonymous': False}
-        entry, _ = create_submission(request.user, data, board=self.board)
+        entry, created = create_submission(request.user, data, board=self.board)
+        if created and self.board == GuestbookEntry.BOARD_GUESTBOOK:
+            notify_guestbook_entry_telegram(entry)
         return return_response(
             message=f'{self.board_label}发布成功', contents={'entry': serialize_entry(entry, request)}, status_code=status.HTTP_201_CREATED
         )
@@ -186,6 +192,7 @@ class GuestbookRepliesView(GenericAPIView):
             entry, created = create_submission(request.user, serializer.validated_data, parent, self.board)
             if created:
                 notify_guestbook_reply(entry)
+                notify_guestbook_reply_telegram(entry)
         return return_response(
             message='回复发布成功', contents={'entry': serialize_entry(entry, request, include_reply_count=False)},
             status_code=status.HTTP_201_CREATED,

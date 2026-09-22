@@ -11,6 +11,7 @@ from django.utils import timezone
 
 from .models import ResourceNotificationOutbox
 from common.messaging import send_direct_message
+from management_panel.telegram_notifications import send_mail_with_telegram_alert
 from user.models import User
 from utils.utils import format_file_size
 
@@ -204,7 +205,9 @@ def notify_resource_upload_result(reviewer, upload_request, result):
         send_direct_message(sender=reviewer, recipient=upload_request.uploaded_by, content=content)
     recipient = upload_request.uploaded_by.email or upload_request.uploaded_by.college_email
     if recipient:
-        send_mail(
+        send_mail_with_telegram_alert(
+            send_mail,
             get_resource_upload_result_subject(result), content, settings.EMAIL_HOST_USER,
             [recipient], fail_silently=False,
+            alert_context=f'资料投稿 #{upload_request.pk} 审核结果邮件',
         )

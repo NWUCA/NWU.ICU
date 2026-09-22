@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.test import override_settings
 from django.urls import reverse
+from unittest.mock import patch
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -70,9 +71,12 @@ class RegisterTests(APITestCase):
                       response.data['errors'][0]['err_code'])
 
     def test_create_account_with_correct_info(self):
-        response = self.client.post(self.url, self.register_data, format='json')
+        with patch('user.views.notify_user_registered') as notify:
+            response = self.client.post(self.url, self.register_data, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(get_msg_msg('has_sent_email'), response.data['message'])
+        notify.assert_called_once()
+        self.assertEqual(notify.call_args.args[0].username, self.register_data['username'])
 
     def test_create_account_with_exist_email(self):
         self.client.post(self.url, self.register_data, format='json')
