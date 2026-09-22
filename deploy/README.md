@@ -1,5 +1,12 @@
 # NWU.ICU 部署说明
 
+> 当前 `nwu.icu` 生产服务器采用 1Panel OpenResty 代理到宿主机回环端口。日常前后端更新、
+> 数据库迁移、OpenResty 修改和回滚请以
+> [生产发布 Runbook](production-runbook.md) 为准。本文后面的自动化/共享 Docker 网络方案
+> 是通用替代方案，不是当前服务器的实际拓扑。
+
+普通代码更新可直接查看 [日常更新速查](quick-update.md)。
+
 推荐让前后端仓库保持同级目录，生产 Compose 会同时构建两个项目：
 
 ```text

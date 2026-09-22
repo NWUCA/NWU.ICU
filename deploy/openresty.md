@@ -1,5 +1,9 @@
 # 使用 Docker OpenResty 接入 NWU.ICU
 
+> 本文描述的是 OpenResty 与 gateway 共用 Docker 网络的通用方案。当前 `nwu.icu` 服务器
+> 使用宿主机 OpenResty 代理到 `127.0.0.1:18080`；实际文件路径、上传规则和修改流程请以
+> [生产发布 Runbook](production-runbook.md#9-openresty--nginx-配置) 为准。
+
 生产部署脚本只负责 NWU.ICU 的目录、镜像、容器、迁移和健康检查，不会创建、修改或重载
 OpenResty，也不会申请证书。HTTPS 与域名继续由现有 OpenResty 部署维护。
 
