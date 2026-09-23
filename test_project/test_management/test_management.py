@@ -18,7 +18,7 @@ from rest_framework.test import APIClient, APITestCase
 from PIL import Image
 
 from common.file.models import ResourcePublishJob, ResourceUploadRequest, UploadedFile
-from common.models import Notification
+from common.models import About, Notification
 from guestbook.models import GuestbookEntry, GuestbookReport
 from management_panel.models import (
     AdminPasskeyCredential,
@@ -234,6 +234,22 @@ class ManagementAccessTests(APITestCase):
                 response = getattr(self.client, method)(url, data, format='json')
                 self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_about_management_requires_elevation_and_publish_permission(self):
+        url = reverse('api:management-about')
+        self.assertEqual(self.client.get(url).status_code, status.HTTP_404_NOT_FOUND)
+
+        self.client.force_login(self.staff)
+        self.assertEqual(self.client.get(url).status_code, status.HTTP_403_FORBIDDEN)
+
+        self.elevate()
+        self.assertEqual(self.client.get(url).status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(
+            self.client.put(url, {'content': '<p>未授权</p>'}, format='json').status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+        self.grant(self.staff, 'publish_announcements')
+        self.assertEqual(self.client.get(url).status_code, status.HTTP_200_OK)
+
 
 @override_settings(
     WEBAUTHN_RP_ID='localhost',
@@ -436,6 +452,106 @@ class PasskeyCeremonyTests(APITestCase):
 
 
 class ManagementBusinessTests(ManagementAccessTests):
+    def test_about_page_can_be_created_and_edited_from_management(self):
+        self.elevate()
+        self.grant(self.staff, 'publish_announcements')
+        url = reverse('api:management-about')
+        self.assertEqual(self.client.get(url).data['contents']['about']['content'], '')
+        self.assertEqual(self.client.get(reverse('api:about')).data['contents']['about'], '')
+
+        saved = self.client.put(
+            url,
+            {'content': '<p><strong>本站介绍</strong><script>bad()</script></p>'},
+            format='json',
+        )
+        self.assertEqual(saved.status_code, status.HTTP_200_OK)
+        self.assertEqual(saved.data['contents']['about']['title'], '关于本站')
+        self.assertEqual(saved.data['contents']['about']['content'], '<p><strong>本站介绍</strong></p>')
+        self.assertEqual(About.objects.filter(type='about').count(), 1)
+        self.assertEqual(
+            self.client.get(reverse('api:about')).data['contents']['about'],
+            '<p><strong>本站介绍</strong></p>',
+        )
+
+        edited = self.client.put(url, {'content': '<p>更新介绍</p>'}, format='json')
+        self.assertEqual(edited.status_code, status.HTTP_200_OK)
+        self.assertEqual(About.objects.filter(type='about').count(), 1)
+        self.assertEqual(About.objects.get(type='about').content, '<p>更新介绍</p>')
+        self.assertEqual(
+            self.client.put(url, {'content': '<p>' + '字' * 501 + '</p>'}, format='json').status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+    def test_about_uses_announcement_image_validation_and_reference_counts(self):
+        self.elevate()
+        self.grant(self.staff, 'publish_announcements')
+        url = reverse('api:management-about')
+
+        def upload_image(owner, name, color):
+            image_data = io.BytesIO()
+            Image.new('RGB', (2, 2), color=color).save(image_data, format='PNG')
+            data = image_data.getvalue()
+            return UploadedFile.objects.create(
+                created_by=owner,
+                file=SimpleUploadedFile(name, data, content_type='image/png'),
+                file_size=len(data),
+                file_type='img',
+            )
+
+        owned = upload_image(self.staff, 'owned.png', 'blue')
+        foreign = upload_image(self.user, 'foreign.png', 'red')
+
+        response = self.client.put(
+            url,
+            {'content': (
+                f'<p><a href="https://example.com" onclick="bad()">链接</a></p>'
+                f'<img src="/api/download/{owned.pk}/" data-size="50" onerror="bad()">'
+                '<img src="https://example.com/external.png">'
+            )},
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        content = About.objects.get(type='about').content
+        self.assertIn('rel="noopener noreferrer"', content)
+        self.assertIn('data-size="50"', content)
+        self.assertIn(f'src="/api/download/{owned.pk}/"', content)
+        self.assertNotIn('onerror', content)
+        self.assertNotIn('external.png', content)
+        self.assertEqual(UploadedFile.objects.get(pk=owned.pk).ref_count, 1)
+
+        forbidden = self.client.put(
+            url,
+            {'content': f'<img src="/api/download/{foreign.pk}/">'},
+            format='json',
+        )
+        self.assertEqual(forbidden.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(UploadedFile.objects.get(pk=foreign.pk).ref_count, 0)
+        self.assertEqual(UploadedFile.objects.get(pk=owned.pk).ref_count, 1)
+
+        removed = self.client.put(url, {'content': '<p>没有图片</p>'}, format='json')
+        self.assertEqual(removed.status_code, status.HTTP_200_OK)
+        self.assertEqual(UploadedFile.objects.get(pk=owned.pk).ref_count, 0)
+
+    def test_about_uses_latest_legacy_row_when_multiple_exist(self):
+        older = About.objects.create(type='about', content='<p>旧内容</p>')
+        newer = About.objects.create(type='about', content='<p>新内容</p>')
+        About.objects.filter(pk=older.pk).update(update_time=timezone.now() - timedelta(days=1))
+
+        self.assertEqual(self.client.get(reverse('api:about')).data['contents']['about'], '<p>新内容</p>')
+        self.elevate()
+        self.grant(self.staff, 'publish_announcements')
+        response = self.client.put(
+            reverse('api:management-about'),
+            {'content': '<p>最新编辑</p>'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        older.refresh_from_db()
+        newer.refresh_from_db()
+        self.assertEqual(older.content, '<p>旧内容</p>')
+        self.assertEqual(newer.content, '<p>最新编辑</p>')
+        self.assertEqual(self.client.get(reverse('api:about')).data['contents']['about'], '<p>最新编辑</p>')
+
     def test_report_list_is_plain_text_and_remove_resolves_all_pending_reports(self):
         self.elevate()
         self.grant(self.staff, 'moderate_reports')

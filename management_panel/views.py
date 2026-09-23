@@ -32,6 +32,7 @@ from webauthn.helpers.structs import (
 )
 
 from common.file.models import ResourceUploadDirectoryBlacklist, ResourceUploadFile, ResourceUploadRequest
+from common.about import current_about, save_about
 from common.file.resource_blacklist import get_resource_upload_blacklist
 from common.file.resource_directories import ResourceDirectoryCacheError, get_cached_child_directories
 from common.file.resource_workflow import (
@@ -72,6 +73,7 @@ from .security import (
     require_management_access,
 )
 from .serializers import (
+    AboutContentSerializer,
     AnnouncementVisibilitySerializer,
     PasskeyAuthenticationVerifySerializer,
     PasskeyRegistrationOptionsSerializer,
@@ -590,6 +592,35 @@ class ManagementAnnouncementVisibilityView(ManagementAPIView):
             message='公告已显示' if entry.is_visible else '公告已隐藏',
             contents={'entry': serialize_entry(entry, request)},
         )
+
+
+class ManagementAboutView(ManagementAPIView):
+    required_permission = 'guestbook.publish_announcements'
+
+    @staticmethod
+    def _payload(about):
+        return {
+            'title': '关于本站',
+            'content': about.content if about else '',
+            'update_time': about.update_time if about else None,
+        }
+
+    def get(self, request):
+        return return_response(contents={'about': self._payload(current_about())})
+
+    def put(self, request):
+        existing = current_about()
+        serializer = AboutContentSerializer(
+            data=request.data,
+            context={'request': request, 'existing_content': existing.content if existing else ''},
+        )
+        if not serializer.is_valid():
+            return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
+        try:
+            about = save_about(editor=request.user, content=serializer.validated_data['content'])
+        except ValidationError as error:
+            return _validation_error_response(error)
+        return return_response(message='关于本站已更新', contents={'about': self._payload(about)})
 
 
 class ManagementResourceUploadBlacklistView(ManagementAPIView):

@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from common.file.serializers import ResourceDirectorySerializer
+from guestbook.serializers import validate_announcement_rich_content
 
 
 class ResourceUploadBlacklistSerializer(ResourceDirectorySerializer):
@@ -33,6 +34,18 @@ class ReportResolutionSerializer(serializers.Serializer):
 
 class AnnouncementVisibilitySerializer(serializers.Serializer):
     visible = serializers.BooleanField()
+
+
+class AboutContentSerializer(serializers.Serializer):
+    content = serializers.CharField(max_length=16_000)
+
+    def validate_content(self, value):
+        return validate_announcement_rich_content(
+            value,
+            request=self.context.get('request'),
+            existing_content=self.context.get('existing_content', ''),
+            label='关于本站',
+        )
 
 
 class ResourceReviewSerializer(serializers.Serializer):

@@ -58,6 +58,33 @@ def ensure_file_references(content, previous_content=''):
         raise ValidationError({'content': '引用的附件已不存在，请重新上传后提交。'})
 
 
+def ensure_owned_rich_content_references(*, owner, reference_ids, image_ids=(), label='公告'):
+    """Require newly introduced attachments to belong to the current editor."""
+    from .models import UploadedFile
+
+    reference_ids = {str(value) for value in reference_ids}
+    if reference_ids:
+        owned_ids = {
+            str(value) for value in UploadedFile.objects.filter(
+                id__in=reference_ids,
+                created_by=owner,
+            ).values_list('id', flat=True)
+        }
+        if owned_ids != reference_ids:
+            raise ValidationError({'content': f'{label}只能引用当前管理员上传的有效文件。'})
+    image_ids = {str(value) for value in image_ids}
+    if image_ids:
+        valid_image_ids = {
+            str(value) for value in UploadedFile.objects.filter(
+                id__in=image_ids,
+                created_by=owner,
+                file_type='img',
+            ).values_list('id', flat=True)
+        }
+        if valid_image_ids != image_ids:
+            raise ValidationError({'content': f'{label}只能使用当前管理员上传的有效图片。'})
+
+
 def _content_querysets():
     for app_label, model_name in CONTENT_MODELS:
         model = apps.get_model(app_label, model_name)

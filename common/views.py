@@ -33,6 +33,7 @@ from .messaging import (
     mark_conversation_read,
     send_direct_message,
 )
+from .about import current_about
 from .models import (
     Bulletin, About, Conversation, ConversationParticipant, DirectMessage, Notification,
 )
@@ -122,11 +123,8 @@ class AboutView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        try:
-            tos_content_database = About.objects.order_by('-update_time').get(type="about")
-        except About.DoesNotExist:
-            return return_response(contents={"about": ""})
-        return return_response(contents={"about": tos_content_database.content})
+        about = current_about()
+        return return_response(contents={'about': about.content if about else ''})
 
 
 class MessageBoxView(GenericAPIView):

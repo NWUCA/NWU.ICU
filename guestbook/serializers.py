@@ -93,6 +93,27 @@ def announcement_image_ids(value):
     return clean_announcement_html(value)[2]
 
 
+def validate_announcement_rich_content(value, *, request=None, existing_content='', label='公告'):
+    content, text, image_ids = clean_announcement_html(value)
+    if not text and not image_ids:
+        raise serializers.ValidationError('内容不能为空。')
+    if len(text) > 500:
+        raise serializers.ValidationError('内容不能超过 500 字。')
+    added_image_ids = image_ids - announcement_image_ids(existing_content)
+    valid_image_ids = set()
+    if request and added_image_ids:
+        valid_image_ids = {
+            str(image_id) for image_id in UploadedFile.objects.filter(
+                id__in=added_image_ids,
+                created_by=request.user,
+                file_type='img',
+            ).values_list('id', flat=True)
+        }
+    if valid_image_ids != added_image_ids:
+        raise serializers.ValidationError(f'{label}只能使用当前管理员上传的有效图片。')
+    return content
+
+
 class GuestbookReplySerializer(serializers.Serializer):
     content = serializers.CharField(max_length=16_000)
     submission_id = serializers.UUIDField(required=False)
@@ -115,26 +136,11 @@ class AnnouncementContentSerializer(GuestbookContentSerializer):
     priority = serializers.IntegerField(min_value=-100, max_value=100, default=0)
 
     def validate_content(self, value):
-        content, text, image_ids = clean_announcement_html(value)
-        if not text and not image_ids:
-            raise serializers.ValidationError('内容不能为空。')
-        if len(text) > 500:
-            raise serializers.ValidationError('内容不能超过 500 字。')
-        request = self.context.get('request')
-        existing_image_ids = announcement_image_ids(self.context.get('existing_content', ''))
-        added_image_ids = image_ids - existing_image_ids
-        valid_image_ids = set()
-        if request and added_image_ids:
-            valid_image_ids = {
-                str(image_id) for image_id in UploadedFile.objects.filter(
-                    id__in=added_image_ids,
-                    created_by=request.user,
-                    file_type='img',
-                ).values_list('id', flat=True)
-            }
-        if valid_image_ids != added_image_ids:
-            raise serializers.ValidationError('公告只能使用当前管理员上传的有效图片。')
-        return content
+        return validate_announcement_rich_content(
+            value,
+            request=self.context.get('request'),
+            existing_content=self.context.get('existing_content', ''),
+        )
 
     def validate_title(self, value):
         if not value:

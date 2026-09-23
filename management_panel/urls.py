@@ -5,6 +5,7 @@ from .resource_tools import (ManagementResourceOperationsView, ManagementResourc
                              ManagementResourceAuditView, ManagementResourceStatisticsView)
 
 from .views import (
+    ManagementAboutView,
     ManagementAnnouncementDetailView,
     ManagementAnnouncementVisibilityView,
     ManagementAnnouncementView,
@@ -43,6 +44,7 @@ urlpatterns = [
     path('passkeys/registration/verify/', PasskeyRegistrationVerifyView.as_view(), name='passkey-register-verify'),
     path('reports/', ManagementReportListView.as_view(), name='management-reports'),
     path('reports/<int:report_id>/resolve/', ManagementReportResolveView.as_view(), name='management-report-resolve'),
+    path('about/', ManagementAboutView.as_view(), name='management-about'),
     path('announcements/', ManagementAnnouncementView.as_view(), name='management-announcements'),
     path(
         'announcements/<int:entry_id>/',

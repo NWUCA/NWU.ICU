@@ -1,10 +1,14 @@
 from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
-from rest_framework.exceptions import ValidationError
 
 from common.file.models import UploadedFile
-from common.file.references import ensure_file_references, file_lifecycle, file_reference_ids
+from common.file.references import (
+    ensure_file_references,
+    ensure_owned_rich_content_references,
+    file_lifecycle,
+    file_reference_ids,
+)
 from .models import GuestbookEntry
 from .serializers import announcement_image_ids
 from .submissions import create_submission
@@ -34,35 +38,11 @@ def _announcement_for_update(entry_id):
     return entry
 
 
-def _ensure_owned_references(*, owner, reference_ids, image_ids=()):
-    reference_ids = {str(value) for value in reference_ids}
-    if reference_ids:
-        owned_ids = {
-            str(value) for value in UploadedFile.objects.filter(
-                id__in=reference_ids,
-                created_by=owner,
-            ).values_list('id', flat=True)
-        }
-        if owned_ids != reference_ids:
-            raise ValidationError({'content': '公告只能引用当前管理员上传的有效文件。'})
-    image_ids = {str(value) for value in image_ids}
-    if image_ids:
-        valid_image_ids = {
-            str(value) for value in UploadedFile.objects.filter(
-                id__in=image_ids,
-                created_by=owner,
-                file_type='img',
-            ).values_list('id', flat=True)
-        }
-        if valid_image_ids != image_ids:
-            raise ValidationError({'content': '公告只能使用当前管理员上传的有效图片。'})
-
-
 @file_lifecycle()
 def publish_announcement(*, author, data):
     ensure_file_references(data['content'])
     references = file_reference_ids(data['content'])
-    _ensure_owned_references(
+    ensure_owned_rich_content_references(
         owner=author,
         reference_ids=references,
         image_ids=announcement_image_ids(data['content']),
@@ -97,7 +77,7 @@ def update_announcement(*, entry_id, editor, data):
         current_references = file_reference_ids(data['content'])
         previous_images = announcement_image_ids(previous_content)
         current_images = announcement_image_ids(data['content'])
-        _ensure_owned_references(
+        ensure_owned_rich_content_references(
             owner=editor,
             reference_ids=(current_references - previous_references)
             | (current_images - previous_images),
