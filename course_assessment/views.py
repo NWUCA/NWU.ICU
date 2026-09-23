@@ -221,12 +221,14 @@ class CourseView(APIView):
                     'nickname': '已删除用户',
                     'avatar': '',
                     'anonymous': True,
+                    'is_student': False,
                 } if review.is_deleted else {'id': -1 if (
                         review.anonymous and review.created_by.id != request.user.id) else review.created_by.id,
                            'nickname': get_msg_msg(
                                'anonymous_user_nickname') if review.anonymous else review.created_by.nickname,
                            'avatar': settings.ANONYMOUS_USER_AVATAR_UUID if review.anonymous else review.created_by.avatar_uuid,
                            'anonymous': review.anonymous,
+                           'is_student': userUtils.get_user_info_in_review(review)['is_student'],
                            **({} if review.anonymous else {
                                'uuid': review.created_by.uuid,
                                'has_avatar': str(review.created_by.avatar_uuid) != str(settings.DEFAULT_USER_AVATAR_UUID),
