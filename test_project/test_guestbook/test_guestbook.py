@@ -1,8 +1,11 @@
+from datetime import timedelta
+from unittest.mock import patch
+
 from django.conf import settings
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
-from unittest.mock import patch
 
 from guestbook.models import GuestbookEntry, GuestbookLike, GuestbookReport
 from common.models import Notification
@@ -72,6 +75,7 @@ class GuestbookApiTests(APITestCase):
         )
         self.assertEqual(announcement.board, GuestbookEntry.BOARD_ANNOUNCEMENT)
         self.assertFalse(announcement.anonymous)
+        announcement_updated_at = announcement.updated_at
         self.assertEqual(self.author_client.get(announcements_url).data['contents']['count'], 1)
         self.assertEqual(self.author_client.get(reverse('api:guestbook')).data['contents']['count'], 0)
 
@@ -87,6 +91,7 @@ class GuestbookApiTests(APITestCase):
         )
         announcement.refresh_from_db()
         self.assertEqual(announcement.like_count, 1)
+        self.assertEqual(announcement.updated_at, announcement_updated_at)
         self.assertEqual(
             self.author_client.post(
                 reverse('api:announcement-report', kwargs={'entry_id': announcement.id}),
@@ -104,6 +109,123 @@ class GuestbookApiTests(APITestCase):
         self.assertEqual(
             admin_client.delete(reverse('api:announcement-detail', kwargs={'entry_id': announcement.id})).status_code,
             status.HTTP_403_FORBIDDEN,
+        )
+
+    def test_hidden_announcement_root_blocks_every_public_tree_endpoint(self):
+        announcement = GuestbookEntry.objects.create(
+            author=self.author,
+            title='Hidden notice',
+            content='<p>notice</p>',
+            board=GuestbookEntry.BOARD_ANNOUNCEMENT,
+            is_visible=False,
+        )
+        reply = GuestbookEntry.objects.create(
+            author=self.reader,
+            content='<p>reply</p>',
+            board=GuestbookEntry.BOARD_ANNOUNCEMENT,
+            parent=announcement,
+            root=announcement,
+        )
+        endpoints = [
+            ('get', reverse('api:announcement-detail', kwargs={'entry_id': announcement.pk}), None),
+            ('get', reverse('api:announcement-detail', kwargs={'entry_id': reply.pk}), None),
+            ('get', reverse('api:announcement-replies', kwargs={'entry_id': announcement.pk}), None),
+            (
+                'post',
+                reverse('api:announcement-replies', kwargs={'entry_id': announcement.pk}),
+                {'content': '<p>new</p>'},
+            ),
+            ('get', reverse('api:announcement-context', kwargs={'entry_id': reply.pk}), None),
+            (
+                'put',
+                reverse('api:announcement-like', kwargs={'entry_id': announcement.pk}),
+                {'liked': True},
+            ),
+            ('put', reverse('api:announcement-like', kwargs={'entry_id': reply.pk}), {'liked': True}),
+            (
+                'post',
+                reverse('api:announcement-report', kwargs={'entry_id': announcement.pk}),
+                {'reason': 'spam'},
+            ),
+            (
+                'post',
+                reverse('api:announcement-report', kwargs={'entry_id': reply.pk}),
+                {'reason': 'spam'},
+            ),
+        ]
+        for method, url, data in endpoints:
+            with self.subTest(method=method, url=url):
+                response = getattr(self.reader_client, method)(url, data, format='json')
+                self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(
+            self.reader_client.get(reverse('api:announcements')).data['contents']['count'],
+            0,
+        )
+        self.assertEqual(GuestbookEntry.objects.filter(root=announcement).count(), 1)
+        self.assertEqual(GuestbookLike.objects.count(), 0)
+        self.assertEqual(GuestbookReport.objects.count(), 0)
+
+        announcement.refresh_from_db()
+        announcement.soft_delete()
+        self.assertEqual(
+            self.reader_client.get(
+                reverse('api:announcement-detail', kwargs={'entry_id': reply.pk}),
+            ).status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
+        self.assertEqual(
+            self.reader_client.post(
+                reverse('api:announcement-replies', kwargs={'entry_id': announcement.pk}),
+                {'content': '<p>blocked after delete</p>'},
+                format='json',
+            ).status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
+        self.assertEqual(
+            self.reader_client.put(
+                reverse('api:announcement-like', kwargs={'entry_id': reply.pk}),
+                {'liked': True},
+                format='json',
+            ).status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
+        self.assertEqual(
+            self.reader_client.post(
+                reverse('api:announcement-report', kwargs={'entry_id': reply.pk}),
+                {'reason': 'spam'},
+                format='json',
+            ).status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
+
+    def test_public_announcements_order_by_priority_then_updated_at(self):
+        low = GuestbookEntry.objects.create(
+            author=self.author,
+            title='Low',
+            content='<p>low</p>',
+            board=GuestbookEntry.BOARD_ANNOUNCEMENT,
+            priority=-100,
+        )
+        older = GuestbookEntry.objects.create(
+            author=self.author,
+            title='Older',
+            content='<p>older</p>',
+            board=GuestbookEntry.BOARD_ANNOUNCEMENT,
+            priority=5,
+        )
+        newer = GuestbookEntry.objects.create(
+            author=self.author,
+            title='Newer',
+            content='<p>newer</p>',
+            board=GuestbookEntry.BOARD_ANNOUNCEMENT,
+            priority=5,
+        )
+        GuestbookEntry.objects.filter(pk=older.pk).update(updated_at=timezone.now() - timedelta(days=2))
+        GuestbookEntry.objects.filter(pk=newer.pk).update(updated_at=timezone.now() - timedelta(days=1))
+        response = self.reader_client.get(reverse('api:announcements'))
+        self.assertEqual(
+            [entry['id'] for entry in response.data['contents']['results']],
+            [newer.pk, older.pk, low.pk],
         )
 
     def test_anonymous_entry_never_exposes_author_identity(self):
@@ -211,6 +333,7 @@ class GuestbookApiTests(APITestCase):
         self.assertFalse(Notification.objects.filter(recipient=self.author).exists())
 
     def test_admin_deletion_is_soft_and_content_is_read_only(self):
+        from django.core.exceptions import PermissionDenied
         from django.contrib.admin.sites import AdminSite
         from guestbook.admin import GuestbookEntryAdmin
         root = GuestbookEntry.objects.create(author=self.author, content='<p>root</p>')
@@ -224,6 +347,21 @@ class GuestbookApiTests(APITestCase):
         self.assertEqual(child.parent_id, root.id)
         self.assertIn('content', admin.readonly_fields)
         self.assertIn('parent', admin.readonly_fields)
+
+        announcement = GuestbookEntry.objects.create(
+            author=self.author,
+            title='Managed announcement',
+            content='<p>notice</p>',
+            board=GuestbookEntry.BOARD_ANNOUNCEMENT,
+        )
+        with self.assertRaises(PermissionDenied):
+            admin.delete_queryset(None, GuestbookEntry.all_objects.filter(pk=announcement.pk))
+        announcement.is_visible = False
+        announcement.save(update_fields=('is_visible',))
+        admin.delete_queryset(None, GuestbookEntry.all_objects.filter(pk=announcement.pk))
+        announcement.refresh_from_db()
+        self.assertTrue(announcement.is_deleted)
+        admin.delete_queryset(None, GuestbookEntry.all_objects.filter(pk=announcement.pk))
 
     def test_admin_entry_queryset_is_scoped_to_each_management_permission(self):
         from types import SimpleNamespace
@@ -245,6 +383,12 @@ class GuestbookApiTests(APITestCase):
             parent=announcement_root,
             root=announcement_root,
         )
+        orphaned_announcement_reply = GuestbookEntry.objects.create(
+            author=self.reader,
+            content='<p>orphaned reply</p>',
+            board=GuestbookEntry.BOARD_ANNOUNCEMENT,
+            root=announcement_root,
+        )
         publisher = SimpleNamespace(
             has_perm=lambda permission: permission == 'guestbook.publish_announcements',
         )
@@ -257,7 +401,10 @@ class GuestbookApiTests(APITestCase):
         moderator_ids = set(model_admin.get_queryset(SimpleNamespace(user=moderator)).values_list('pk', flat=True))
 
         self.assertEqual(publisher_ids, {announcement_root.pk})
-        self.assertEqual(moderator_ids, {guestbook_root.pk, announcement_reply.pk})
+        self.assertEqual(
+            moderator_ids,
+            {guestbook_root.pk, announcement_reply.pk, orphaned_announcement_reply.pk},
+        )
         self.assertFalse(model_admin.has_view_permission(SimpleNamespace(user=publisher), guestbook_root))
         self.assertFalse(model_admin.has_view_permission(SimpleNamespace(user=moderator), announcement_root))
 

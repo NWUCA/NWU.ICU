@@ -1,7 +1,13 @@
 from django.conf import settings
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models, transaction
+from django.utils import timezone
 
 from utils.models import SoftDeleteModel
+
+
+class VisibleAnnouncementDeleteError(ValueError):
+    pass
 
 
 class GuestbookEntry(SoftDeleteModel):
@@ -26,6 +32,12 @@ class GuestbookEntry(SoftDeleteModel):
         'self', null=True, blank=True, on_delete=models.SET_NULL, related_name='descendants'
     )
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(default=timezone.now)
+    priority = models.SmallIntegerField(
+        default=0,
+        validators=[MinValueValidator(-100), MaxValueValidator(100)],
+    )
+    is_visible = models.BooleanField(default=True)
     like_count = models.PositiveIntegerField(default=0)
     submission_id = models.UUIDField(null=True, blank=True, editable=False)
 
@@ -34,26 +46,44 @@ class GuestbookEntry(SoftDeleteModel):
         permissions = [('publish_announcements', 'Can publish announcements from the management panel')]
         constraints = [
             models.UniqueConstraint(fields=('author', 'submission_id'), name='unique_guestbook_submission'),
+            models.CheckConstraint(
+                check=models.Q(priority__gte=-100, priority__lte=100),
+                name='guestbook_priority_range',
+            ),
         ]
         indexes = [
             models.Index(fields=('board', '-created_at', '-id'), name='guestbook_board_recent_idx'),
+            models.Index(
+                fields=('board', 'parent', 'root', '-priority', '-updated_at', '-id'),
+                name='guestbook_announce_sort_idx',
+            ),
             models.Index(fields=('root', 'parent', 'created_at'), name='guestbook_reply_tree_idx'),
             models.Index(fields=('-created_at', '-id'), name='guestbook_recent_idx'),
         ]
 
     @property
     def is_root(self):
-        return self.parent_id is None
+        return self.parent_id is None and self.root_id is None
 
     @transaction.atomic
     def soft_delete(self):
         # Serialize deletion with replies and likes, including their notifications.
         current = type(self).all_objects.select_for_update().get(pk=self.pk)
+        if (
+            current.board == self.BOARD_ANNOUNCEMENT
+            and current.is_root
+            and current.is_visible
+        ):
+            raise VisibleAnnouncementDeleteError('请先隐藏公告再删除。')
         if not current.is_deleted:
             super(GuestbookEntry, current).soft_delete()
         self.is_deleted, self.deleted_at = current.is_deleted, current.deleted_at
-        from .notifications import remove_entry_notifications
-        remove_entry_notifications(self.pk)
+        if current.board == self.BOARD_ANNOUNCEMENT and current.is_root:
+            from .notifications import remove_announcement_notifications
+            remove_announcement_notifications(self.pk)
+        else:
+            from .notifications import remove_entry_notifications
+            remove_entry_notifications(self.pk)
 
     def delete(self, using=None, keep_parents=False):
         self.soft_delete()

@@ -202,6 +202,38 @@ class ManagementAccessTests(APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_announcement_management_endpoints_require_publish_permission(self):
+        self.elevate()
+        announcement = GuestbookEntry.objects.create(
+            author=self.staff,
+            title='Protected',
+            content='<p>protected</p>',
+            board=GuestbookEntry.BOARD_ANNOUNCEMENT,
+            is_visible=False,
+        )
+        requests = [
+            ('get', reverse('api:management-announcements'), None),
+            (
+                'put',
+                reverse('api:management-announcement-detail', kwargs={'entry_id': announcement.pk}),
+                {'title': 'Edited', 'content': '<p>edited</p>', 'priority': 0},
+            ),
+            (
+                'post',
+                reverse('api:management-announcement-visibility', kwargs={'entry_id': announcement.pk}),
+                {'visible': True},
+            ),
+            (
+                'delete',
+                reverse('api:management-announcement-detail', kwargs={'entry_id': announcement.pk}),
+                None,
+            ),
+        ]
+        for method, url, data in requests:
+            with self.subTest(method=method):
+                response = getattr(self.client, method)(url, data, format='json')
+                self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
 
 @override_settings(
     WEBAUTHN_RP_ID='localhost',
@@ -444,12 +476,16 @@ class ManagementBusinessTests(ManagementAccessTests):
         }
         first = self.client.post(url, payload, format='json')
         second = self.client.post(url, payload, format='json')
+        conflict = self.client.post(url, {**payload, 'priority': 1}, format='json')
         self.assertEqual(first.status_code, status.HTTP_201_CREATED)
         self.assertEqual(second.status_code, status.HTTP_200_OK)
+        self.assertEqual(conflict.status_code, status.HTTP_409_CONFLICT)
         self.assertEqual(GuestbookEntry.objects.filter(board=GuestbookEntry.BOARD_ANNOUNCEMENT).count(), 1)
         entry = GuestbookEntry.objects.get(board=GuestbookEntry.BOARD_ANNOUNCEMENT)
         self.assertEqual(entry.content, '<p><strong>Tonight</strong></p>')
         self.assertFalse(entry.anonymous)
+        self.assertEqual(entry.priority, 0)
+        self.assertTrue(entry.is_visible)
 
     def test_announcement_accepts_owned_uploaded_images_only(self):
         self.elevate()
@@ -518,6 +554,318 @@ class ManagementBusinessTests(ManagementAccessTests):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertFalse(GuestbookEntry.objects.filter(title='Invalid image owner').exists())
+
+    def test_announcement_management_lists_edits_and_orders_by_priority_then_update_time(self):
+        self.elevate()
+        self.grant(self.staff, 'publish_announcements')
+        older = GuestbookEntry.objects.create(
+            author=self.staff,
+            title='Older high priority',
+            content='<p>older</p>',
+            board=GuestbookEntry.BOARD_ANNOUNCEMENT,
+            priority=10,
+        )
+        newer = GuestbookEntry.objects.create(
+            author=self.staff,
+            title='Newer high priority',
+            content='<p>newer</p>',
+            board=GuestbookEntry.BOARD_ANNOUNCEMENT,
+            priority=10,
+        )
+        low = GuestbookEntry.objects.create(
+            author=self.staff,
+            title='Low priority',
+            content='<p>low</p>',
+            board=GuestbookEntry.BOARD_ANNOUNCEMENT,
+            priority=-5,
+            is_visible=False,
+        )
+        old_time = timezone.now() - timedelta(days=2)
+        new_time = timezone.now() - timedelta(days=1)
+        GuestbookEntry.objects.filter(pk=older.pk).update(updated_at=old_time)
+        GuestbookEntry.objects.filter(pk=newer.pk).update(updated_at=new_time)
+
+        listing = self.client.get(reverse('api:management-announcements'))
+        self.assertEqual(listing.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            [entry['id'] for entry in listing.data['contents']['results']],
+            [newer.pk, older.pk, low.pk],
+        )
+        self.assertEqual(
+            self.client.get(
+                reverse('api:management-announcements'),
+                {'visibility': 'hidden'},
+            ).data['contents']['results'][0]['id'],
+            low.pk,
+        )
+        self.assertEqual(
+            self.client.get(
+                reverse('api:management-announcements'),
+                {'visibility': 'invalid'},
+            ).status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        original_created_at = older.created_at
+        response = self.client.put(
+            reverse('api:management-announcement-detail', kwargs={'entry_id': older.pk}),
+            {'title': 'Edited', 'content': '<p>edited</p>', 'priority': 11},
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        older.refresh_from_db()
+        self.assertEqual(older.title, 'Edited')
+        self.assertEqual(older.priority, 11)
+        self.assertEqual(older.created_at, original_created_at)
+        self.assertGreater(older.updated_at, old_time)
+        self.assertEqual(response.data['contents']['entry']['priority'], 11)
+        edited_at = older.updated_at
+        self.assertEqual(
+            self.client.put(
+                reverse('api:management-announcement-detail', kwargs={'entry_id': older.pk}),
+                {'title': 'Edited', 'content': '<p>edited</p>', 'priority': 11},
+                format='json',
+            ).status_code,
+            status.HTTP_200_OK,
+        )
+        older.refresh_from_db()
+        self.assertEqual(older.updated_at, edited_at)
+
+    def test_announcement_visibility_gates_delete_and_soft_delete_preserves_replies(self):
+        self.elevate()
+        self.grant(self.staff, 'publish_announcements')
+        announcement = GuestbookEntry.objects.create(
+            author=self.staff,
+            title='Visible',
+            content='<p>notice</p>',
+            board=GuestbookEntry.BOARD_ANNOUNCEMENT,
+        )
+        reply = GuestbookEntry.objects.create(
+            author=self.user,
+            content='<p>reply</p>',
+            board=GuestbookEntry.BOARD_ANNOUNCEMENT,
+            parent=announcement,
+            root=announcement,
+        )
+        Notification.objects.create(
+            recipient=self.user,
+            actor=self.staff,
+            kind=Notification.KIND_REPLY,
+            dedupe_key='announcement-deep-reply',
+            payload={
+                'source': 'announcement',
+                'guestbook': {
+                    'root_id': announcement.pk,
+                    'entry_id': reply.pk,
+                    'target_id': reply.pk,
+                },
+                'reply': {'id': reply.pk},
+            },
+        )
+        detail_url = reverse('api:management-announcement-detail', kwargs={'entry_id': announcement.pk})
+        self.assertEqual(
+            self.client.put(
+                reverse('api:management-announcement-detail', kwargs={'entry_id': reply.pk}),
+                {'title': 'Not a root', 'content': '<p>x</p>', 'priority': 0},
+                format='json',
+            ).status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
+        self.assertEqual(self.client.delete(detail_url).status_code, status.HTTP_409_CONFLICT)
+
+        previous_update = announcement.updated_at
+        hidden = self.client.post(
+            reverse('api:management-announcement-visibility', kwargs={'entry_id': announcement.pk}),
+            {'visible': False},
+            format='json',
+        )
+        self.assertEqual(hidden.status_code, status.HTTP_200_OK)
+        announcement.refresh_from_db()
+        self.assertFalse(announcement.is_visible)
+        self.assertGreater(announcement.updated_at, previous_update)
+        self.assertEqual(
+            self.client.get(reverse('api:announcements')).data['contents']['count'],
+            0,
+        )
+
+        hidden_at = announcement.updated_at
+        shown = self.client.post(
+            reverse('api:management-announcement-visibility', kwargs={'entry_id': announcement.pk}),
+            {'visible': True},
+            format='json',
+        )
+        self.assertEqual(shown.status_code, status.HTTP_200_OK)
+        announcement.refresh_from_db()
+        self.assertTrue(announcement.is_visible)
+        self.assertGreater(announcement.updated_at, hidden_at)
+        self.assertEqual(self.client.get(reverse('api:announcements')).data['contents']['count'], 1)
+        self.client.post(
+            reverse('api:management-announcement-visibility', kwargs={'entry_id': announcement.pk}),
+            {'visible': False},
+            format='json',
+        )
+
+        deleted = self.client.delete(detail_url)
+        self.assertEqual(deleted.status_code, status.HTTP_200_OK)
+        announcement.refresh_from_db()
+        reply.refresh_from_db()
+        self.assertTrue(announcement.is_deleted)
+        self.assertEqual(reply.root_id, announcement.pk)
+        self.assertFalse(reply.is_deleted)
+        self.assertFalse(GuestbookEntry.objects.filter(pk=announcement.pk).exists())
+        self.assertTrue(GuestbookEntry.all_objects.filter(pk=announcement.pk).exists())
+        self.assertFalse(Notification.objects.filter(dedupe_key='announcement-deep-reply').exists())
+
+    def test_announcement_links_image_sizes_and_priority_bounds_are_sanitized(self):
+        self.elevate()
+        self.grant(self.staff, 'publish_announcements')
+        image_data = io.BytesIO()
+        Image.new('RGB', (2, 2), color='green').save(image_data, format='PNG')
+        upload = self.client.post(
+            reverse('api:file-upload'),
+            {
+                'file': SimpleUploadedFile(
+                    'sized.png', image_data.getvalue(), content_type='image/png',
+                ),
+                'file_type': 'img',
+            },
+            format='multipart',
+        )
+        image_id = upload.data['contents']['uuid']
+        response = self.client.post(
+            reverse('api:management-announcements'),
+            {
+                'title': 'Rich content',
+                'priority': 100,
+                'content': (
+                    '<p><a href="/announcements/?page=1" target="_blank">站内</a>'
+                    '<a href="https://example.com/path" onclick="bad()">站外</a>'
+                    '<a href="javascript:alert(1)">危险</a>'
+                    '<a href="http://[::1">损坏链接</a></p>'
+                    f'<img src="/api/download/{image_id}/" data-size="50" '
+                    'style="width:1px" onerror="bad()">'
+                    f'<img src="/api/download/{image_id}/" data-size="33">'
+                ),
+                'submission_id': '30d4ed5e-c53d-4c31-9187-e806d77a790d',
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        content = GuestbookEntry.objects.get(title='Rich content').content
+        self.assertIn('<a href="/announcements/?page=1">站内</a>', content)
+        self.assertIn('href="https://example.com/path"', content)
+        self.assertIn('target="_blank"', content)
+        self.assertIn('rel="noopener noreferrer"', content)
+        self.assertIn('危险', content)
+        self.assertIn('损坏链接', content)
+        self.assertNotIn('javascript:', content)
+        self.assertNotIn('http://[::1', content)
+        self.assertIn('data-size="50"', content)
+        self.assertNotIn('data-size="33"', content)
+        self.assertNotIn('style=', content)
+        self.assertNotIn('onerror', content)
+
+        for priority in (-101, 101):
+            invalid = self.client.post(
+                reverse('api:management-announcements'),
+                {'title': 'Invalid', 'content': '<p>x</p>', 'priority': priority},
+                format='json',
+            )
+            self.assertEqual(invalid.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_announcement_edit_preserves_existing_foreign_images_and_tracks_reference_deltas(self):
+        self.elevate()
+        self.grant(self.staff, 'publish_announcements')
+
+        def upload_image(name, color):
+            image_data = io.BytesIO()
+            Image.new('RGB', (2, 2), color=color).save(image_data, format='PNG')
+            response = self.client.post(
+                reverse('api:file-upload'),
+                {
+                    'file': SimpleUploadedFile(name, image_data.getvalue(), content_type='image/png'),
+                    'file_type': 'img',
+                },
+                format='multipart',
+            )
+            self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+            return response.data['contents']['uuid']
+
+        original_image = upload_image('original.png', 'blue')
+        forbidden_image = upload_image('forbidden.png', 'red')
+        created = self.client.post(
+            reverse('api:management-announcements'),
+            {
+                'title': 'Images',
+                'content': f'<img src="/api/download/{original_image}/" data-size="25">',
+                'priority': 0,
+                'submission_id': '40d4ed5e-c53d-4c31-9187-e806d77a790d',
+            },
+            format='json',
+        )
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED)
+        entry_id = created.data['contents']['entry']['id']
+
+        editor = create_user(
+            username='announcement-editor',
+            email='announcement-editor@example.com',
+            is_staff=True,
+        )
+        self.client.force_login(editor)
+        editor_image = upload_image('editor.png', 'green')
+        self.elevate(editor)
+        self.grant(editor, 'publish_announcements')
+        detail_url = reverse('api:management-announcement-detail', kwargs={'entry_id': entry_id})
+        retained = self.client.put(
+            detail_url,
+            {
+                'title': 'Images edited',
+                'content': (
+                    f'<img src="/api/download/{original_image}/" data-size="50">'
+                    f'<img src="/api/download/{editor_image}/" data-size="75">'
+                ),
+                'priority': 1,
+            },
+            format='json',
+        )
+        self.assertEqual(retained.status_code, status.HTTP_200_OK)
+        self.assertEqual(UploadedFile.objects.get(pk=original_image).ref_count, 1)
+        self.assertEqual(UploadedFile.objects.get(pk=editor_image).ref_count, 1)
+
+        removed = self.client.put(
+            detail_url,
+            {
+                'title': 'Images edited again',
+                'content': f'<img src="/api/download/{editor_image}/" data-size="100">',
+                'priority': 1,
+            },
+            format='json',
+        )
+        self.assertEqual(removed.status_code, status.HTTP_200_OK)
+        self.assertEqual(UploadedFile.objects.get(pk=original_image).ref_count, 0)
+
+        forbidden = self.client.put(
+            detail_url,
+            {
+                'title': 'Forbidden image',
+                'content': f'<img src="/api/download/{forbidden_image}/">',
+                'priority': 1,
+            },
+            format='json',
+        )
+        self.assertEqual(forbidden.status_code, status.HTTP_400_BAD_REQUEST)
+        forbidden_link = self.client.put(
+            detail_url,
+            {
+                'title': 'Forbidden link',
+                'content': f'<p><a href="/api/download/{forbidden_image}/">file</a></p>',
+                'priority': 1,
+            },
+            format='json',
+        )
+        self.assertEqual(forbidden_link.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(forbidden_link.data['errors'][0]['field'], 'content')
+        self.assertEqual(GuestbookEntry.objects.get(pk=entry_id).title, 'Images edited again')
 
     def test_resource_review_uses_workflow_and_revision(self):
         self.elevate()

@@ -1,6 +1,6 @@
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Count, Exists, F, IntegerField, OuterRef, Subquery, Value
+from django.db.models import Count, Exists, F, IntegerField, OuterRef, Q, Subquery, Value
 from django.db.models.functions import Coalesce
 from rest_framework import status
 from rest_framework.generics import GenericAPIView
@@ -26,6 +26,20 @@ from .serializers import (
 )
 
 DELETED_CONTENT = '[内容已删除]'
+
+
+def visible_announcement_entries(entries):
+    return entries.filter(
+        Q(parent__isnull=True, root__isnull=True, is_visible=True, is_deleted=False)
+        | Q(
+            root__isnull=False,
+            root__board=GuestbookEntry.BOARD_ANNOUNCEMENT,
+            root__parent__isnull=True,
+            root__root__isnull=True,
+            root__is_visible=True,
+            root__is_deleted=False,
+        )
+    )
 
 
 def with_entry_counts(entries, request):
@@ -71,6 +85,9 @@ def serialize_entry(entry, request, *, include_reply_count=True):
         'anonymous': entry.anonymous,
         'is_deleted': entry.is_deleted,
         'created_at': entry.created_at,
+        'updated_at': entry.updated_at,
+        'priority': entry.priority,
+        'is_visible': entry.is_visible,
         'like_count': entry.like_count,
         'author': entry_author(entry, request),
         'is_me': is_authenticated and entry.author_id == request.user.id,
@@ -89,10 +106,25 @@ def serialize_entry(entry, request, *, include_reply_count=True):
 def get_entry_or_none(entry_id, *, lock=False, board=None):
     try:
         entries = GuestbookEntry.all_objects.select_related('author', 'parent', 'root')
-        if lock:
-            entries = entries.select_for_update(of=('self',))
         if board is not None:
             entries = entries.filter(board=board)
+        if board == GuestbookEntry.BOARD_ANNOUNCEMENT:
+            public_entries = visible_announcement_entries(entries)
+            if lock:
+                snapshot = public_entries.get(id=entry_id)
+                root_id = snapshot.root_id or snapshot.id
+                root = GuestbookEntry.all_objects.select_for_update().get(id=root_id)
+                if (
+                    root.board != GuestbookEntry.BOARD_ANNOUNCEMENT
+                    or not root.is_root
+                    or root.is_deleted
+                    or not root.is_visible
+                ):
+                    return None
+                return public_entries.select_for_update(of=('self',)).get(id=entry_id)
+            entries = public_entries
+        elif lock:
+            entries = entries.select_for_update(of=('self',))
         return entries.get(id=entry_id)
     except GuestbookEntry.DoesNotExist:
         return None
@@ -105,7 +137,12 @@ class GuestbookListView(GenericAPIView):
     board_label = '留言'
 
     def get(self, request):
-        entries = with_entry_counts(GuestbookEntry.all_objects.filter(parent__isnull=True, board=self.board), request)
+        entries = GuestbookEntry.all_objects.filter(parent__isnull=True, board=self.board)
+        if self.board == GuestbookEntry.BOARD_ANNOUNCEMENT:
+            entries = entries.filter(root__isnull=True, is_visible=True, is_deleted=False).order_by(
+                '-priority', '-updated_at', '-id',
+            )
+        entries = with_entry_counts(entries, request)
         page = self.paginate_queryset(entries)
         return self.get_paginated_response([serialize_entry(entry, request) for entry in page])
 
@@ -171,7 +208,10 @@ class GuestbookRepliesView(GenericAPIView):
         parent = get_entry_or_none(entry_id, board=self.board)
         if parent is None:
             return return_response(errors={'entry': {'err_code': 'not_found', 'err_msg': '留言不存在'}}, status_code=404)
-        entries = with_entry_counts(GuestbookEntry.all_objects.filter(parent_id=parent.id), request).order_by('created_at', 'id')
+        entries = GuestbookEntry.all_objects.filter(parent_id=parent.id)
+        if self.board == GuestbookEntry.BOARD_ANNOUNCEMENT:
+            entries = visible_announcement_entries(entries)
+        entries = with_entry_counts(entries, request).order_by('created_at', 'id')
         page = self.paginate_queryset(entries)
         return self.get_paginated_response([serialize_entry(entry, request) for entry in page])
 
@@ -215,7 +255,15 @@ class GuestbookContextView(GenericAPIView):
             path.append(current.id)
             current = current.parent
         path.reverse()
-        entries = with_entry_counts(GuestbookEntry.all_objects.filter(id__in=path), request).in_bulk()
+        entries = GuestbookEntry.all_objects.filter(id__in=path)
+        if self.board == GuestbookEntry.BOARD_ANNOUNCEMENT:
+            entries = visible_announcement_entries(entries)
+        entries = with_entry_counts(entries, request).in_bulk()
+        if any(entry_id not in entries for entry_id in path):
+            return return_response(
+                errors={'entry': {'err_code': 'not_found', 'err_msg': '留言不存在'}},
+                status_code=404,
+            )
         return return_response(contents={
             'root_id': entry.root_id or entry.id,
             'path': path,
@@ -262,8 +310,9 @@ class GuestbookReportView(GenericAPIView):
     def get_throttles(self):
         return [InteractionUserRateThrottle()] if self.request.method == 'POST' else []
 
+    @transaction.atomic
     def post(self, request, entry_id):
-        entry = get_entry_or_none(entry_id, board=self.board)
+        entry = get_entry_or_none(entry_id, lock=True, board=self.board)
         if entry is None or entry.is_deleted:
             return return_response(errors={'entry': {'err_code': 'not_found', 'err_msg': '留言不存在'}}, status_code=404)
         serializer = GuestbookReportSerializer(data=request.data)

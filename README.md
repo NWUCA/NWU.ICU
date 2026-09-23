@@ -35,6 +35,9 @@ Windows 调试、Debian 生产部署、Docker Compose 与 OpenResty 配置见
 站内资料页、Windows / WSL 资料目录挂载和 Linux 配置见
 [资料浏览说明](deploy/resource-browser.md)。
 
+前后端测试命令、隔离测试数据库要求和本地环境恢复步骤见
+[测试要求](docs/testing.md)。
+
 ## Roadmap
 
 - [x] 用户站内信

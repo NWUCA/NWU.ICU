@@ -15,6 +15,7 @@ logs/
 !README.md
 !deploy/
 !deploy/*.md
+!docs/testing.md
 media/uploads/1.webp
 media/uploads/annoymous_avatar_ejQV9py.jpg
 media/uploads/default_avatar_6L9CaNq.jpg

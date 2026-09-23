@@ -1,7 +1,8 @@
 from django import forms
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.core.exceptions import PermissionDenied
 
+from .announcements import AnnouncementMustBeHidden, AnnouncementNotFound, delete_announcement
 from .models import GuestbookEntry, GuestbookLike, GuestbookReport
 from .moderation import resolve_guestbook_report
 
@@ -27,8 +28,11 @@ class GuestbookReportAdminForm(forms.ModelForm):
 
 @admin.register(GuestbookEntry)
 class GuestbookEntryAdmin(admin.ModelAdmin):
-    list_display = ('id', 'board', 'author', 'anonymous', 'parent', 'created_at', 'is_deleted', 'like_count')
-    list_filter = ('board', 'anonymous', 'is_deleted', 'created_at')
+    list_display = (
+        'id', 'board', 'author', 'anonymous', 'parent', 'priority', 'is_visible',
+        'created_at', 'updated_at', 'is_deleted', 'like_count',
+    )
+    list_filter = ('board', 'anonymous', 'is_visible', 'is_deleted', 'created_at')
     search_fields = ('title', 'content', 'author__username', 'author__nickname')
     readonly_fields = tuple(field.name for field in GuestbookEntry._meta.fields)
     actions = ['soft_delete_selected']
@@ -66,6 +70,7 @@ class GuestbookEntryAdmin(admin.ModelAdmin):
         announcement_roots = {
             'board': GuestbookEntry.BOARD_ANNOUNCEMENT,
             'parent__isnull': True,
+            'root__isnull': True,
         }
         if can_publish:
             return queryset.filter(**announcement_roots)
@@ -85,14 +90,31 @@ class GuestbookEntryAdmin(admin.ModelAdmin):
             permission = self.required_permission_for(entry)
             if not request.user.has_perm(permission):
                 raise PermissionDenied
+            if (
+                entry.board == GuestbookEntry.BOARD_ANNOUNCEMENT
+                and entry.is_root
+                and entry.is_visible
+            ):
+                self.message_user(request, '请先隐藏公告再删除。', messages.ERROR)
+                return
         self.delete_queryset(request, queryset)
 
     def delete_model(self, request, obj):
+        if obj.is_deleted:
+            return
+        if obj.board == GuestbookEntry.BOARD_ANNOUNCEMENT and obj.is_root:
+            try:
+                delete_announcement(entry_id=obj.pk)
+            except AnnouncementMustBeHidden as error:
+                raise PermissionDenied('请先隐藏公告再删除。') from error
+            except AnnouncementNotFound:
+                return
+            return
         obj.soft_delete()
 
     def delete_queryset(self, request, queryset):
         for entry in queryset.order_by('pk'):
-            entry.soft_delete()
+            self.delete_model(request, entry)
 
 
 @admin.register(GuestbookReport)

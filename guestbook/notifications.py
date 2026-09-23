@@ -25,7 +25,13 @@ def notification_author(user):
 def notify_guestbook_reply(entry):
     """Notify only the author of the direct parent, never the author replying to themself."""
     parent = entry.parent
+    root = entry.root if entry.root_id else entry
     if entry.is_deleted or parent is None or parent.is_deleted or parent.author_id == entry.author_id:
+        return
+    if (
+        entry.board == GuestbookEntry.BOARD_ANNOUNCEMENT
+        and (root.is_deleted or not root.is_visible)
+    ):
         return
     Notification.objects.update_or_create(
         dedupe_key=f'guestbook:reply:{entry.id}:{parent.author_id}',
@@ -53,7 +59,12 @@ def notify_guestbook_like(entry, *, mark_unread=True):
     """Keep one aggregate notification per entry and omit any user-written content."""
     dedupe_key = f'guestbook:like:{entry.id}:{entry.author_id}'
     has_external_likes = GuestbookLike.objects.filter(entry=entry).exclude(user_id=entry.author_id).exists()
-    if entry.is_deleted or not has_external_likes:
+    root = entry.root if entry.root_id else entry
+    announcement_hidden = (
+        entry.board == GuestbookEntry.BOARD_ANNOUNCEMENT
+        and (root.is_deleted or not root.is_visible)
+    )
+    if entry.is_deleted or announcement_hidden or not has_external_likes:
         Notification.objects.filter(dedupe_key=dedupe_key).delete()
         return
     defaults = {
@@ -84,20 +95,37 @@ def remove_entry_notifications(entry_id):
     ).delete()
 
 
+def remove_announcement_notifications(root_id):
+    Notification.objects.filter(
+        payload__source='announcement',
+        payload__guestbook__root_id=root_id,
+    ).delete()
+
+
 def hydrate_guestbook_notifications(notifications):
     """Resolve text at read time, including notifications written before this change."""
     from .models import GuestbookEntry
     ids = [note.payload.get('guestbook', {}).get('entry_id') for note in notifications
            if note.payload.get('source') in ('guestbook', 'announcement') and note.kind == Notification.KIND_REPLY]
-    entries = GuestbookEntry.all_objects.select_related('author').in_bulk(ids)
+    entries = GuestbookEntry.all_objects.select_related('author', 'root').in_bulk(ids)
     for note in notifications:
         if note.payload.get('source') not in ('guestbook', 'announcement') or note.kind != Notification.KIND_REPLY:
             continue
         entry_id = note.payload.get('guestbook', {}).get('entry_id')
         entry = entries.get(entry_id)
+        root = entry.root if entry and entry.root_id else entry
+        announcement_hidden = bool(
+            entry
+            and entry.board == GuestbookEntry.BOARD_ANNOUNCEMENT
+            and (root.is_deleted or not root.is_visible)
+        )
         note.payload = {**note.payload, 'reply': {
             'id': entry_id,
-            'content': entry.content if entry and not entry.is_deleted else '[内容已删除]',
+            'content': (
+                '[公告已隐藏]'
+                if announcement_hidden
+                else entry.content if entry and not entry.is_deleted else '[内容已删除]'
+            ),
         }}
         if entry:
             note.payload['created_by'] = notification_author(entry.author)

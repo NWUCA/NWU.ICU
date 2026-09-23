@@ -5,6 +5,8 @@ from .resource_tools import (ManagementResourceOperationsView, ManagementResourc
                              ManagementResourceAuditView, ManagementResourceStatisticsView)
 
 from .views import (
+    ManagementAnnouncementDetailView,
+    ManagementAnnouncementVisibilityView,
     ManagementAnnouncementView,
     ManagementReportListView,
     ManagementReportResolveView,
@@ -42,6 +44,16 @@ urlpatterns = [
     path('reports/', ManagementReportListView.as_view(), name='management-reports'),
     path('reports/<int:report_id>/resolve/', ManagementReportResolveView.as_view(), name='management-report-resolve'),
     path('announcements/', ManagementAnnouncementView.as_view(), name='management-announcements'),
+    path(
+        'announcements/<int:entry_id>/',
+        ManagementAnnouncementDetailView.as_view(),
+        name='management-announcement-detail',
+    ),
+    path(
+        'announcements/<int:entry_id>/visibility/',
+        ManagementAnnouncementVisibilityView.as_view(),
+        name='management-announcement-visibility',
+    ),
     path('uploads/', ManagementResourceUploadListView.as_view(), name='management-uploads'),
     path('uploads/blacklist/', ManagementResourceUploadBlacklistView.as_view(), name='management-upload-blacklist'),
     path('uploads/directories/', ManagementResourceDirectoryView.as_view(), name='management-upload-directories'),

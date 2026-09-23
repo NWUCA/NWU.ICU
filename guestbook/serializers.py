@@ -1,4 +1,5 @@
 import re
+from urllib.parse import urlsplit
 
 from bs4 import BeautifulSoup, Comment
 from rest_framework import serializers
@@ -8,10 +9,38 @@ from .models import GuestbookReport
 
 ALLOWED_TAGS = {'p', 'br', 'strong', 'em', 's', 'u'}
 DISCARDED_TAGS = {'script', 'style', 'iframe', 'object', 'embed', 'template'}
+ANNOUNCEMENT_IMAGE_SIZES = {'25', '50', '75', '100'}
+MAX_ANNOUNCEMENT_LINK_LENGTH = 2048
 ANNOUNCEMENT_IMAGE_PATH = re.compile(
     r'^/api/download/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/$',
     re.IGNORECASE,
 )
+
+
+def _announcement_link_attrs(value):
+    href = str(value or '').strip()
+    if (
+        not href
+        or len(href) > MAX_ANNOUNCEMENT_LINK_LENGTH
+        or '\\' in href
+        or any(char.isspace() or ord(char) < 32 or ord(char) == 127 for char in href)
+    ):
+        return None
+    if href.startswith('/') and not href.startswith('//'):
+        return {'href': href}
+    try:
+        parsed = urlsplit(href)
+        hostname = parsed.hostname
+        parsed.port
+    except ValueError:
+        return None
+    if parsed.scheme.lower() not in {'http', 'https'} or not hostname:
+        return None
+    return {
+        'href': href,
+        'target': '_blank',
+        'rel': 'noopener noreferrer',
+    }
 
 
 def _clean_html(value, *, allow_images=False):
@@ -34,7 +63,16 @@ def _clean_html(value, *, allow_images=False):
             alt = tag.get('alt', '').strip()[:200]
             if alt:
                 attrs['alt'] = alt
+            image_size = str(tag.get('data-size', ''))
+            if image_size in ANNOUNCEMENT_IMAGE_SIZES:
+                attrs['data-size'] = image_size
             tag.attrs = attrs
+        elif tag.name == 'a' and allow_images:
+            attrs = _announcement_link_attrs(tag.get('href'))
+            if attrs is None:
+                tag.unwrap()
+            else:
+                tag.attrs = attrs
         elif tag.name not in ALLOWED_TAGS:
             tag.unwrap()
         else:
@@ -74,6 +112,7 @@ class GuestbookContentSerializer(GuestbookReplySerializer):
 
 class AnnouncementContentSerializer(GuestbookContentSerializer):
     title = serializers.CharField(max_length=100, trim_whitespace=True)
+    priority = serializers.IntegerField(min_value=-100, max_value=100, default=0)
 
     def validate_content(self, value):
         content, text, image_ids = clean_announcement_html(value)
@@ -82,16 +121,18 @@ class AnnouncementContentSerializer(GuestbookContentSerializer):
         if len(text) > 500:
             raise serializers.ValidationError('内容不能超过 500 字。')
         request = self.context.get('request')
+        existing_image_ids = announcement_image_ids(self.context.get('existing_content', ''))
+        added_image_ids = image_ids - existing_image_ids
         valid_image_ids = set()
-        if request and image_ids:
+        if request and added_image_ids:
             valid_image_ids = {
                 str(image_id) for image_id in UploadedFile.objects.filter(
-                    id__in=image_ids,
+                    id__in=added_image_ids,
                     created_by=request.user,
                     file_type='img',
                 ).values_list('id', flat=True)
             }
-        if valid_image_ids != image_ids:
+        if valid_image_ids != added_image_ids:
             raise serializers.ValidationError('公告只能使用当前管理员上传的有效图片。')
         return content
 
@@ -99,6 +140,10 @@ class AnnouncementContentSerializer(GuestbookContentSerializer):
         if not value:
             raise serializers.ValidationError('标题不能为空。')
         return value
+
+
+class AnnouncementUpdateSerializer(AnnouncementContentSerializer):
+    priority = serializers.IntegerField(min_value=-100, max_value=100)
 
 
 class GuestbookLikeSerializer(serializers.Serializer):

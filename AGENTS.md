@@ -5,6 +5,15 @@
 - 在 WSL 的 `/mnt/e/Code/nwuicu/NWU.ICU` 中使用 Docker Compose；不要在 Windows 原生 Python 中启动 Django。
 - 若 `.env` 未设置资源目录，使用 `RESOURCE_STORAGE_HOST_PATH="$PWD/resource-storage" docker compose up -d`。
 
+## 测试要求
+
+- 完整测试流程见 `docs/testing.md`。
+- 在提供 Docker CLI 的 WSL 发行版中运行后端测试；当前开发机使用 `Debian1`，不要改用 Windows 原生 Django。
+- 每次测试必须显式使用 `--env-file .env.test`，并同时加载 `docker-compose.yaml` 与 `docker-compose.test.yaml`，确保 PostgreSQL 与 Django 测试容器使用同一套凭据。
+- 每次测试必须使用非默认且唯一的 Compose 项目名（`-p nwuicu-test-<唯一后缀>`），隔离容器、网络和 `test-pgdata`。禁止用默认 `nwuicu` 项目运行测试覆盖文件，以免重建正在使用的开发数据库容器。
+- 凭据不匹配或测试卷陈旧时，改用新的唯一项目名；不得擅自删除旧卷。测试结束后停止隔离测试项目的 `db`，不执行 `docker compose down`，不删除卷。
+- 测试前后记录默认开发栈状态；若误影响默认栈，按 `docs/testing.md` 恢复并验证。
+
 ## 生产部署
 
 - 生产服务器 SSH 别名为 `resour`。执行部署前必须完整阅读 `deploy/production-runbook.md` 和 `deploy/quick-update.md`。

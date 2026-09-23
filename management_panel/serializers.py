@@ -31,6 +31,10 @@ class ReportResolutionSerializer(serializers.Serializer):
     note = serializers.CharField(max_length=500, trim_whitespace=True)
 
 
+class AnnouncementVisibilitySerializer(serializers.Serializer):
+    visible = serializers.BooleanField()
+
+
 class ResourceReviewSerializer(serializers.Serializer):
     action = serializers.ChoiceField(choices=('approve', 'reject', 'retry'))
     expected_revision = serializers.IntegerField(min_value=1)

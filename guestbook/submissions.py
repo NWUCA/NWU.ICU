@@ -20,6 +20,7 @@ def previous_submission(author, data, parent=None, board=GuestbookEntry.BOARD_GU
         or entry.title != data.get('title', '')
         or entry.content != data['content']
         or entry.anonymous != data.get('anonymous', False)
+        or entry.priority != data.get('priority', 0)
     ):
         raise SubmissionConflict()
     return entry

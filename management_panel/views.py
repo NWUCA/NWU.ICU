@@ -10,6 +10,7 @@ from django.db import IntegrityError, transaction
 from django.http import FileResponse, Http404
 from django.utils import timezone
 from rest_framework import status
+from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
 from webauthn import (
@@ -40,11 +41,18 @@ from common.file.resource_workflow import (
     retry_resource_publish,
 )
 from common.file.serializers import ResourceDirectorySerializer, ResourceUploadRequestSerializer
-from guestbook.announcements import publish_announcement
+from guestbook.announcements import (
+    AnnouncementMustBeHidden,
+    AnnouncementNotFound,
+    delete_announcement,
+    publish_announcement,
+    set_announcement_visibility,
+    update_announcement,
+)
 from guestbook.models import GuestbookEntry, GuestbookReport
 from guestbook.moderation import ReportModerationError, resolve_guestbook_report
-from guestbook.serializers import AnnouncementContentSerializer
-from guestbook.views import serialize_entry
+from guestbook.serializers import AnnouncementContentSerializer, AnnouncementUpdateSerializer
+from guestbook.views import serialize_entry, with_entry_counts
 from utils.custom_pagination import StandardResultsSetPagination
 from utils.utils import return_response
 
@@ -64,6 +72,7 @@ from .security import (
     require_management_access,
 )
 from .serializers import (
+    AnnouncementVisibilitySerializer,
     PasskeyAuthenticationVerifySerializer,
     PasskeyRegistrationOptionsSerializer,
     PasskeyRegistrationVerifySerializer,
@@ -131,6 +140,14 @@ def _permission_flags(user):
             'management_panel.change_telegramnotificationsettings'
         ),
     }
+
+
+def _validation_error_response(error):
+    details = {
+        field: value if isinstance(value, (list, tuple)) else [value]
+        for field, value in error.detail.items()
+    }
+    return return_response(errors=details, status_code=status.HTTP_400_BAD_REQUEST)
 
 
 class ManagementAPIView(APIView):
@@ -460,15 +477,118 @@ class ManagementReportResolveView(ManagementAPIView):
 class ManagementAnnouncementView(ManagementAPIView):
     required_permission = 'guestbook.publish_announcements'
 
+    def get(self, request):
+        queryset = GuestbookEntry.objects.filter(
+            board=GuestbookEntry.BOARD_ANNOUNCEMENT,
+            parent__isnull=True,
+            root__isnull=True,
+        )
+        visibility = request.query_params.get('visibility')
+        if visibility:
+            if visibility not in {'published', 'hidden'}:
+                return return_response(
+                    errors={'visibility': {'err_code': 'invalid_visibility', 'err_msg': '无效的公告可见性'}},
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
+            queryset = queryset.filter(is_visible=visibility == 'published')
+        queryset = with_entry_counts(
+            queryset.order_by('-priority', '-updated_at', '-id'),
+            request,
+        )
+        paginator = StandardResultsSetPagination()
+        page = paginator.paginate_queryset(queryset, request)
+        return paginator.get_paginated_response([serialize_entry(entry, request) for entry in page])
+
     def post(self, request):
         serializer = AnnouncementContentSerializer(data=request.data, context={'request': request})
         if not serializer.is_valid():
             return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
-        entry, created = publish_announcement(author=request.user, data=serializer.validated_data)
+        try:
+            entry, created = publish_announcement(author=request.user, data=serializer.validated_data)
+        except ValidationError as error:
+            return _validation_error_response(error)
         return return_response(
             message='公告发布成功',
             contents={'entry': serialize_entry(entry, request), 'created': created},
             status_code=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
+
+
+class ManagementAnnouncementDetailView(ManagementAPIView):
+    required_permission = 'guestbook.publish_announcements'
+
+    @staticmethod
+    def _not_found():
+        return return_response(
+            errors={'announcement': {'err_code': 'not_found', 'err_msg': '公告不存在'}},
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+
+    def put(self, request, entry_id):
+        entry = GuestbookEntry.objects.filter(
+            pk=entry_id,
+            board=GuestbookEntry.BOARD_ANNOUNCEMENT,
+            parent__isnull=True,
+            root__isnull=True,
+        ).first()
+        if entry is None:
+            return self._not_found()
+        serializer = AnnouncementUpdateSerializer(
+            data=request.data,
+            context={'request': request, 'existing_content': entry.content},
+        )
+        if not serializer.is_valid():
+            return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
+        try:
+            entry = update_announcement(
+                entry_id=entry_id,
+                editor=request.user,
+                data=serializer.validated_data,
+            )
+        except AnnouncementNotFound:
+            return self._not_found()
+        except ValidationError as error:
+            return _validation_error_response(error)
+        return return_response(message='公告已更新', contents={'entry': serialize_entry(entry, request)})
+
+    def delete(self, request, entry_id):
+        try:
+            entry = delete_announcement(entry_id=entry_id)
+        except AnnouncementNotFound:
+            return self._not_found()
+        except AnnouncementMustBeHidden:
+            return return_response(
+                errors={
+                    'announcement': {
+                        'err_code': 'announcement_must_be_hidden',
+                        'err_msg': '请先隐藏公告再删除',
+                    },
+                },
+                status_code=status.HTTP_409_CONFLICT,
+            )
+        return return_response(message='公告已删除', contents={'entry_id': entry.pk})
+
+
+class ManagementAnnouncementVisibilityView(ManagementAPIView):
+    required_permission = 'guestbook.publish_announcements'
+
+    def post(self, request, entry_id):
+        serializer = AnnouncementVisibilitySerializer(data=request.data)
+        if not serializer.is_valid():
+            return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
+        try:
+            entry = set_announcement_visibility(
+                entry_id=entry_id,
+                visible=serializer.validated_data['visible'],
+            )
+        except AnnouncementNotFound:
+            return return_response(
+                errors={'announcement': {'err_code': 'not_found', 'err_msg': '公告不存在'}},
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
+        return return_response(
+            message='公告已显示' if entry.is_visible else '公告已隐藏',
+            contents={'entry': serialize_entry(entry, request)},
         )
 
 
