@@ -57,6 +57,8 @@ Docker 只发布以下回环端口，不要改成 `0.0.0.0`：
 
 因此前端更新需要重建 gateway 镜像，不要把 `dist/` 手工复制到 1Panel 站点目录。
 gateway 构建时必须注入本次前后端完整提交号，页脚据此显示实际构建版本。
+在 `/etc/nwuicu/production.env` 配置 `FRONTEND_GITHUB_URL` 与 `BACKEND_GITHUB_URL`，
+Compose 会将两个仓库地址传入 gateway 构建，使提交号链接到对应的 GitHub 提交页。
 
 ## 3. 每次更新前的本地准备
 

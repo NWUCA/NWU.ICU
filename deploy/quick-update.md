@@ -35,6 +35,8 @@ cd "$RELEASE/NWU.ICU"
 export ENV_FILE=/etc/nwuicu/production.env
 export COMPOSE_PARALLEL_LIMIT=1
 
+# production.env 中配置 FRONTEND_GITHUB_URL 和 BACKEND_GITHUB_URL，供页脚提交链接使用。
+
 dc() {
   docker compose --env-file /etc/nwuicu/production.env \
     -f docker-compose.production.yaml \

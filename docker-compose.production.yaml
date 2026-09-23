@@ -81,6 +81,9 @@ services:
     build:
       context: ../new_nwu_icu_frontend
       dockerfile: Dockerfile
+      args:
+        FRONTEND_GITHUB_URL: ${FRONTEND_GITHUB_URL:-}
+        BACKEND_GITHUB_URL: ${BACKEND_GITHUB_URL:-}
     restart: unless-stopped
     volumes:
       - ${STATIC_STORAGE_HOST_PATH:?set STATIC_STORAGE_HOST_PATH}:/srv/django-static:ro
