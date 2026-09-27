@@ -67,7 +67,11 @@ dc build \
 
 构建失败就停止，不重启线上容器。
 
-## 4. 检查迁移并备份
+## 4. 检查迁移并全量备份两个数据库
+
+**每次更新都必须备份业务库和 `umami` 库，包括仅更新前端/gateway、配置以及没有迁移的更新。**
+在任何容器切换或迁移前执行，不用已有每日备份替代本次快照。两份备份必须完整包含结构和数据，
+并通过完整读取、对象清单及 SHA-256 校验；任一步失败就停止更新。
 
 ```bash
 dc run --rm --no-deps web python manage.py showmigrations --plan
@@ -75,19 +79,32 @@ dc run --rm --no-deps web python manage.py check --deploy
 
 BACKUP_TIME=$(date +%Y%m%d_%H%M%S)
 BACKUP_DIR=/root/nwuicuBack/update_$BACKUP_TIME
+set -euo pipefail
+umask 077
 install -d -m 700 "$BACKUP_DIR"
 DB_USER=$(docker exec pgsql printenv POSTGRES_USER)
 DB_NAME=$(docker exec pgsql printenv POSTGRES_DB)
 
-docker exec pgsql pg_dump -U "$DB_USER" -d "$DB_NAME" -Fc --no-owner --no-privileges \
-  > "$BACKUP_DIR/nwuicu_$BACKUP_TIME.dump"
-test -s "$BACKUP_DIR/nwuicu_$BACKUP_TIME.dump"
-docker exec -i pgsql pg_restore --list \
-  < "$BACKUP_DIR/nwuicu_$BACKUP_TIME.dump" \
-  > "$BACKUP_DIR/nwuicu_$BACKUP_TIME.list"
-test -s "$BACKUP_DIR/nwuicu_$BACKUP_TIME.list"
-sha256sum "$BACKUP_DIR"/*
+for database in "$DB_NAME" umami; do
+  if [ "$database" = "$DB_NAME" ]; then name=business_full; else name=umami_full; fi
+  docker exec pgsql pg_dump -U "$DB_USER" -d "$database" \
+    -Fc --no-owner --no-privileges > "$BACKUP_DIR/$name.dump"
+  test -s "$BACKUP_DIR/$name.dump"
+  docker exec -i pgsql pg_restore --file=/dev/null < "$BACKUP_DIR/$name.dump"
+  docker exec -i pgsql pg_restore --list \
+    < "$BACKUP_DIR/$name.dump" > "$BACKUP_DIR/$name.list"
+  test -s "$BACKUP_DIR/$name.list"
+done
+(
+  cd "$BACKUP_DIR"
+  sha256sum business_full.dump business_full.list umami_full.dump umami_full.list > SHA256SUMS
+  sha256sum -c SHA256SUMS
+)
 ```
+
+记录备份目录，不删除历史备份。双库快照和清单获得对应传输授权后下载到本地再校验 SHA-256；
+其中包含 Umami 账号、网站配置和访问数据，不能提交仓库或公开分享。
+角色和凭据不包含在库快照中，恢复时复用既有角色/私有配置并指定目标库所有者。
 
 如果要修改 `/etc/nwuicu/production.env`，先以 `0600` 权限复制到本次备份目录。
 `ALLOWED_HOSTS` 必须包含 `api.nwu.icu`。
@@ -157,7 +174,7 @@ dc exec web python manage.py admin_passkey_enroll <username>
 创建固定提交的新发布目录
 → 更新四处镜像标签
 → 临时 Swap，串行 build web/gateway 并注入提交号
-→ showmigrations、check、pg_dump
+→ showmigrations、check、业务库 + Umami 库全量 pg_dump、完整读取与 SHA-256 校验
 → migrate
 → 先 up web/gateway，验证后 up worker/cron
 → curl、hash、重启次数和 logs 验证

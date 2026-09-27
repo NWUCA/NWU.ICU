@@ -66,8 +66,12 @@ docker compose -p nwuicu-umami --env-file deploy/.env.umami \
 生产依照 [production-runbook.md](production-runbook.md) 和 [quick-update.md](quick-update.md)
 准备已经 push 的固定提交与新发布目录。私有配置放在 `/etc/nwuicu/umami.env`，仅设置
 `UMAMI_` 前缀变量，不覆盖已有生产配置。创建专用库、首次初始化之前按 Runbook 制作并校验
-业务库快照；以后升级也须另外备份 `umami` 库。现有 `nwuicu-db-backup` 只备份业务库，
-不会自动覆盖新增统计库。
+业务库快照。专用库创建后，**每次生产更新前都须全量备份业务库和 `umami` 库**，包括仅更新
+前端/gateway、配置、Umami 镜像和没有迁移的更新。按 [生产 Runbook 第 7 节](production-runbook.md#7-每次更新前全量备份迁移时进入维护)
+或 [日常更新第 4 节](quick-update.md#4-检查迁移并全量备份两个数据库) 的双库命令执行；生成
+自定义格式 dump、完整读取归档、生成对象清单与 SHA-256，并在全部校验通过后才继续更新。
+Umami 备份包含账号、网站配置、全部事件和已有的回放/热图数据，不得只备份部分表。
+现有 `nwuicu-db-backup` 只备份业务库，不能替代上述更新前备份，也不会自动覆盖新增统计库。
 
 在新发布的 `NWU.ICU` 目录中，保留生产要求的两个 Compose 文件，再追加本文件：
 
@@ -91,8 +95,11 @@ docker stats --no-stream nwuicu-umami-1 pgsql
 只选择 `umami` 并使用 `--no-deps`；不运行全栈 `up`、`down` 或数据库重建。之后每次生产
 更新都保留这个追加文件及相同项目名。该镜像直接拉取，不在生产服务器源码构建。
 
-本配置仅提供本机面板入口和内部 `umami:3000` 地址。前端埋点、gateway 同域代理尚未接入；
-正式接入时通过现有 gateway 发布脚本与采集接口，并保留真实客户端 IP 的可信代理链。
+本配置提供本机面板入口和内部 `umami:3000` 地址。生产面板通过 `https://umami.nwu.icu`
+的 OpenResty 反向代理访问；前端已通过 gateway 的 `/_site/client.js` 和 `/_site/api/send`
+同域接口接入基础统计，保持真实客户端 IP 的可信代理链。配置详见
+[前端统计说明](https://github.com/MooWantFree/new_nwu_icu_frontend/blob/88e762cd6f23e5a893075d59aef60d363dacd177/docs/analytics.md)。
+当前不加载回放/热图录制脚本。
 远程查看临时面板可使用 SSH 隧道：
 
 ```sh

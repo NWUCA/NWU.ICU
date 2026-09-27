@@ -189,33 +189,54 @@ docker compose --env-file /etc/nwuicu/production.env \
 `swapon --show` 的 used 数量后，执行 `swapoff /swapfile`，删除 `/swapfile` 并再次确认
 `swapon --show` 为空。
 
-## 7. 进入维护与制作快照
+## 7. 每次更新前全量备份；迁移时进入维护
 
-先让 `nwu.icu` 和 `api.nwu.icu` 返回 503 维护页，执行 `openresty -t` 成功后再平滑重载。
-确认两个域名均为 503 后停止旧 `web` 与 `cron`，保持 `pgsql` 运行。
+**每次生产更新都必须在切换容器前，全量备份业务库和 `umami` 库。** 仅更新前端、gateway、
+配置或 Umami 镜像，以及没有数据库迁移时，也不能跳过。已有每日备份不能替代本次更新前快照。
+Umami 全量快照应包含完整结构与数据，包括账号、网站配置、访问事件以及已有的回放/热图数据；
+不要只导出事件表或选择性业务表。
 
-迁移前必须制作完整自定义格式快照：
+普通更新可在线备份，不需要为备份停止或重启 PostgreSQL。有需要维护窗口的迁移时，先让
+`nwu.icu` 和 `api.nwu.icu` 返回 503，执行 `openresty -t` 成功后平滑重载，确认两个域名
+均为 503 后停止旧 `web` 与 `cron`，再制作快照；保持 `pgsql` 运行。若本次升级 Umami
+并执行迁移，也应先暂停其写入，再备份 `umami` 库。
+
+以下命令在服务器 Bash 中执行，生成两个 PostgreSQL 自定义格式全量快照、对象清单与校验文件：
 
 ```bash
+set -euo pipefail
+umask 077
 BACKUP_DIR=/root/nwuicuBack/predeploy_$RELEASE_ID
 install -d -m 700 "$BACKUP_DIR"
 
 DB_USER=$(docker exec pgsql printenv POSTGRES_USER)
 DB_NAME=$(docker exec pgsql printenv POSTGRES_DB)
 
-docker exec pgsql pg_dump -U "$DB_USER" -d "$DB_NAME" \
-  -Fc --no-owner --no-privileges \
-  > "$BACKUP_DIR/nwuicu_full_pre_migration_$RELEASE_ID.dump"
-
-docker exec -i pgsql pg_restore --list \
-  < "$BACKUP_DIR/nwuicu_full_pre_migration_$RELEASE_ID.dump" \
-  > "$BACKUP_DIR/nwuicu_full_pre_migration_$RELEASE_ID.list"
-
-sha256sum "$BACKUP_DIR"/*
+for database in "$DB_NAME" umami; do
+  if [ "$database" = "$DB_NAME" ]; then name=business_full; else name=umami_full; fi
+  docker exec pgsql pg_dump -U "$DB_USER" -d "$database" \
+    -Fc --no-owner --no-privileges > "$BACKUP_DIR/$name.dump"
+  test -s "$BACKUP_DIR/$name.dump"
+  # Read/decompress the entire archive without restoring or modifying a database.
+  docker exec -i pgsql pg_restore --file=/dev/null < "$BACKUP_DIR/$name.dump"
+  docker exec -i pgsql pg_restore --list \
+    < "$BACKUP_DIR/$name.dump" > "$BACKUP_DIR/$name.list"
+  test -s "$BACKUP_DIR/$name.list"
+done
+(
+  cd "$BACKUP_DIR"
+  sha256sum business_full.dump business_full.list umami_full.dump umami_full.list > SHA256SUMS
+  sha256sum -c SHA256SUMS
+)
 ```
 
-快照和目录清单应下载到本地并再次校验 SHA-256。完整快照用于回滚迁移，不应以选择性业务表
-导出替代。
+任一导出、完整读取、对象清单或 SHA-256 校验失败，都必须停止更新，不切换容器、不执行迁移。
+数据库不存在时应核对配置，不能静默跳过 `umami`。记录本次备份目录，保留旧发布和历史备份。
+两个库的快照与清单应在获得对应传输授权后下载到本地，并再次执行 `sha256sum -c SHA256SUMS`。
+Umami 快照包含账号与访问数据，不能发布到仓库或公开目录。
+
+`--no-owner --no-privileges` 不省略表结构或数据；恢复时需复用已存在的数据库角色与私有配置，
+并按目标库所有者恢复。数据库角色、凭据及 `/etc/nwuicu/*.env` 不包含在这两个库的快照中。
 
 ## 8. 迁移和核心启动
 
@@ -372,10 +393,11 @@ docker compose --env-file /etc/nwuicu/production.env \
   up -d --no-deps --no-build cron
 ```
 
-数据库全量备份由宿主机的 `nwuicu-db-backup.timer` 管理，每天 04:00（`Asia/Shanghai`）
+业务数据库的每日全量备份由宿主机的 `nwuicu-db-backup.timer` 管理，每天 04:00（`Asia/Shanghai`）
 执行。备份写入 `/root/nwuicuBack/daily/<timestamp>/`，每次包含 PostgreSQL 自定义格式
 dump、`pg_restore --list` 对象清单、元数据和 `SHA256SUMS`。timer 使用
 `Persistent=true`，服务器错过执行时间时会在下次启动后补跑；它不会自动删除历史备份。
+当前定时脚本仅备份业务库，不包含 `umami`；每次更新仍须执行第 7 节的双库全量备份。
 
 安装或更新任务：
 
