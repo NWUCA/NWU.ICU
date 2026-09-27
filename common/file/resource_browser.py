@@ -118,39 +118,45 @@ def read_directory_readme(directory):
     return '', ''
 
 
+def browse_resource(raw_path, user=None):
+    """One permission/path-checked representation for HTML and the JSON API."""
+    target, path = resolve_resource(raw_path)
+    access = ResourceAccess(user)
+    access.require(path)
+    try:
+        contents = entry_metadata(target, path)
+        contents['download_gate_enabled'] = download_gate_enabled()
+        contents['indexable'] = access.mode(path) == 'public'
+        directory = target if target.is_dir() else target.parent
+        contents['readme'], contents['readme_warning'] = read_directory_readme(directory)
+        if target.is_dir():
+            entries = []
+            for child in target.iterdir():
+                if not visible_name(child.name):
+                    continue
+                child_path = posixpath.join(path, child.name)
+                if not access.allowed(child_path):
+                    continue
+                try:
+                    resolved, _ = resolve_resource(child_path)
+                    if resolved.is_dir() or resolved.is_file():
+                        entries.append(entry_metadata(resolved, child_path))
+                except (Http404, ValidationError, OSError):
+                    continue
+            contents['entries'] = sorted(entries, key=lambda item: (
+                item['type'] != 'directory', item['name'].casefold(), item['name']))
+        elif not target.is_file():
+            raise Http404
+    except OSError as error:
+        raise ResourceUnavailable() from error
+    return contents
+
+
 class ResourceBrowseView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        target, path = resolve_resource(request.query_params.get('path', '/'))
-        access = ResourceAccess(request.user)
-        access.require(path)
-        try:
-            contents = entry_metadata(target, path)
-            contents['download_gate_enabled'] = download_gate_enabled()
-            directory = target if target.is_dir() else target.parent
-            contents['readme'], contents['readme_warning'] = read_directory_readme(directory)
-            if target.is_dir():
-                entries = []
-                for child in target.iterdir():
-                    if not visible_name(child.name):
-                        continue
-                    child_path = posixpath.join(path, child.name)
-                    if not access.allowed(child_path):
-                        continue
-                    try:
-                        resolved, _ = resolve_resource(child_path)
-                        if resolved.is_dir() or resolved.is_file():
-                            entries.append(entry_metadata(resolved, child_path))
-                    except (Http404, ValidationError, OSError):
-                        continue
-                contents['entries'] = sorted(entries, key=lambda item: (
-                    item['type'] != 'directory', item['name'].casefold(), item['name']))
-            elif not target.is_file():
-                raise Http404
-        except OSError as error:
-            raise ResourceUnavailable() from error
-        response = return_response(contents=contents)
+        response = return_response(contents=browse_resource(request.query_params.get('path', '/'), request.user))
         response['Cache-Control'] = 'no-store'
         return response
 
@@ -297,13 +303,16 @@ def stream_range(source, start, length):
 class ResourceFileView(APIView):
     permission_classes = [AllowAny]
 
+    def check_download_access(self, request, path, inline):
+        require_resource_ticket(request, path, inline)
+
     def get(self, request):
         target, path = resolve_resource(request.query_params.get('path', '/'))
         ResourceAccess(request.user).require(path)
         if not target.is_file():
             raise Http404
         inline = request.query_params.get('inline') == '1' and target.suffix.lower() in INLINE_TYPES
-        require_resource_ticket(request, path, inline)
+        self.check_download_access(request, path, inline)
         try:
             source = target.open('rb')
             stat = target.stat()

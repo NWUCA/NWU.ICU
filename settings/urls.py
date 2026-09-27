@@ -33,6 +33,8 @@ from common.file.view import (
 from common.file.resource_browser import (
     ResourceBrowseView, ResourceFileAuthorizeView, ResourceFileView, ResourceSearchView,
 )
+from common.file.resource_seo import resource_page, robots_txt, sitemap
+from common.file.resource_legacy import LegacyResourceFileView, LegacyResourceRedirectView
 from common.views import (
     AboutView,
     CaptchaView,
@@ -167,6 +169,8 @@ api_patterns = [
     path('resources/browse/', ResourceBrowseView.as_view(), name='resource-browse'),
     path('resources/search/', ResourceSearchView.as_view(), name='resource-search'),
     path('resources/file/', ResourceFileView.as_view(), name='resource-file'),
+    path('resources/file/legacy/', LegacyResourceFileView.as_view(), name='resource-file-legacy'),
+    path('resources/legacy-redirect/', LegacyResourceRedirectView.as_view(), name='resource-legacy-redirect'),
     path('resources/file/authorize/', ResourceFileAuthorizeView.as_view(), name='resource-file-authorize'),
     path('upload/directories/', ResourceDirectoryView.as_view(), name='resource-upload-directories'),
     path('upload/config/', ResourceUploadConfigView.as_view(), name='resource-upload-config'),
@@ -178,6 +182,11 @@ api_patterns = [
     path('search/', CourseTeacherSearchView.as_view(), name='search'),
 ]
 urlpatterns = [
+    path('disk', resource_page, name='resource-page-root'),
+    path('disk/', resource_page, name='resource-page-root-slash'),
+    path('disk/<path:path>', resource_page, name='resource-page'),
+    path('robots.txt', robots_txt, name='robots'),
+    path('sitemap.xml', sitemap, name='sitemap'),
     path('admin/login/', throttled_admin_login, name='admin-login'),
     path(
         'admin/upload/',

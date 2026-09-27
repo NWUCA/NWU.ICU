@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https:; media-src 'self' blob: https:; worker-src 'self' blob:">
+  <title>{{ title }}</title>
+  {% if description %}<meta name="description" content="{{ description }}">{% endif %}
+  {% if canonical %}<link rel="canonical" href="{{ canonical }}">{% endif %}
+  {% if noindex %}<meta name="robots" content="noindex, follow">{% endif %}
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="/resource-entry.css">
+  <script type="module" src="/resource-entry.js"></script>
+</head>
+<body>
+  <div id="app">
+    <main class="mx-auto max-w-6xl px-4 py-8">
+      <a href="/">NWU.ICU</a>
+      {% if error %}
+        <h1>{{ title }}</h1><p role="alert">{{ error }}</p>
+        {% if status == 401 %}<a href="/login">登录后访问</a>{% endif %}
+        <a href="/disk">返回全部资料</a>
+      {% else %}
+        <nav aria-label="资料目录"><ol>{% for crumb in breadcrumbs %}<li><a href="{{ crumb.url }}">{{ crumb.name }}</a></li>{% endfor %}</ol></nav>
+        <h1 class="my-6 text-2xl font-bold">{% if contents.path == '/' %}资料下载{% else %}{{ contents.name }}{% endif %}</h1>
+        {% if contents.readme %}<section aria-label="目录说明"><h2>目录说明</h2><pre class="whitespace-pre-wrap break-words">{{ contents.readme }}</pre></section>{% endif %}
+        {% if contents.type == 'directory' %}
+          <section aria-label="文件列表"><h2>文件与目录</h2><ul>
+          {% for entry in entries %}<li class="border-b py-3"><a href="{{ entry.url }}">{{ entry.name }}</a>{% if entry.type == 'file' %} <span>{{ entry.size|filesizeformat }}</span>{% endif %}</li>{% empty %}<li>此目录暂无公开资料。</li>{% endfor %}
+          </ul></section>
+        {% else %}
+          <section aria-label="文件详情"><p>文件大小：{{ contents.size|filesizeformat }}</p><p>修改时间：<time>{{ contents.modified_at }}</time></p>
+          {% if contents.download_gate_enabled %}<noscript>下载此资料需要启用 JavaScript 完成访问验证。</noscript>{% else %}<a href="{{ download_url }}" rel="nofollow">下载文件</a>{% endif %}</section>
+        {% endif %}
+      {% endif %}
+    </main>
+  </div>
+  {% if contents %}{{ contents|json_script:"resource-bootstrap" }}{% endif %}
+</body>
+</html>
