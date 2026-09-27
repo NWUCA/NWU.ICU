@@ -14,6 +14,7 @@ services:
       python manage.py collectstatic --noinput &&
       gunicorn settings.wsgi:application --bind 0.0.0.0:8000 --workers $${GUNICORN_WORKERS:-3} --timeout $${GUNICORN_TIMEOUT:-60} --access-logfile - --error-logfile -"
     volumes:
+      - archive-cache:/app/archive-cache
       - ${MEDIA_STORAGE_HOST_PATH:-./media}:/app/media
       - ${RESOURCE_INDEX_HOST_PATH:-./data}:/app/data
       - ${RESOURCE_STORAGE_HOST_PATH:?请在.env中配置AList本地存储物理目录}:/resource-storage
@@ -117,7 +118,35 @@ services:
     networks:
       - app-network
 
+  archive-worker: &archive-worker
+    build: .
+    restart: unless-stopped
+    env_file:
+      - ${ENV_FILE:-.env}
+    command: python manage.py process_resource_archives
+    cpus: "${RESOURCE_ARCHIVE_CPU_LIMIT:-0.5}"
+    mem_limit: ${RESOURCE_ARCHIVE_MEMORY_LIMIT:-256m}
+    volumes:
+      - archive-cache:/app/archive-cache
+      - ${RESOURCE_STORAGE_HOST_PATH:?请配置资料目录}:/resource-storage:ro
+    environment:
+      DJANGO_SETTINGS_MODULE: settings.settings
+      DB_HOST: db
+      DB_PORT: 5432
+      RESOURCE_STORAGE_ROOT: /resource-storage
+      RESOURCE_ARCHIVE_CACHE_ROOT: /app/archive-cache
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  archive-cleaner:
+    <<: *archive-worker
+    command: python manage.py clean_resource_archives --watch
+
 volumes:
+  archive-cache:
   pgdata:
 
 networks:

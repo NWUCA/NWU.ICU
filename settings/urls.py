@@ -34,6 +34,10 @@ from common.file.resource_browser import (
     ResourceBrowseView, ResourceFileAuthorizeView, ResourceFileView, ResourceSearchView,
 )
 from common.file.resource_seo import resource_page, robots_txt, sitemap
+from common.file.archive_views import (
+    ArchiveConfigView, ArchiveListView, ArchiveDetailView, ArchiveCancelView,
+    ArchiveAuthorizeView, ArchiveDownloadView,
+)
 from common.file.resource_legacy import LegacyResourceFileView, LegacyResourceRedirectView
 from common.views import (
     AboutView,
@@ -166,6 +170,12 @@ api_patterns = [
         ResourceUploadFileDownloadView.as_view(),
         name='resource-upload-file-download',
     ),
+    path('resources/archives/config/', ArchiveConfigView.as_view()),
+    path('resources/archives/', ArchiveListView.as_view()),
+    path('resources/archives/<uuid:receipt_id>/', ArchiveDetailView.as_view()),
+    path('resources/archives/<uuid:receipt_id>/cancel/', ArchiveCancelView.as_view()),
+    path('resources/archives/<uuid:receipt_id>/authorize/', ArchiveAuthorizeView.as_view()),
+    path('resources/archives/<uuid:receipt_id>/download/', ArchiveDownloadView.as_view()),
     path('resources/browse/', ResourceBrowseView.as_view(), name='resource-browse'),
     path('resources/search/', ResourceSearchView.as_view(), name='resource-search'),
     path('resources/file/', ResourceFileView.as_view(), name='resource-file'),

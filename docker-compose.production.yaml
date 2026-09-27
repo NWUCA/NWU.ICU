@@ -54,6 +54,7 @@ services:
       --workers $${GUNICORN_WORKERS:-3} --timeout $${GUNICORN_TIMEOUT:-300}
       --access-logfile - --error-logfile -"
     volumes:
+      - archive-cache:/app/archive-cache
       - ${MEDIA_STORAGE_HOST_PATH:?set MEDIA_STORAGE_HOST_PATH}:/app/media
       - ${STATIC_STORAGE_HOST_PATH:?set STATIC_STORAGE_HOST_PATH}:/app/staticfiles
       - ${RESOURCE_INDEX_HOST_PATH:?set RESOURCE_INDEX_HOST_PATH}:/app/data
@@ -76,6 +77,19 @@ services:
   resource-worker:
     <<: *backend-service
     command: python manage.py process_resource_upload_tasks --poll-seconds 5
+
+  archive-worker: &archive-worker
+    <<: *backend-service
+    command: python manage.py process_resource_archives
+    cpus: "${RESOURCE_ARCHIVE_CPU_LIMIT:-0.5}"
+    mem_limit: ${RESOURCE_ARCHIVE_MEMORY_LIMIT:-256m}
+    volumes:
+      - archive-cache:/app/archive-cache
+      - ${RESOURCE_STORAGE_HOST_PATH:?set RESOURCE_STORAGE_HOST_PATH}:/resource-storage:ro
+
+  archive-cleaner:
+    <<: *archive-worker
+    command: python manage.py clean_resource_archives --watch
 
   gateway:
     build:
@@ -102,6 +116,7 @@ services:
           - nwuicu-gateway
 
 volumes:
+  archive-cache:
   pgdata:
 
 networks:

@@ -99,12 +99,14 @@ def issue_captcha_proof(request, scope):
         'actor': actor_identity(request),
         'issued_at': int(time.time()),
     }
+    if scope == 'resource_archive':
+        payload['context'] = throttle_cache().get('archive-context:' + digest(actor_identity(request)))
     ttl = proof_config['ttl']
     throttle_cache().set(f'captcha-proof:{digest(nonce)}', True, ttl)
     return signing.dumps(payload, salt=PROOF_SALT, compress=True), ttl
 
 
-def consume_captcha_proof(request, scope, proof=None):
+def consume_captcha_proof(request, scope, proof=None, context=None):
     proof = proof or request.headers.get('X-Captcha-Proof', '')
     if not proof:
         return False
@@ -117,6 +119,8 @@ def consume_captcha_proof(request, scope, proof=None):
     except signing.BadSignature as error:
         raise InvalidCaptchaProof() from error
     if payload.get('scope') != scope or payload.get('actor') != actor_identity(request):
+        raise InvalidCaptchaProof()
+    if context is not None and payload.get('context') != context:
         raise InvalidCaptchaProof()
     if not throttle_cache().delete(f"captcha-proof:{digest(payload.get('nonce', ''))}"):
         raise InvalidCaptchaProof()

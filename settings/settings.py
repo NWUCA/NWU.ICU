@@ -307,7 +307,7 @@ API_RATE_LIMITS = {
         'ttl': env.int('CAPTCHA_PROOF_TTL', default=120),
         'allowed_scopes': (
             'login', 'review_write', 'guestbook_write', 'reply_write',
-            'catalog_write', 'resource_download',
+            'catalog_write', 'resource_download', 'resource_archive',
         ),
     },
     'login': {
@@ -425,6 +425,32 @@ RESOURCE_DIRECTORY_CACHE_FILE = Path(env(
 ))
 _resource_storage_root = env('RESOURCE_STORAGE_ROOT', default='').strip()
 RESOURCE_STORAGE_ROOT = Path(_resource_storage_root) if _resource_storage_root else None
+
+# ZIP cache: queue capacity excludes running tasks; size values are bytes.
+RESOURCE_ARCHIVE = {
+    'enabled': env.bool('RESOURCE_ARCHIVE_ENABLED', default=True),
+    'max_files': env.int('RESOURCE_ARCHIVE_MAX_FILES', default=20),
+    'max_bytes': env.int('RESOURCE_ARCHIVE_MAX_BYTES', default=200 * 1024**2),
+    'queue_limit': env.int('RESOURCE_ARCHIVE_QUEUE_LIMIT', default=100),
+    'concurrency': env.int('RESOURCE_ARCHIVE_CONCURRENCY', default=1),
+    'max_wait': env.int('RESOURCE_ARCHIVE_MAX_WAIT_SECONDS', default=600),
+    'timeout': env.int('RESOURCE_ARCHIVE_TIMEOUT_SECONDS', default=120),
+    'window': env.int('RESOURCE_ARCHIVE_RATE_WINDOW_SECONDS', default=3600),
+    'anon_free': env.int('RESOURCE_ARCHIVE_ANON_FREE_CREATIONS', default=4),
+    'user_free': env.int('RESOURCE_ARCHIVE_USER_FREE_CREATIONS', default=7),
+    'ip_captcha': env.int('RESOURCE_ARCHIVE_IP_CAPTCHA_CREATIONS', default=30),
+    'request_rate': env('RESOURCE_ARCHIVE_REQUEST_RATE', default='30/minute'),
+    'ip_request_rate': env('RESOURCE_ARCHIVE_IP_REQUEST_RATE', default='300/minute'),
+    'cache_root': env('RESOURCE_ARCHIVE_CACHE_ROOT', default=str(BASE_DIR / 'archive-cache')),
+    'cache_max': env.int('RESOURCE_ARCHIVE_CACHE_MAX_BYTES', default=4 * 1024**3),
+    'min_free': env.int('RESOURCE_ARCHIVE_MIN_FREE_BYTES', default=1024**3),
+    'idle_ttl': env.int('RESOURCE_ARCHIVE_IDLE_TTL_SECONDS', default=1800),
+    'cleanup_interval': env.int('RESOURCE_ARCHIVE_CLEANUP_INTERVAL_SECONDS', default=60),
+    'ticket_ttl': env.int('RESOURCE_ARCHIVE_TICKET_TTL_SECONDS', default=120),
+    'telegram': env.bool('RESOURCE_ARCHIVE_SPACE_CLEANUP_TELEGRAM_ENABLED', default=True),
+    'notice_interval': env.int('RESOURCE_ARCHIVE_NOTICE_INTERVAL_SECONDS', default=60),
+    'history_ttl': env.int('RESOURCE_ARCHIVE_HISTORY_TTL_SECONDS', default=86400),
+}
 
 # Telegram 通知
 TELEGRAM_BOT_API_TOKEN = env('TELEGRAM_BOT_API_TOKEN', default='')

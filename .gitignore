@@ -1,4 +1,5 @@
 .idea
+/archive-cache/
 .venv/
 .uv-cache/
 *.sqlite3

@@ -1,4 +1,5 @@
 .git
+archive-cache
 .env
 .env.*
 !.env.sample

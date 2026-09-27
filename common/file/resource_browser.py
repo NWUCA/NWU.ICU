@@ -214,6 +214,7 @@ class ResourceSearchSerializer(serializers.Serializer):
     path = serializers.CharField(max_length=4096, default='/', trim_whitespace=False)
     page = serializers.IntegerField(min_value=1, default=1)
     sort = serializers.ChoiceField(choices=['name', 'modified', 'size'], default='name')
+    direction = serializers.ChoiceField(choices=['asc', 'desc'], required=False)
     type = serializers.ChoiceField(choices=['all', 'file', 'directory'], default='all')
 
 
@@ -264,10 +265,13 @@ class ResourceSearchView(APIView):
         # Stable ties keep paginated results deterministic. Apply locality before
         # slicing, so current-folder files cannot fall behind remote folders.
         matches.sort(key=lambda item: (item['name'].casefold(), item['path']))
+        descending = query.get('direction', 'asc' if query['sort'] == 'name' else 'desc') == 'desc'
         if query['sort'] == 'modified':
-            matches.sort(key=lambda item: item['modified_at'] or '', reverse=True)
+            matches.sort(key=lambda item: item['modified_at'] or '', reverse=descending)
         elif query['sort'] == 'size':
-            matches.sort(key=lambda item: item['size'] or 0, reverse=True)
+            matches.sort(key=lambda item: item['size'] or 0, reverse=descending)
+        elif descending:
+            matches.reverse()
         matches.sort(key=lambda item: (posixpath.dirname(item['path']) != path, item['type'] != 'directory'))
         page_size = 100
         page = query['page']

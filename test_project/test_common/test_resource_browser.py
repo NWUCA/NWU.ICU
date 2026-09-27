@@ -26,6 +26,27 @@ from utils.throttle import issue_captcha_proof
 
 
 class ResourceBrowserTests(TestCase):
+    def test_search_sort_direction_applies_before_pagination_and_preserves_grouping(self):
+        entries = [
+            {'name': f'排序{i:03}.pdf', 'path': f'/排序{i:03}.pdf', 'type': 'file',
+             'size': i, 'modified_at': f'2026-01-01T00:{i // 60:02}:{i % 60:02}Z'}
+            for i in range(101)
+        ]
+        entries.append({'name': '排序文件夹', 'path': '/排序文件夹', 'type': 'directory', 'size': None, 'modified_at': ''})
+        with patch('common.file.resource_browser.resource_search_entries', return_value=entries):
+            for sort in ('name', 'modified', 'size'):
+                for direction in ('asc', 'desc'):
+                    with self.subTest(sort=sort, direction=direction):
+                        query = {'q': '排序', 'sort': sort, 'direction': direction}
+                        first = ResourceSearchView.as_view()(self.factory.get('/api/resources/search/', query)).data['contents']
+                        second = ResourceSearchView.as_view()(self.factory.get('/api/resources/search/', {**query, 'page': 2})).data['contents']
+                        combined = first['entries'] + second['entries']
+                        self.assertEqual(combined[0]['type'], 'directory')
+                        expected = list(range(101)) if direction == 'asc' else list(reversed(range(101)))
+                        self.assertEqual([item['size'] for item in combined[1:]], expected)
+        invalid = ResourceSearchView.as_view()(self.factory.get('/api/resources/search/', {'q': '排序', 'direction': 'invalid'}))
+        self.assertEqual(invalid.status_code, 400)
+
     def test_search_uses_only_index_and_refreshes_metadata_after_reindex(self):
         for number in range(30):
             (self.root / '课程.2026' / f'试卷{number}.txt').write_text('old')

@@ -29,7 +29,7 @@ COPY . .
 
 RUN groupadd --gid 10001 app \
     && useradd --uid 10001 --gid app --create-home --no-log-init app \
-    && mkdir -p /app/data /app/media /app/static \
+    && mkdir -p /app/data /app/media /app/static /app/archive-cache \
     && chown -R app:app /app
 
 USER app
