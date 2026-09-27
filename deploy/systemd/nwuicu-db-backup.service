@@ -1,5 +1,5 @@
 [Unit]
-Description=Create a full NWU.ICU PostgreSQL backup
+Description=Create full NWU.ICU and Umami PostgreSQL backups
 Requires=docker.service
 After=docker.service
 

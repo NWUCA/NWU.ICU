@@ -38,11 +38,30 @@ if [[ ! "${latest}" =~ ^[0-9]{8}_[0-9]{6}$ ]]; then
 fi
 
 final_dir="${backup_root}/${latest}"
-if [[ -d "${final_dir}" ]]; then
+validate_backup() {
+    local directory="$1"
+    local expected_count=1
+    local -a expected_files=("nwuicu_full_${latest}.dump" "nwuicu_full_${latest}.list")
+    test -s "${directory}/metadata.txt"
+    if grep -qx 'backup_format_version=2' "${directory}/metadata.txt"; then
+        expected_count=2
+        expected_files+=("umami_full_${latest}.dump" "umami_full_${latest}.list")
+    elif grep -q '^backup_format_version=' "${directory}/metadata.txt"; then
+        echo "Unsupported backup format in ${directory}." >&2
+        return 1
+    fi
+    test "$(find "${directory}" -maxdepth 1 -type f -name '*.dump' | wc -l)" -eq "${expected_count}"
+    test "$(find "${directory}" -maxdepth 1 -type f -name '*.list' | wc -l)" -eq "${expected_count}"
     (
-        cd "${final_dir}"
-        sha256sum --quiet -c SHA256SUMS
+        cd "${directory}"
+        # Require the manifest to cover both databases, not merely any one dump.
+        sha256sum "${expected_files[@]}" metadata.txt | cmp -s - SHA256SUMS
+        sha256sum -c SHA256SUMS
     )
+}
+
+if [[ -d "${final_dir}" ]]; then
+    validate_backup "${final_dir}"
     echo "Latest backup ${latest} is already present and valid; nothing to download."
     exit 0
 fi
@@ -60,13 +79,7 @@ scp "${ssh_options[@]}" -rp \
     "${work_dir}/"
 
 test -s "${work_dir}/SHA256SUMS"
-test "$(find "${work_dir}" -maxdepth 1 -type f -name '*.dump' | wc -l)" -eq 1
-test "$(find "${work_dir}" -maxdepth 1 -type f -name '*.list' | wc -l)" -eq 1
-
-(
-    cd "${work_dir}"
-    sha256sum -c SHA256SUMS
-)
+validate_backup "${work_dir}"
 
 chmod -R go-rwx "${work_dir}"
 mv -- "${work_dir}" "${final_dir}"

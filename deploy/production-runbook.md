@@ -397,11 +397,15 @@ docker compose --env-file /etc/nwuicu/production.env \
   up -d --no-deps --no-build cron
 ```
 
-业务数据库的每日全量备份由宿主机的 `nwuicu-db-backup.timer` 管理，每天 04:00（`Asia/Shanghai`）
-执行。备份写入 `/root/nwuicuBack/daily/<timestamp>/`，每次包含 PostgreSQL 自定义格式
-dump、`pg_restore --list` 对象清单、元数据和 `SHA256SUMS`。timer 使用
+业务库和 `umami` 库的每日全量备份由宿主机的 `nwuicu-db-backup.timer` 管理，每天 04:00（`Asia/Shanghai`）
+执行。备份写入 `/root/nwuicuBack/daily/<timestamp>/`，分别生成 `nwuicu_full_<timestamp>.dump` 和
+`umami_full_<timestamp>.dump`，以及各自的 `pg_restore --list` 对象清单、元数据和 `SHA256SUMS`。
+每份快照先通过 `pg_restore --file=/dev/null` 完整读取验证；任一库失败都会让任务失败，目录保留为
+`.incomplete_*`，不发布为成功备份。timer 使用
 `Persistent=true`，服务器错过执行时间时会在下次启动后补跑；它不会自动删除历史备份。
-当前定时脚本仅备份业务库，不包含 `umami`；每次更新仍须执行第 7 节的双库全量备份。
+每日备份不能替代每次更新前第 7 节的双库全量快照。元数据的 `backup_format_version=2` 表示双库格式；
+`deploy/nas-download-latest-db-backup` 同时校验两个库，并兼容历史单库备份。更新备份脚本时应配套更新
+已有 NAS 下载端，否则旧版“恰好一个 dump/list”检查会拒绝新的双库目录。
 
 安装或更新任务：
 
