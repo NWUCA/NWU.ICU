@@ -52,6 +52,6 @@ Cleaner 每分钟清理过期、失败、取消和崩溃遗留文件。正在下
 - `GET /api/resources/archives/{receipt_id}/`：状态与队列前方数量。
 - `POST /api/resources/archives/{receipt_id}/cancel/`：取消自己的领取。
 - `POST /api/resources/archives/{receipt_id}/authorize/`：重新检查权限、续期并签发 120 秒凭证。
-- `GET /api/resources/archives/{receipt_id}/download/?access=...`：原生流式下载，单段 Range。
+- `GET /api/resources/file/archives/{receipt_id}/?access=...`：原生流式下载，单段 Range；复用现有 `/api/resources/file/` 无缓存、无缓冲代理通道。旧 `/api/resources/archives/{receipt_id}/download/` 路由保留兼容，新授权仅签发新通道的 URL。
 
 接口均 private/no-store，写操作包括匿名请求都检查 CSRF。ZIP 初始下载请求按包含的文件计入现有下载统计，沿用五分钟去重口径；不把打包完成算成下载完成。

@@ -179,6 +179,7 @@ api_patterns = [
     path('resources/browse/', ResourceBrowseView.as_view(), name='resource-browse'),
     path('resources/search/', ResourceSearchView.as_view(), name='resource-search'),
     path('resources/file/', ResourceFileView.as_view(), name='resource-file'),
+    path('resources/file/archives/<uuid:receipt_id>/', ArchiveDownloadView.as_view()),
     path('resources/file/legacy/', LegacyResourceFileView.as_view(), name='resource-file-legacy'),
     path('resources/legacy-redirect/', LegacyResourceRedirectView.as_view(), name='resource-legacy-redirect'),
     path('resources/file/authorize/', ResourceFileAuthorizeView.as_view(), name='resource-file-authorize'),

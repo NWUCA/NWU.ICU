@@ -121,7 +121,9 @@ class ArchiveAuthorizeView(ArchiveView):
             service.touch(receipt.archive)
             token = signing.dumps({'receipt': str(receipt.pk), 'actor': service.identities(request)[0]},
                                   salt=TICKET_SALT)
-            url = f'/api/resources/archives/{receipt.pk}/download/?' + urlencode({'access': token})
+            # Reuse the unbuffered, uncached file-download proxy location. The
+            # generic API proxy may otherwise strip Range when caching is enabled.
+            url = f'/api/resources/file/archives/{receipt.pk}/?' + urlencode({'access': token})
             return return_response(contents={'url': url, 'task': service.serialize(receipt)})
 
 

@@ -7,7 +7,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from unittest.mock import patch
-from urllib.parse import unquote
+from urllib.parse import unquote, urlsplit
 
 from django.conf import settings
 from django.contrib.auth.models import AnonymousUser
@@ -16,6 +16,7 @@ from django.core.management import call_command
 from django.db import close_old_connections
 from django.http import Http404
 from django.test import TransactionTestCase, override_settings
+from django.urls import resolve
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError, NotAuthenticated
 from rest_framework.test import APIClient, APIRequestFactory
@@ -362,7 +363,11 @@ class ResourceArchiveTests(ArchiveSetup, TransactionTestCase):
         receipt = self.finish()
         authorization = self.view(ArchiveAuthorizeView, receipt, 'post')
         url = authorization.data['contents']['url']
-        response = self.view(ArchiveDownloadView, receipt, url=url, HTTP_RANGE='bytes=0-9')
+        self.assertTrue(url.startswith('/api/resources/file/archives/'))
+        route = resolve(urlsplit(url).path)
+        request = APIRequestFactory().get(url, HTTP_RANGE='bytes=0-9')
+        request.nwu_browser_id = 'a'
+        response = route.func(request, **route.kwargs)
         self.assertEqual(response.status_code, 206)
         self.assertEqual(response['Content-Length'], '10')
         Archive.objects.filter(pk=receipt.archive_id).update(expires_at=timezone.now() - timedelta(seconds=1))
