@@ -1,0 +1,29 @@
+# Reuse the existing PostgreSQL instance; this file defines no database or volume.
+# May run independently locally, or be appended to the production Compose files.
+services:
+  umami:
+    image: ${UMAMI_IMAGE:?set UMAMI_IMAGE to an official fixed version or digest}
+    init: true
+    restart: unless-stopped
+    mem_limit: ${UMAMI_MEMORY_LIMIT:-512m}
+    environment:
+      DATABASE_URL: ${UMAMI_DATABASE_URL:?set the dedicated umami database URL}
+      APP_SECRET: ${UMAMI_APP_SECRET:?set a unique random APP_SECRET}
+      TWO_FACTOR_ENCRYPTION_KEY: ${UMAMI_TWO_FACTOR_ENCRYPTION_KEY:?set a 64-character hex key}
+      NODE_OPTIONS: ${UMAMI_NODE_OPTIONS:---max-old-space-size=256}
+      DISABLE_TELEMETRY: "1"
+    ports:
+      - "127.0.0.1:${UMAMI_HOST_PORT:-13000}:3000"
+    networks:
+      - existing-db-network
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--output", "/dev/null", "http://127.0.0.1:3000/api/heartbeat"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 90s
+
+networks:
+  existing-db-network:
+    external: true
+    name: ${UMAMI_DB_NETWORK:-nwuicu_app-network}
