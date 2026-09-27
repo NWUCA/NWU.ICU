@@ -336,7 +336,11 @@ location / {
 | `/api/upload/` | `26m` | 发送/读取超时 300 秒 |
 | `/api/upload/request/` | `1025m` | 关闭请求缓冲，超时 300 秒 |
 | `/api/management/resources/upload/` | `2g` | 关闭请求缓冲，超时 300 秒 |
-| `/api/resources/file/` | 不放宽请求体 | `proxy_buffering off`，读取超时 300 秒 |
+| `/api/resources/file/` | 不放宽请求体 | `proxy_cache off`、`proxy_buffering off`，读取超时 300 秒 |
+
+文件代理必须显式关闭继承的全局 `proxy_cache`，即使应用响应包含 `private, no-store`。
+否则外层缓存逻辑可能不向上游发送 `Range`，导致后端和 gateway 返回 206，而公网入口变成整文件 200。
+`nwu.icu` 与 `api.nwu.icu` 都要检查；验收时用 GET + Range 比对字节，不能只测 HEAD 或首页状态。
 
 `api.nwu.icu/proxy/root.conf` 保持相同规则，但上游为 `127.0.0.1:8000`，并额外拒绝：
 

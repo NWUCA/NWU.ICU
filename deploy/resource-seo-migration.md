@@ -110,3 +110,19 @@
 - 后端完整测试：342 passed，179 subtests passed；迁移检查无变更，Django 系统检查通过。
 - 实际 Nginx → gateway → Django 链路：12 个别名 × 5 类目录/文件/下载/预览场景共 60 项通过。旧地址只返回一次 301，最终页面 200，Range 文件读取 206；另验证根目录、HEAD、退役 API 和缺失文件。
 - 本次没有修改生产 OpenResty、证书或 AList 监听配置。上线时仍须按部署顺序完成这些现网操作。
+
+## 2026-09-28 生产切换
+
+上文的“未切换”描述为切换前审计记录。本次生产发布信息：
+
+- 发布目录：`/opt/nwuicu/releases/20260928_025807_640626cc_b68d4e67`。
+- 后端固定提交：`640626ccf429a14b05171ad06257e24555d36f22`；前端固定提交：`b68d4e67c52bab5a51d85af3111c0c79be483204`。
+- 配置、证书、生产环境文件、容器元数据及业务库/Umami 全量快照：`/root/nwuicuBack/seo_migration_20260928_025423`。快照已完整读取，并生成对象清单和 SHA-256。
+- 三个旧域名 `resour.nwu.icu`、`resource.nwu.icu`、`r.nwu.icu` 已共用有效证书，并在 HTTP/HTTPS 下直达新站最终地址。旧学院 rewrite 和旧域名 HTTP→HTTPS 中间跳转已移除，ACME 入口保留。
+- 旧站访问日志追加 `host`、`location` 字段，用于今后精确核对请求域名与跳转目标。
+- 外层两个新站下载 location 增加 `proxy_cache off`，修复全局缓存导致公网 Range 失效的问题。后端、gateway、公网的 GET Range 均返回 206。
+- AList 使用相同固定镜像和原有挂载，只发布 `127.0.0.1:5244`。原容器保留为 `alist-before-seo-20260928`，新旧容器不能同时启动；资源数据未删除。AList 设置另存 `alist-settings-before.tar.gz`。
+- 前端 191 项测试通过，后端 342 项测试和 179 项子测试通过；生产无待执行数据库迁移。公网链路验收 511 项通过，包括三个域名、两种协议、12 个学院别名、目录/文件页、下载/预览、有无 `/local`、Range/HEAD、PDF 编码、缺失文件和 ACME 例外。
+- 原有 `/swapfile` 在本次部署前已经存在且启用；本次没有覆盖或新建。回收前需再次核对 available 内存与已使用 Swap，不得强行 `swapoff`。
+
+本段是部署记录的文档补充；线上镜像使用上述固定代码提交，后续文档提交无需重新构建应用。
