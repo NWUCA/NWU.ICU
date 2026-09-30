@@ -107,7 +107,8 @@ print("Fixed images and existing database volume verified.")
 ## 4. 备份、迁移和切换
 
 继续执行 [日常更新速查](quick-update.md) 的双库全量备份、迁移及静态文件收集。
-一次性容器使用 `--no-build --pull never`；核心切换使用：
+一次性容器的 `dc run` 使用 `--pull never`，不加该命令不支持的 `--no-build`；
+合并配置已移除 `build`，因此仅使用预先拉取的镜像。核心切换的 `dc up` 使用：
 
 ```bash
 dc up -d --no-deps --no-build --pull never --wait web gateway

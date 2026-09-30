@@ -66,7 +66,9 @@ dc config --quiet
 ```
 
 Compose >= 2.24.4 支持模板中的 `!reset`。重新登录该发布目录操作时，重新 source
-`release-images.env` 并 export `ENV_FILE`。所有启动都带 `--no-build --pull never`。
+`release-images.env` 并 export `ENV_FILE`。`dc up` 带 `--no-build --pull never`；
+`dc run` 仅带 `--pull never`，因为 `run` 不支持 `--no-build`。合并配置已移除 `build`，
+一次性容器也只使用预先拉取的镜像。
 
 ## 4. 检查迁移并全量备份两个数据库
 
@@ -75,8 +77,8 @@ Compose >= 2.24.4 支持模板中的 `!reset`。重新登录该发布目录操�
 并通过完整读取、对象清单及 SHA-256 校验；任一步失败就停止更新。
 
 ```bash
-dc run --rm --no-deps --no-build --pull never web python manage.py showmigrations --plan
-dc run --rm --no-deps --no-build --pull never web python manage.py check --deploy
+dc run --rm --no-deps --pull never web python manage.py showmigrations --plan
+dc run --rm --no-deps --pull never web python manage.py check --deploy
 
 BACKUP_TIME=$(date +%Y%m%d_%H%M%S)
 BACKUP_DIR=/root/nwuicuBack/update_$BACKUP_TIME
@@ -113,8 +115,8 @@ done
 ## 5. 迁移并分阶段切换
 
 ```bash
-dc run --rm --no-deps --no-build --pull never web python manage.py migrate --noinput
-dc run --rm --no-deps --no-build --pull never web bash -c \
+dc run --rm --no-deps --pull never web python manage.py migrate --noinput
+dc run --rm --no-deps --pull never web bash -c \
   "python manage.py create_super_user && \
    python manage.py create_init_avatar && \
    python manage.py createcachetable && \
