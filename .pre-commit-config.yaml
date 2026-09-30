@@ -7,9 +7,11 @@ repos:
     -   id: trailing-whitespace
     -   id: end-of-file-fixer
     -   id: check-yaml
+        # Compose !reset tags are checked by deploy/tests/test_registry_compose.py.
+        exclude: ^deploy/docker-compose\.server\.registry\.example\.yaml$
     -   id: check-added-large-files
 
-- repo: https://gitlab.com/pycqa/flake8
+- repo: https://github.com/PyCQA/flake8
   rev: 3.9.2
   hooks:
   - id: flake8
@@ -24,7 +26,7 @@ repos:
     exclude: migrations
 
 - repo: https://github.com/pycqa/isort
-  rev: 5.10.1
+  rev: 5.13.2
   hooks:
     - id: isort
       args: ["--profile", "black", "--filter-files"]

@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# Pull and verify a release; stdout is a sourceable manifest, progress goes to stderr.
+# This command never builds images or starts/stops containers.
+set -Eeuo pipefail
+
+fail() { echo "$*" >&2; exit 1; }
+[[ $# -ge 2 && $# -le 3 ]] || fail 'Usage: pull-release-images BACKEND_COMMIT FRONTEND_COMMIT [GATEWAY_IMAGE@sha256:DIGEST]'
+backend_commit=$1
+frontend_commit=$2
+[[ "$backend_commit" =~ ^[0-9a-f]{40}$ ]] || fail 'Backend commit must be a full lowercase SHA.'
+[[ "$frontend_commit" =~ ^[0-9a-f]{40}$ ]] || fail 'Frontend commit must be a full lowercase SHA.'
+
+backend_repository=ghcr.io/nwuca/nwu.icu
+gateway_repository=ghcr.io/moowantfree/new_nwu_icu_frontend
+gateway_ref="$gateway_repository:sha-$frontend_commit-backend-$backend_commit"
+if [[ $# == 3 ]]; then
+  gateway_ref=$3
+  [[ "$gateway_ref" == "$gateway_repository@"* && "${gateway_ref#*@}" =~ ^sha256:[0-9a-f]{64}$ ]] || fail 'Gateway digest must belong to the frontend GHCR repository.'
+fi
+
+label() { docker image inspect "$1" --format "{{ index .Config.Labels \"$2\" }}"; }
+verify_platform() {
+  [[ $(docker image inspect "$1" --format '{{.Os}}/{{.Architecture}}') == linux/amd64 ]] || fail 'Unexpected image platform.'
+}
+
+docker pull --platform linux/amd64 "$gateway_ref" >&2
+verify_platform "$gateway_ref"
+[[ $(label "$gateway_ref" org.opencontainers.image.source) == https://github.com/MooWantFree/new_nwu_icu_frontend ]] || fail 'Gateway source mismatch.'
+[[ $(label "$gateway_ref" org.opencontainers.image.revision) == "$frontend_commit" ]] || fail 'Gateway frontend revision mismatch.'
+[[ $(label "$gateway_ref" io.nwuicu.backend-commit) == "$backend_commit" ]] || fail 'Gateway backend revision mismatch.'
+backend_image=$(label "$gateway_ref" io.nwuicu.backend-image)
+[[ "$backend_image" == "$backend_repository@"* && "${backend_image#*@}" =~ ^sha256:[0-9a-f]{64}$ ]] || fail 'Gateway has no valid paired backend digest.'
+
+gateway_image=''
+while IFS= read -r digest; do
+  if [[ "$digest" == "$gateway_repository@"* && "${digest#*@}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+    if [[ $# == 3 && "$digest" != "$gateway_ref" ]]; then continue; fi
+    [[ -z "$gateway_image" ]] || fail 'Ambiguous gateway digest.'
+    gateway_image=$digest
+  fi
+done < <(docker image inspect "$gateway_ref" --format '{{range .RepoDigests}}{{println .}}{{end}}')
+[[ -n "$gateway_image" ]] || fail 'Gateway digest was not returned by Docker.'
+if [[ $# == 3 ]]; then
+  [[ "$gateway_image" == "$gateway_ref" ]] || fail 'Pulled gateway digest mismatch.'
+fi
+
+# Pull the backend bound into this gateway, even if its commit tag was rebuilt later.
+docker pull --platform linux/amd64 "$backend_image" >&2
+verify_platform "$backend_image"
+[[ $(label "$backend_image" org.opencontainers.image.source) == https://github.com/NWUCA/NWU.ICU ]] || fail 'Backend source mismatch.'
+[[ $(label "$backend_image" org.opencontainers.image.revision) == "$backend_commit" ]] || fail 'Backend revision mismatch.'
+
+printf 'BACKEND_COMMIT=%s\nFRONTEND_COMMIT=%s\nBACKEND_IMAGE=%s\nGATEWAY_IMAGE=%s\n' \
+  "$backend_commit" "$frontend_commit" "$backend_image" "$gateway_image"

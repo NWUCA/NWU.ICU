@@ -34,6 +34,11 @@ RUN groupadd --gid 10001 app \
 
 USER app
 
+ARG BACKEND_COMMIT=unknown
+ARG BACKEND_GITHUB_URL=
+LABEL org.opencontainers.image.source=$BACKEND_GITHUB_URL \
+    org.opencontainers.image.revision=$BACKEND_COMMIT
+
 EXPOSE 8000
 
 CMD ["gunicorn", "settings.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3", "--timeout", "60", "--access-logfile", "-", "--error-logfile", "-"]

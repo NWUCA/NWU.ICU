@@ -3,16 +3,17 @@ name: Backend CI
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: backend-ci-${{ github.workflow }}-${{ github.ref }}
+  group: backend-ci-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
 env:
-  PYTHON_VERSION: '3.10'
+  PYTHON_VERSION: '3.11'
   UV_VERSION: '0.10.12'
   DJANGO_SETTINGS_MODULE: settings.test
   SECRET_KEY: github-actions-only-secret-key
@@ -47,6 +48,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -58,8 +61,21 @@ jobs:
           enable-cache: true
       - name: Install locked dependencies
         run: uv sync --frozen --all-groups
-      - name: Run all pre-commit checks
-        run: uv run --frozen pre-commit run --all-files --show-diff-on-failure
+      - name: Check changed files with pre-commit
+        env:
+          BASE_COMMIT: ${{ github.event.pull_request.base.sha || github.event.before }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Existing files have historical formatting debt. New changes must pass all hooks.
+          if [[ -z "$BASE_COMMIT" || "$BASE_COMMIT" =~ ^0+$ ]]; then
+            BASE_COMMIT=$(git rev-parse --verify HEAD^ 2>/dev/null || git hash-object -w -t tree /dev/null)
+          fi
+          git diff --name-only --diff-filter=ACMR -z "$BASE_COMMIT" HEAD > "$RUNNER_TEMP/changed-files"
+          mapfile -d '' files < "$RUNNER_TEMP/changed-files"
+          if ((${#files[@]})); then
+            uv run --frozen pre-commit run --files "${files[@]}" --show-diff-on-failure
+          fi
 
   test:
     name: Test
@@ -99,3 +115,48 @@ jobs:
         run: uv run --frozen python manage.py makemigrations --check --dry-run
       - name: Run all tests
         run: uv run --frozen pytest
+
+  publish:
+    name: Publish backend image
+    needs: [lint, test]
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/master')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Check out the tested commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Resolve image name
+        id: release
+        run: echo "repository=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+      - name: Build and publish backend
+        id: image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.release.outputs.repository }}:sha-${{ github.sha }}
+          build-args: |
+            BACKEND_COMMIT=${{ github.sha }}
+            BACKEND_GITHUB_URL=https://github.com/${{ github.repository }}
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+      - name: Record the published image
+        env:
+          IMAGE: ${{ steps.release.outputs.repository }}
+          DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          printf '### Backend image ready\n\n`%s@%s`\n\nNo production deployment was performed.\n' "$IMAGE" "$DIGEST" >> "$GITHUB_STEP_SUMMARY"

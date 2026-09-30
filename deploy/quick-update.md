@@ -4,9 +4,13 @@
 若涉及破坏性迁移、端口、域名或上传规则变更，改用
 [完整生产发布 Runbook](production-runbook.md)。
 
+默认由 GitHub Actions 构建镜像，服务器主动拉取固定摘要。首次配置和前后端配对发布见
+[镜像发布说明](registry-images.md)。此流程不在服务器 build，不创建或清理构建用 Swap。
+
 ## 1. 创建固定提交的新发布目录
 
-本地先确认前后端工作区干净、测试通过且提交已经 push。登录 `ssh resour` 后设置：
+本地先确认前后端工作区干净、测试通过且提交已经 push，并且一组配套镜像已经发布成功。
+登录 `ssh resour` 后设置：
 
 ```bash
 OLD=<当前发布目录>
@@ -25,18 +29,33 @@ git clone --no-checkout "$(git -C "$OLD/new_nwu_icu_frontend" remote get-url ori
 git -C "$RELEASE/new_nwu_icu_frontend" checkout --detach "$FRONTEND_COMMIT"
 ```
 
-确认两个仓库状态干净。为新发布目录创建 `docker-compose.server.yaml`，只包含四个固定镜像
-标签、`127.0.0.1` 回环端口和外部 `nwuicu_pgdata` 卷。不要在旧发布目录中 `git pull`。
+确认两个仓库状态干净。不要在旧发布目录中 `git pull`。
 
-## 2. 配置 Compose 和临时 Swap
+## 2. 拉取并验证固定镜像
 
 ```bash
 cd "$RELEASE/NWU.ICU"
+set -euo pipefail
+GATEWAY_REF=ghcr.io/moowantfree/new_nwu_icu_frontend@sha256:<Actions-Summary中的摘要>
+bash deploy/pull-release-images "$BACKEND_COMMIT" "$FRONTEND_COMMIT" "$GATEWAY_REF" \
+  > ../release-images.env.tmp
+mv ../release-images.env.tmp ../release-images.env
+set -a
+source ../release-images.env
+set +a
 export ENV_FILE=/etc/nwuicu/production.env
-export COMPOSE_PARALLEL_LIMIT=1
+```
 
-# production.env 中配置 FRONTEND_GITHUB_URL 和 BACKEND_GITHUB_URL，供页脚提交链接使用。
+拉取失败就停止，旧容器继续运行。脚本按 gateway 绑定的后端摘要拉取，避免同一后端提交
+被重建后版本对不上。Manifest 不含密钥，保留在本次发布目录。
 
+## 3. 配置只使用镜像的 Compose
+
+将 `deploy/docker-compose.server.registry.example.yaml` 复制到 `../docker-compose.server.yaml`，
+核对并保留旧 override 的额外运行配置。模板移除六个应用服务的 build，保留回环端口与
+外部 `nwuicu_pgdata` 卷。执行 [镜像发布说明](registry-images.md) 第 3 节的配置断言。
+
+```bash
 dc() {
   docker compose --env-file /etc/nwuicu/production.env \
     -f docker-compose.production.yaml \
@@ -44,28 +63,10 @@ dc() {
 }
 
 dc config --quiet
-
-test ! -e /swapfile
-fallocate -l 4G /swapfile
-chmod 600 /swapfile
-mkswap /swapfile
-swapon /swapfile
-swapon --show
 ```
 
-不要把 Swap 写入 `/etc/fstab`。
-
-## 3. 串行构建固定镜像
-
-```bash
-dc build web
-dc build \
-  --build-arg FRONTEND_COMMIT="$FRONTEND_COMMIT" \
-  --build-arg BACKEND_COMMIT="$BACKEND_COMMIT" \
-  gateway
-```
-
-构建失败就停止，不重启线上容器。
+Compose >= 2.24.4 支持模板中的 `!reset`。重新登录该发布目录操作时，重新 source
+`release-images.env` 并 export `ENV_FILE`。所有启动都带 `--no-build --pull never`。
 
 ## 4. 检查迁移并全量备份两个数据库
 
@@ -74,8 +75,8 @@ dc build \
 并通过完整读取、对象清单及 SHA-256 校验；任一步失败就停止更新。
 
 ```bash
-dc run --rm --no-deps web python manage.py showmigrations --plan
-dc run --rm --no-deps web python manage.py check --deploy
+dc run --rm --no-deps --no-build --pull never web python manage.py showmigrations --plan
+dc run --rm --no-deps --no-build --pull never web python manage.py check --deploy
 
 BACKUP_TIME=$(date +%Y%m%d_%H%M%S)
 BACKUP_DIR=/root/nwuicuBack/update_$BACKUP_TIME
@@ -112,8 +113,8 @@ done
 ## 5. 迁移并分阶段切换
 
 ```bash
-dc run --rm --no-deps web python manage.py migrate --noinput
-dc run --rm --no-deps web bash -c \
+dc run --rm --no-deps --no-build --pull never web python manage.py migrate --noinput
+dc run --rm --no-deps --no-build --pull never web bash -c \
   "python manage.py create_super_user && \
    python manage.py create_init_avatar && \
    python manage.py createcachetable && \
@@ -121,17 +122,17 @@ dc run --rm --no-deps web bash -c \
    python manage.py update_semester && \
    python manage.py collectstatic --noinput"
 
-dc up -d --no-deps --no-build web gateway
+dc up -d --no-deps --no-build --pull never --wait web gateway
 dc ps
 curl -fsS https://nwu.icu/ > /dev/null
 curl -fsS https://nwu.icu/api/user/csrf/ > /dev/null
 
-dc up -d --no-deps --no-build resource-worker cron
+dc up -d --no-deps --no-build --pull never resource-worker cron archive-worker archive-cleaner
 ```
 
 不要执行 `docker compose down`，不要重启 `pgsql`，不要删除 `nwuicu_pgdata`。
 
-## 6. 验收并清理临时 Swap
+## 6. 验收固定版本
 
 ```bash
 curl -fsS https://nwu.icu/ > /dev/null
@@ -142,8 +143,9 @@ curl -fsS https://api.nwu.icu/api/user/csrf/ > /dev/null
 
 dc ps
 docker inspect nwuicu-web-1 nwuicu-gateway-1 nwuicu-resource-worker-1 nwuicu-cron-1 \
-  --format '{{.Name}} restarts={{.RestartCount}} image={{.Config.Image}}'
-dc logs --since 10m web gateway resource-worker cron
+  nwuicu-archive-worker-1 nwuicu-archive-cleaner-1 \
+  --format '{{.Name}} restarts={{.RestartCount}} health={{if .State.Health}}{{.State.Health.Status}}{{end}} image={{.Config.Image}}'
+dc logs --since 10m web gateway resource-worker cron archive-worker archive-cleaner
 
 docker exec nwuicu-gateway-1 sh -lc \
   "grep -R -q '$FRONTEND_COMMIT' /usr/share/nginx/html/assets && \
@@ -151,13 +153,11 @@ docker exec nwuicu-gateway-1 sh -lc \
 
 free -h
 swapon --show
-swapoff /swapfile
-rm -f /swapfile
-test -z "$(swapon --show=NAME --noheadings)"
 ```
 
 确认两个域名的 CSRF 接口均为 200、容器健康、重启次数为 0、前端产物包含两个完整提交号，
-并且没有持续 5xx 或迁移错误。
+并且没有持续 5xx 或迁移错误。容器镜像摘要必须与本次 `release-images.env` 一致。
+拉取式发布不调整既有 Swap；仅明确选择 Runbook 中的服务器备用构建时才创建和清理临时 Swap。
 
 ## 7. 签发管理员 Passkey 绑定码
 
@@ -172,11 +172,10 @@ dc exec web python manage.py admin_passkey_enroll <username>
 
 ```text
 创建固定提交的新发布目录
-→ 更新四处镜像标签
-→ 临时 Swap，串行 build web/gateway 并注入提交号
+→ 拉取并核对 GitHub 已构建的配套镜像，记录摘要
+→ registry override 去掉 build，固定镜像摘要
 → showmigrations、check、业务库 + Umami 库全量 pg_dump、完整读取与 SHA-256 校验
 → migrate
-→ 先 up web/gateway，验证后 up worker/cron
+→ 先 up web/gateway，验证后 up worker/cron/archive
 → curl、hash、重启次数和 logs 验证
-→ swapoff 并删除临时 Swap
 ```

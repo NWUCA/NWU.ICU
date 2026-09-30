@@ -47,7 +47,8 @@ Docker 只发布以下回环端口，不要改成 `0.0.0.0`：
 
 ## 2. 前端如何发布
 
-前端不在服务器运行 `pnpm dev`。它通过多阶段 Dockerfile 发布：
+前端不在服务器运行 `pnpm dev`。默认由 GitHub Actions 通过多阶段 Dockerfile 构建并发布到
+GHCR，服务器主动拉取。配置及固定提交发布步骤见 [镜像发布说明](registry-images.md)：
 
 1. Node 阶段运行 `pnpm install --frozen-lockfile` 和 `pnpm build`；
 2. `dist/` 被复制到 gateway 镜像的 `/usr/share/nginx/html`；
@@ -55,10 +56,10 @@ Docker 只发布以下回环端口，不要改成 `0.0.0.0`：
 4. `/srv/nwuicu/static` 只读挂载到 `/srv/django-static`；
 5. `/media/` 在 gateway 层固定返回 404。
 
-因此前端更新需要重建 gateway 镜像，不要把 `dist/` 手工复制到 1Panel 站点目录。
+因此前端更新需要在 GitHub 重建 gateway 镜像，服务器不运行 build；不要把 `dist/` 手工复制到 1Panel 站点目录。
 gateway 构建时必须注入本次前后端完整提交号，页脚据此显示实际构建版本。
-在 `/etc/nwuicu/production.env` 配置 `FRONTEND_GITHUB_URL` 与 `BACKEND_GITHUB_URL`，
-Compose 会将两个仓库地址传入 gateway 构建，使提交号链接到对应的 GitHub 提交页。
+Actions 同时注入两个仓库 URL，使提交号链接到对应的 GitHub 提交页。
+下文服务器本地构建是备用流程，默认镜像拉取流程不创建构建用 Swap。
 
 ## 3. 每次更新前的本地准备
 
@@ -113,7 +114,10 @@ git -C "$RELEASE/new_nwu_icu_frontend" checkout --detach "$FRONTEND_COMMIT"
 仓库的 `docker-compose.production.yaml` 保存通用配置；每个发布目录根部另放
 `docker-compose.server.yaml`，只记录这台服务器的镜像标签、回环端口和既有卷。
 
-示例：
+默认使用 `deploy/docker-compose.server.registry.example.yaml`，先拉取并验证镜像，导入
+`release-images.env` 中的两个固定摘要。模板以 `!reset null` 去掉应用服务的 `build`，
+保留回环端口和既有数据库卷。保留上一发布的额外 override，且不要让 web 启动命令重复迁移。
+详细步骤见 [镜像发布说明](registry-images.md)。以下固定本地标签示例只用于备用本地构建：
 
 ```yaml
 services:
@@ -157,7 +161,13 @@ docker compose \
 解析后的项目名必须是 `nwuicu`，数据库卷名必须是 `nwuicu_pgdata`。如果出现新的数据库卷，
 立即停止，不要启动 Compose。
 
-## 6. 构建固定标签镜像
+## 6. 拉取固定摘要镜像（默认）或本地构建（备用）
+
+默认按 [镜像发布说明](registry-images.md) 在 GitHub 构建，服务器运行
+`deploy/pull-release-images`，核对完整提交与配套摘要后再进入第 7 节。镜像拉取失败时旧容器
+继续运行，不进入维护状态。此流程不创建、关闭或删除 Swap。
+
+仅明确选择服务器本地构建时，才执行以下备用步骤，不能对 registry override 执行 build：
 
 低内存服务器应串行构建；线上旧容器在此阶段继续运行：
 
@@ -169,6 +179,7 @@ fallocate -l 4G /swapfile
 chmod 600 /swapfile
 mkswap /swapfile
 swapon /swapfile
+export LOCAL_BUILD_SWAP_CREATED=1
 swapon --show
 
 docker compose --env-file /etc/nwuicu/production.env \
@@ -466,13 +477,16 @@ curl -fsS https://api.nwu.icu/api/user/csrf/ > /dev/null
 
 free -h
 swapon --show
-swapoff /swapfile
-rm -f /swapfile
-test -z "$(swapon --show=NAME --noheadings)"
+if [ "${LOCAL_BUILD_SWAP_CREATED:-0}" = 1 ]; then
+  swapoff /swapfile
+  rm -f /swapfile
+  test -z "$(swapon --show=NAME --noheadings)"
+fi
 ```
 
-确认四个容器的重启次数均为 0、gateway 静态资源包含两个完整提交号、两个域名的 CSRF
-接口均为 200，并且临时 Swap 已移除。
+确认应用容器的重启次数均为 0、gateway 静态资源包含两个完整提交号、两个域名的 CSRF
+接口均为 200。固定摘要发布还需核对容器镜像与本次 `release-images.env` 一致。
+本节的 `swapoff`/删除命令仅适用于第 6 节备用构建创建的临时 Swap；默认拉取流程跳过它们。
 
 ## 12. 回滚边界
 

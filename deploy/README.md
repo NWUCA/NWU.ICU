@@ -7,7 +7,11 @@
 
 普通代码更新可直接查看 [日常更新速查](quick-update.md)。
 
-推荐让前后端仓库保持同级目录，生产 Compose 会同时构建两个项目：
+当前生产默认由 GitHub Actions 构建并发布 GHCR 镜像，服务器主动拉取固定摘要，
+不在服务器构建或创建构建用 Swap。首次配置见 [镜像发布说明](registry-images.md)。
+
+推荐让前后端仓库保持同级目录；当前服务器使用 registry override 运行预构建镜像，
+后文通用部署脚本仍可在其他环境本地构建两个项目：
 
 ```text
 /opt/nwuicu/

@@ -1,0 +1,34 @@
+# Copy into a NEW release root as docker-compose.server.yaml.
+# Docker Compose >= 2.24.4. Preserve any additional overrides from the previous release.
+services:
+  web:
+    image: ${BACKEND_IMAGE:?source release-images.env before running Compose}
+    build: !reset null
+    # Migrations and initialization run once before the application is switched.
+    command: >-
+      bash -c "exec gunicorn settings.wsgi:application --bind 0.0.0.0:8000
+      --workers $${GUNICORN_WORKERS:-3} --timeout $${GUNICORN_TIMEOUT:-300}
+      --access-logfile - --error-logfile -"
+    ports:
+      - "127.0.0.1:8000:8000"
+  cron:
+    image: ${BACKEND_IMAGE:?source release-images.env before running Compose}
+    build: !reset null
+  resource-worker:
+    image: ${BACKEND_IMAGE:?source release-images.env before running Compose}
+    build: !reset null
+  archive-worker:
+    image: ${BACKEND_IMAGE:?source release-images.env before running Compose}
+    build: !reset null
+  archive-cleaner:
+    image: ${BACKEND_IMAGE:?source release-images.env before running Compose}
+    build: !reset null
+  gateway:
+    image: ${GATEWAY_IMAGE:?source release-images.env before running Compose}
+    build: !reset null
+    ports:
+      - "127.0.0.1:18080:80"
+volumes:
+  pgdata:
+    external: true
+    name: nwuicu_pgdata
