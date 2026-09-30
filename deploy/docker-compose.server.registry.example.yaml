@@ -3,6 +3,7 @@
 services:
   web:
     image: ${BACKEND_IMAGE:?source release-images.env before running Compose}
+    pull_policy: never
     build: !reset null
     # Migrations and initialization run once before the application is switched.
     command: >-
@@ -13,18 +14,23 @@ services:
       - "127.0.0.1:8000:8000"
   cron:
     image: ${BACKEND_IMAGE:?source release-images.env before running Compose}
+    pull_policy: never
     build: !reset null
   resource-worker:
     image: ${BACKEND_IMAGE:?source release-images.env before running Compose}
+    pull_policy: never
     build: !reset null
   archive-worker:
     image: ${BACKEND_IMAGE:?source release-images.env before running Compose}
+    pull_policy: never
     build: !reset null
   archive-cleaner:
     image: ${BACKEND_IMAGE:?source release-images.env before running Compose}
+    pull_policy: never
     build: !reset null
   gateway:
     image: ${GATEWAY_IMAGE:?source release-images.env before running Compose}
+    pull_policy: never
     build: !reset null
     ports:
       - "127.0.0.1:18080:80"

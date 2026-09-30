@@ -78,6 +78,7 @@ gateway 绑定的那个后端摘要。拉取失败就停止，旧容器继续运
 挂载和网络修正。模板移除六个应用服务的 `build`，所有后端服务共用 `$BACKEND_IMAGE`，
 gateway 使用 `$GATEWAY_IMAGE`。固定回环端口及外部数据库卷不变。
 
+模板设置 `pull_policy: never`，因此一次性容器和正常服务都只使用事先校验的本地镜像。
 模板要求 Docker Compose >= 2.24.4（`!reset`）；当前服务器 2.27.0 支持。
 `web` 直接启动 Gunicorn，初始化和迁移由发布前的一次性容器执行，避免每次重启重复执行。
 
@@ -96,6 +97,7 @@ assert c["volumes"]["pgdata"]["external"] and c["volumes"]["pgdata"]["name"] == 
 for name in ("web", "gateway", "resource-worker", "cron", "archive-worker", "archive-cleaner"):
     service = c["services"][name]
     assert "build" not in service, name
+    assert service["pull_policy"] == "never", name
     assert "@sha256:" in service["image"], name
 print("Fixed images and existing database volume verified.")
 '
@@ -107,8 +109,9 @@ print("Fixed images and existing database volume verified.")
 ## 4. 备份、迁移和切换
 
 继续执行 [日常更新速查](quick-update.md) 的双库全量备份、迁移及静态文件收集。
-一次性容器的 `dc run` 使用 `--pull never`，不加该命令不支持的 `--no-build`；
-合并配置已移除 `build`，因此仅使用预先拉取的镜像。核心切换的 `dc up` 使用：
+一次性容器使用 `dc run --rm --no-deps web <command>`。服务器 Compose 2.27 的 `run`
+不支持 `--no-build` 或 `--pull`；合并配置通过移除 `build` 并设置 `pull_policy: never`
+限制为事先校验的本地镜像。核心切换的 `dc up` 使用：
 
 ```bash
 dc up -d --no-deps --no-build --pull never --wait web gateway

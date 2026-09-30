@@ -48,6 +48,7 @@ class RegistryComposeTests(unittest.TestCase):
         for name in ['web', 'cron', 'resource-worker', 'archive-worker', 'archive-cleaner', 'gateway']:
             with self.subTest(service=name):
                 self.assertNotIn('build', services[name])
+                self.assertEqual(services[name]['pull_policy'], 'never')
                 self.assertEqual(
                     services[name]['image'],
                     GATEWAY_IMAGE if name == 'gateway' else BACKEND_IMAGE,
