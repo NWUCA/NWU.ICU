@@ -83,7 +83,8 @@ jobs:
     timeout-minutes: 25
     services:
       postgres:
-        image: postgres:16-alpine
+        # Match the development/test database: migrations require zhparser.
+        image: abcfy2/zhparser:17
         env:
           POSTGRES_DB: nwuicu_test
           POSTGRES_USER: postgres
