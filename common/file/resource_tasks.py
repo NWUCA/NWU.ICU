@@ -13,7 +13,11 @@ from management_panel.telegram_notifications import send_mail_with_telegram_aler
 from settings.log import TelegramBotHandler
 from user.models import User
 
-from .models import ResourceNotificationOutbox, ResourcePublishJob, ResourceUploadRequest
+from .models import (
+    ResourceNotificationOutbox,
+    ResourcePublishJob,
+    ResourceUploadRequest,
+)
 from .resource_locks import lock_resource_upload_request
 from .resource_notifications import (
     build_resource_upload_result_batch,
@@ -25,7 +29,6 @@ from .resource_publish import (
     delete_resource_upload_staging_files,
     publish_resource_upload,
 )
-
 
 logger = logging.getLogger(__name__)
 MAX_ATTEMPTS = 5
@@ -68,7 +71,9 @@ def process_one_publish_job():
     job_id = claim_publish_job()
     if not job_id:
         return False
-    job = ResourcePublishJob.objects.select_related('upload_request', 'upload_request__reviewed_by').get(pk=job_id)
+    job = ResourcePublishJob.objects.select_related(
+        'upload_request', 'upload_request__reviewed_by'
+    ).get(pk=job_id)
     upload_request = job.upload_request
     try:
         if upload_request.status != ResourceUploadRequest.STATUS_PUBLISHING:
@@ -89,13 +94,24 @@ def process_one_publish_job():
                 upload_request.status = ResourceUploadRequest.STATUS_PUBLISH_FAILED
                 upload_request.publish_error = message
                 upload_request.save(update_fields=('status', 'publish_error', 'updated_at'))
-                queue_resource_upload_notifications(upload_request, event='publish_failed', reviewer=upload_request.reviewed_by)
+                queue_resource_upload_notifications(
+                    upload_request, event='publish_failed', reviewer=upload_request.reviewed_by
+                )
             else:
                 job.status = ResourcePublishJob.STATUS_RETRY
                 job.available_at = _next_retry(job.attempts)
                 upload_request.publish_error = message
                 upload_request.save(update_fields=('publish_error', 'updated_at'))
-            job.save(update_fields=('attempts', 'last_error', 'locked_at', 'status', 'available_at', 'updated_at'))
+            job.save(
+                update_fields=(
+                    'attempts',
+                    'last_error',
+                    'locked_at',
+                    'status',
+                    'available_at',
+                    'updated_at',
+                )
+            )
         logger.exception('Resource publish job %s failed', job_id)
         return True
 
@@ -112,7 +128,9 @@ def process_one_publish_job():
         upload_request.publish_error = ''
         upload_request.files_deleted_at = now if staging_files_deleted else None
         upload_request.save(update_fields=('status', 'publish_error', 'files_deleted_at', 'updated_at'))
-        queue_resource_upload_notifications(upload_request, event='approved', reviewer=upload_request.reviewed_by)
+        queue_resource_upload_notifications(
+            upload_request, event='approved', reviewer=upload_request.reviewed_by
+        )
     return True
 
 
@@ -120,17 +138,17 @@ def claim_notification():
     with transaction.atomic():
         now = timezone.now()
         claimable = Q(
-            status__in=(ResourceNotificationOutbox.STATUS_PENDING, ResourceNotificationOutbox.STATUS_RETRY),
+            status__in=(
+                ResourceNotificationOutbox.STATUS_PENDING,
+                ResourceNotificationOutbox.STATUS_RETRY,
+            ),
             available_at__lte=now,
         ) | Q(
             status=ResourceNotificationOutbox.STATUS_PROCESSING,
             locked_at__lt=now - timedelta(minutes=15),
         )
         notification = (
-            ResourceNotificationOutbox.objects
-            .filter(claimable)
-            .order_by('available_at', 'pk')
-            .first()
+            ResourceNotificationOutbox.objects.filter(claimable).order_by('available_at', 'pk').first()
         )
         if not notification:
             return None
@@ -191,8 +209,12 @@ def _deliver(notifications):
             raise ValueError('用户没有可用邮箱')
         send_mail_with_telegram_alert(
             send_mail,
-            subject, body, settings.EMAIL_HOST_USER, [recipient],
-            fail_silently=False, html_message=html_body,
+            subject,
+            body,
+            settings.EMAIL_HOST_USER,
+            [recipient],
+            fail_silently=False,
+            html_message=html_body,
             alert_context=f'资料投稿审核结果邮件（通知 {notification.pk}）',
             alert_on_failure=notification.attempts == 0,
         )
@@ -214,8 +236,7 @@ def process_one_notification():
     if not notification_ids:
         return False
     notifications = list(
-        ResourceNotificationOutbox.objects
-        .select_related('recipient', 'sender', 'upload_request')
+        ResourceNotificationOutbox.objects.select_related('recipient', 'sender', 'upload_request')
         .filter(pk__in=notification_ids)
         .order_by('pk')
     )
@@ -228,10 +249,11 @@ def process_one_notification():
             # commit together so a worker crash cannot leave a duplicate retry.
             with transaction.atomic():
                 notifications = list(
-                    ResourceNotificationOutbox.objects
-                    .select_for_update(of=('self',))
+                    ResourceNotificationOutbox.objects.select_for_update(of=('self',))
                     .select_related('recipient', 'sender', 'upload_request')
-                    .filter(pk__in=notification_ids, status=ResourceNotificationOutbox.STATUS_PROCESSING)
+                    .filter(
+                        pk__in=notification_ids, status=ResourceNotificationOutbox.STATUS_PROCESSING
+                    )
                     .order_by('pk')
                 )
                 if not notifications:
@@ -243,13 +265,19 @@ def process_one_notification():
             _deliver(notifications)
     except Exception as error:
         with transaction.atomic():
-            claimed_notifications = ResourceNotificationOutbox.objects.select_for_update().filter(pk__in=notification_ids)
+            claimed_notifications = ResourceNotificationOutbox.objects.select_for_update().filter(
+                pk__in=notification_ids
+            )
             if site_delivery:
-                claimed_notifications = claimed_notifications.filter(status=ResourceNotificationOutbox.STATUS_PROCESSING)
+                claimed_notifications = claimed_notifications.filter(
+                    status=ResourceNotificationOutbox.STATUS_PROCESSING
+                )
             claimed_notifications = list(claimed_notifications)
             if not claimed_notifications:
                 return True
-            retry_at = _next_retry(max(notification.attempts for notification in claimed_notifications) + 1)
+            retry_at = _next_retry(
+                max(notification.attempts for notification in claimed_notifications) + 1
+            )
             for notification in claimed_notifications:
                 notification.attempts += 1
                 notification.last_error = str(error)
@@ -259,9 +287,16 @@ def process_one_notification():
                 else:
                     notification.status = ResourceNotificationOutbox.STATUS_RETRY
                     notification.available_at = retry_at
-                notification.save(update_fields=(
-                    'attempts', 'last_error', 'locked_at', 'status', 'available_at', 'updated_at',
-                ))
+                notification.save(
+                    update_fields=(
+                        'attempts',
+                        'last_error',
+                        'locked_at',
+                        'status',
+                        'available_at',
+                        'updated_at',
+                    )
+                )
         logger.exception('Resource notifications %s failed', notification_ids)
         return True
     if not site_delivery:

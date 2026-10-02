@@ -9,12 +9,12 @@ from django.core.mail import send_mail
 from django.db import transaction
 from django.utils import timezone
 
-from .models import ResourceNotificationOutbox
 from common.models import Notification
 from management_panel.telegram_notifications import send_mail_with_telegram_alert
 from user.models import User
 from utils.utils import format_file_size
 
+from .models import ResourceNotificationOutbox
 
 logger = logging.getLogger(__name__)
 
@@ -36,19 +36,10 @@ def get_resource_upload_url():
 
 def build_resource_upload_result_message(upload_request, result):
     if result == RESULT_APPROVED:
-        return (
-            f'你的资料投稿 #{upload_request.pk} 已审核通过并成功发布到 '
-            f'{upload_request.target_path}。'
-        )
+        return f'你的资料投稿 #{upload_request.pk} 已审核通过并成功发布到 ' f'{upload_request.target_path}。'
     if result == RESULT_PUBLISH_FAILED:
-        return (
-            f'你的资料投稿 #{upload_request.pk} 发布失败，已退回修改。'
-            f'原因：{upload_request.rejection_reason}'
-        )
-    return (
-        f'你的资料投稿 #{upload_request.pk} 未通过审核，已退回修改。'
-        f'理由：{upload_request.rejection_reason}'
-    )
+        return f'你的资料投稿 #{upload_request.pk} 发布失败，已退回修改。' f'原因：{upload_request.rejection_reason}'
+    return f'你的资料投稿 #{upload_request.pk} 未通过审核，已退回修改。' f'理由：{upload_request.rejection_reason}'
 
 
 def get_resource_upload_result_subject(result):
@@ -61,13 +52,24 @@ def get_resource_upload_result_subject(result):
 
 
 def _create_outbox(
-        *, event_key, upload_request, channel, body, reviewer=None, subject='',
-        available_at=None, aggregation_key='', result_snapshot=None):
+    *,
+    event_key,
+    upload_request,
+    channel,
+    body,
+    reviewer=None,
+    subject='',
+    available_at=None,
+    aggregation_key='',
+    result_snapshot=None,
+):
     notification, _ = ResourceNotificationOutbox.objects.get_or_create(
         event_key=event_key,
         defaults={
             'upload_request': upload_request,
-            'recipient': upload_request.uploaded_by if channel != ResourceNotificationOutbox.CHANNEL_TELEGRAM else None,
+            'recipient': upload_request.uploaded_by
+            if channel != ResourceNotificationOutbox.CHANNEL_TELEGRAM
+            else None,
             'sender': reviewer if channel != ResourceNotificationOutbox.CHANNEL_TELEGRAM else None,
             'channel': channel,
             'subject': subject,
@@ -91,18 +93,18 @@ def queue_resource_upload_notifications(upload_request, *, event, reviewer=None)
             f'总大小: {format_file_size(upload_request.total_size)}'
         )
         _create_outbox(
-            event_key=f'{base_key}:telegram', upload_request=upload_request,
-            channel=ResourceNotificationOutbox.CHANNEL_TELEGRAM, body=message,
+            event_key=f'{base_key}:telegram',
+            upload_request=upload_request,
+            channel=ResourceNotificationOutbox.CHANNEL_TELEGRAM,
+            body=message,
         )
         return
     if event == 'publish_failed':
         _create_outbox(
-            event_key=f'{base_key}:telegram', upload_request=upload_request,
+            event_key=f'{base_key}:telegram',
+            upload_request=upload_request,
             channel=ResourceNotificationOutbox.CHANNEL_TELEGRAM,
-            body=(
-                f'资料投稿 #{upload_request.pk} 发布失败，请在后台处理。\n'
-                f'错误：{upload_request.publish_error}'
-            ),
+            body=(f'资料投稿 #{upload_request.pk} 发布失败，请在后台处理。\n' f'错误：{upload_request.publish_error}'),
         )
         return
 
@@ -121,7 +123,10 @@ def queue_resource_upload_notifications(upload_request, *, event, reviewer=None)
         # stable ten-minute collection window even with multiple workers.
         User.objects.select_for_update().get(pk=upload_request.uploaded_by_id)
         batch_now = timezone.now()
-        for channel in (ResourceNotificationOutbox.CHANNEL_SITE_MESSAGE, ResourceNotificationOutbox.CHANNEL_EMAIL):
+        for channel in (
+            ResourceNotificationOutbox.CHANNEL_SITE_MESSAGE,
+            ResourceNotificationOutbox.CHANNEL_EMAIL,
+        ):
             aggregation_key = f'resource-upload:result:{upload_request.uploaded_by_id}:{channel}'
             available_at = (
                 ResourceNotificationOutbox.objects.filter(
@@ -135,9 +140,14 @@ def queue_resource_upload_notifications(upload_request, *, event, reviewer=None)
                 or batch_now + RESULT_NOTIFICATION_DELAY
             )
             _create_outbox(
-                event_key=f'{base_key}:{channel}', upload_request=upload_request,
-                channel=channel, body=body, subject=subject, reviewer=reviewer,
-                available_at=available_at, aggregation_key=aggregation_key,
+                event_key=f'{base_key}:{channel}',
+                upload_request=upload_request,
+                channel=channel,
+                body=body,
+                subject=subject,
+                reviewer=reviewer,
+                available_at=available_at,
+                aggregation_key=aggregation_key,
                 result_snapshot=snapshot,
             )
 
@@ -150,8 +160,10 @@ def build_resource_upload_result_batch(notifications):
     # rejection simply because notifications are grouped by outcome.
     for notification in sorted(notifications, key=lambda item: item.pk):
         snapshot = notification.result_snapshot
-        result = snapshot.get('result') if snapshot else (
-            RESULT_REJECTED if ':rejected:' in notification.event_key else RESULT_APPROVED
+        result = (
+            snapshot.get('result')
+            if snapshot
+            else (RESULT_REJECTED if ':rejected:' in notification.event_key else RESULT_APPROVED)
         )
         if result != previous_result:
             label = '[审核拒绝]' if result == RESULT_REJECTED else '[审核通过]'
@@ -176,7 +188,8 @@ def build_resource_upload_result_batch(notifications):
             if result == RESULT_APPROVED:
                 html_body = (
                     f'你的资料投稿 #{escape(str(request_snapshot.pk))} 已审核通过并成功发布到 '
-                    f'<a href="{escape(get_resource_public_url(request_snapshot.target_path), quote=True)}">'
+                    '<a href="'
+                    f'{escape(get_resource_public_url(request_snapshot.target_path), quote=True)}">'
                     f'{escape(request_snapshot.target_path)}</a>。'
                 )
             else:
@@ -188,8 +201,7 @@ def build_resource_upload_result_batch(notifications):
             html_body = escape(body)
         plain_sections.append(body)
         html_sections.append(
-            '<p style="font-size: 14px; line-height: 1.7; margin: 8px 0;">'
-            f'{html_body}</p>'
+            '<p style="font-size: 14px; line-height: 1.7; margin: 8px 0;">' f'{html_body}</p>'
         )
     return (
         f'{settings.WEBSITE_NAME} 资料投稿审核结果',
@@ -222,13 +234,19 @@ def notify_resource_upload_result(reviewer, upload_request, result):
         recipient=upload_request.uploaded_by,
         subject=get_resource_upload_result_subject(result),
         body=content,
-        dedupe_key=f'resource-upload:{upload_request.pk}:revision:{upload_request.revision}:{result}:system',
+        dedupe_key=(
+            f'resource-upload:{upload_request.pk}:revision:'
+            f'{upload_request.revision}:{result}:system'
+        ),
     )
     recipient = upload_request.uploaded_by.email or upload_request.uploaded_by.college_email
     if recipient:
         send_mail_with_telegram_alert(
             send_mail,
-            get_resource_upload_result_subject(result), content, settings.EMAIL_HOST_USER,
-            [recipient], fail_silently=False,
+            get_resource_upload_result_subject(result),
+            content,
+            settings.EMAIL_HOST_USER,
+            [recipient],
+            fail_silently=False,
             alert_context=f'资料投稿 #{upload_request.pk} 审核结果邮件',
         )

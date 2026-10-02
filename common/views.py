@@ -1,6 +1,5 @@
 import logging
 
-from common.file.resource_browser import search_resources
 from captcha.helpers import captcha_image_url
 from captcha.models import CaptchaStore
 from django.utils import timezone
@@ -9,13 +8,13 @@ from rest_framework.generics import GenericAPIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
 
+from common.file.resource_browser import search_resources
 from course_assessment.managers import (
     SearchModuleErrorException,
     get_search_display_text,
     get_search_highlight_ranges,
 )
 from course_assessment.models import Course, Review, Teacher
-from settings import settings
 from user.models import User
 from utils.custom_pagination import StandardResultsSetPagination
 from utils.throttle import (
@@ -26,16 +25,22 @@ from utils.throttle import (
     SearchUserRateThrottle,
     issue_captcha_proof,
 )
-from utils.utils import return_response, get_err_msg, userUtils, get_user_avatar_info
+from utils.utils import get_err_msg, get_user_avatar_info, return_response, userUtils
+
+from .about import current_about
 from .messaging import (
     get_conversation,
     get_unread_message_count,
     mark_conversation_read,
     send_direct_message,
 )
-from .about import current_about
 from .models import (
-    Bulletin, About, Conversation, ConversationParticipant, DirectMessage, Notification,
+    About,
+    Bulletin,
+    Conversation,
+    ConversationParticipant,
+    DirectMessage,
+    Notification,
 )
 from .serializers import (
     CaptchaSerializer,
@@ -82,14 +87,19 @@ class BulletinListView(APIView):
 
         bulletin_list = []
         for bulletin in bulletins:
-            bulletin_list.append({
-                "title": bulletin.title,
-                "content": bulletin.content,
-                "publisher": {"nickname": bulletin.publisher.nickname, 'id': bulletin.publisher.id,
-                              **get_user_avatar_info(bulletin.publisher)},
-                "create_time": bulletin.create_time,
-                "update_time": bulletin.update_time,
-            })
+            bulletin_list.append(
+                {
+                    "title": bulletin.title,
+                    "content": bulletin.content,
+                    "publisher": {
+                        "nickname": bulletin.publisher.nickname,
+                        'id': bulletin.publisher.id,
+                        **get_user_avatar_info(bulletin.publisher),
+                    },
+                    "create_time": bulletin.create_time,
+                    "update_time": bulletin.update_time,
+                }
+            )
         return return_response(contents={"bulletin_list": bulletin_list})
 
 
@@ -97,7 +107,9 @@ class IndexView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        return return_response(contents="you shouldn't be here", status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return return_response(
+            contents="you shouldn't be here", status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 
 class TextContentView(GenericAPIView):
@@ -109,13 +121,24 @@ class TextContentView(GenericAPIView):
             if blog_id is None:
                 blog_items = About.objects.order_by('weight', '-update_time').filter(type="blogs")
             else:
-                blog_items = About.objects.filter(id=blog_id, type='blogs').order_by('weight', '-update_time')
+                blog_items = About.objects.filter(id=blog_id, type='blogs').order_by(
+                    'weight', '-update_time'
+                )
         except About.DoesNotExist:
             return return_response(contents={"blogs": []})
         blogs_page = self.paginate_queryset(blog_items)
-        blog_dict = {'blogs': [
-            {'id': blog.id, 'title': blog.title, 'content': blog.content, 'create_time': blog.create_time,
-             'modify_time': blog.update_time} for blog in blogs_page]}
+        blog_dict = {
+            'blogs': [
+                {
+                    'id': blog.id,
+                    'title': blog.title,
+                    'content': blog.content,
+                    'create_time': blog.create_time,
+                    'modify_time': blog.update_time,
+                }
+                for blog in blogs_page
+            ]
+        }
         return self.get_paginated_response(blog_dict)
 
 
@@ -152,24 +175,26 @@ class MessageBoxView(GenericAPIView):
             conversation = participation.conversation
             chatter = conversation.other_user(request.user)
             last_message = conversation.last_message
-            result.append({
-                'conversation_id': conversation.id,
-                'chatter': {
-                    'id': chatter.id,
-                    'nickname': chatter.nickname,
-                    **get_user_avatar_info(chatter),
-                },
-                'last_message': {
-                    'id': last_message.id if last_message else None,
-                    'content': last_message.content if last_message else '',
-                    'datetime': last_message.created_at if last_message else None,
-                },
-                'unread_count': get_unread_message_count(
-                    conversation,
-                    request.user,
-                    participation.last_read_message_id,
-                ),
-            })
+            result.append(
+                {
+                    'conversation_id': conversation.id,
+                    'chatter': {
+                        'id': chatter.id,
+                        'nickname': chatter.nickname,
+                        **get_user_avatar_info(chatter),
+                    },
+                    'last_message': {
+                        'id': last_message.id if last_message else None,
+                        'content': last_message.content if last_message else '',
+                        'datetime': last_message.created_at if last_message else None,
+                    },
+                    'unread_count': get_unread_message_count(
+                        conversation,
+                        request.user,
+                        participation.last_read_message_id,
+                    ),
+                }
+            )
         return self.get_paginated_response(result)
 
     def get_particular_user_message(self, request, conversation):
@@ -182,39 +207,52 @@ class MessageBoxView(GenericAPIView):
         snapshot_latest_message_id = conversation.last_message_id or 0
 
         if params.get('after_id'):
-            candidates = list(messages.filter(id__gt=params['after_id']).order_by('id')[:page_size + 1])
+            candidates = list(
+                messages.filter(id__gt=params['after_id']).order_by('id')[: page_size + 1]
+            )
             has_more = len(candidates) > page_size
             message_page = candidates[:page_size]
         elif params.get('before_id'):
-            candidates = list(messages.filter(id__lt=params['before_id']).order_by('-id')[:page_size + 1])
+            candidates = list(
+                messages.filter(id__lt=params['before_id']).order_by('-id')[: page_size + 1]
+            )
             has_more = len(candidates) > page_size
             message_page = list(reversed(candidates[:page_size]))
         else:
-            candidates = list(messages.filter(
-                id__lte=snapshot_latest_message_id
-            ).order_by('-id')[:page_size + 1]) if snapshot_latest_message_id else []
+            candidates = (
+                list(
+                    messages.filter(id__lte=snapshot_latest_message_id).order_by('-id')[: page_size + 1]
+                )
+                if snapshot_latest_message_id
+                else []
+            )
             has_more = len(candidates) > page_size
             message_page = list(reversed(candidates[:page_size]))
 
-        result = [{
-            'id': message.id,
-            'chatter': {
-                'id': message.sender.id,
-                'nickname': message.sender.nickname,
-                **get_user_avatar_info(message.sender),
-            },
-            'content': message.content,
-            'datetime': message.created_at,
-        } for message in message_page]
-        return return_response(contents={
-            'conversation_id': conversation.id,
-            'count': messages.count(),
-            'results': result,
-            'has_more': has_more,
-            'before_id': result[0]['id'] if result else None,
-            'after_id': result[-1]['id'] if result else None,
-            'snapshot_latest_message_id': snapshot_latest_message_id,
-        })
+        result = [
+            {
+                'id': message.id,
+                'chatter': {
+                    'id': message.sender.id,
+                    'nickname': message.sender.nickname,
+                    **get_user_avatar_info(message.sender),
+                },
+                'content': message.content,
+                'datetime': message.created_at,
+            }
+            for message in message_page
+        ]
+        return return_response(
+            contents={
+                'conversation_id': conversation.id,
+                'count': messages.count(),
+                'results': result,
+                'has_more': has_more,
+                'before_id': result[0]['id'] if result else None,
+                'after_id': result[-1]['id'] if result else None,
+                'snapshot_latest_message_id': snapshot_latest_message_id,
+            }
+        )
 
     def get_notification_list(self, request, classify):
         notices = Notification.objects.filter(
@@ -223,7 +261,9 @@ class MessageBoxView(GenericAPIView):
         ).order_by('-updated_at', '-id')
         page = self.paginate_queryset(notices)
         from guestbook.notifications import hydrate_guestbook_notifications
+
         from .announcement_notifications import hydrate_announcement_notifications
+
         hydrate_guestbook_notifications(page)
         hydrate_announcement_notifications(page)
         result = []
@@ -234,25 +274,36 @@ class MessageBoxView(GenericAPIView):
         return self.get_paginated_response(result)
 
     def get(self, request, classify, chatter_id=None):
-        if classify not in ('user', Notification.KIND_LIKE, Notification.KIND_REPLY, Notification.KIND_SYSTEM):
-            return return_response(errors={'classify': get_err_msg('operation_error')},
-                                   status_code=status.HTTP_400_BAD_REQUEST)
+        if classify not in (
+            'user',
+            Notification.KIND_LIKE,
+            Notification.KIND_REPLY,
+            Notification.KIND_SYSTEM,
+        ):
+            return return_response(
+                errors={'classify': get_err_msg('operation_error')},
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
         if chatter_id is None:
             if classify == 'user':
                 return self.get_user_message_list(request)
             return self.get_notification_list(request, classify)
         if classify != 'user':
-            return return_response(errors={'classify': get_err_msg('operation_error')},
-                                   status_code=status.HTTP_400_BAD_REQUEST)
+            return return_response(
+                errors={'classify': get_err_msg('operation_error')},
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
         try:
             chatter = User.objects.get(id=chatter_id)
             conversation = get_conversation(request.user, chatter)
         except User.DoesNotExist:
-            return return_response(errors={'user': get_err_msg('user_not_exist')},
-                                   status_code=status.HTTP_404_NOT_FOUND)
+            return return_response(
+                errors={'user': get_err_msg('user_not_exist')}, status_code=status.HTTP_404_NOT_FOUND
+            )
         except (ValueError, Conversation.DoesNotExist):
-            return return_response(errors={'chat': get_err_msg('chat_not_exist')},
-                                   status_code=status.HTTP_404_NOT_FOUND)
+            return return_response(
+                errors={'chat': get_err_msg('chat_not_exist')}, status_code=status.HTTP_404_NOT_FOUND
+            )
         return self.get_particular_user_message(request, conversation)
 
     def post(self, request):
@@ -261,30 +312,38 @@ class MessageBoxView(GenericAPIView):
             try:
                 receiver = User.objects.get(id=serializer.validated_data['receiver'])
             except User.DoesNotExist:
-                return return_response(errors={'user': get_err_msg('user_not_exist')},
-                                       status_code=status.HTTP_400_BAD_REQUEST)
+                return return_response(
+                    errors={'user': get_err_msg('user_not_exist')},
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
             if receiver == request.user:
-                return return_response(errors={'user': get_err_msg('cannot_send_message_to_self')},
-                                       status_code=status.HTTP_400_BAD_REQUEST)
+                return return_response(
+                    errors={'user': get_err_msg('cannot_send_message_to_self')},
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
             direct_message = send_direct_message(
                 sender=request.user,
                 recipient=receiver,
                 content=serializer.validated_data['content'],
             )
-            return return_response(contents={
-                'message': direct_message.id,
-                'conversation_id': direct_message.conversation_id,
-                'datetime': direct_message.created_at,
-            }, status_code=status.HTTP_201_CREATED)
+            return return_response(
+                contents={
+                    'message': direct_message.id,
+                    'conversation_id': direct_message.conversation_id,
+                    'datetime': direct_message.created_at,
+                },
+                status_code=status.HTTP_201_CREATED,
+            )
         else:
             return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
 
 
 class MessageUnreadView(APIView):
-
     def get(self, request):
         unread_counts = {'user': 0, 'system': 0, 'like': 0, 'reply': 0}
-        participations = ConversationParticipant.objects.filter(user=request.user).select_related('conversation')
+        participations = ConversationParticipant.objects.filter(user=request.user).select_related(
+            'conversation'
+        )
         for participation in participations:
             unread_counts['user'] += get_unread_message_count(
                 participation.conversation,
@@ -316,9 +375,12 @@ class ConversationReadView(APIView):
                 serializer.validated_data['through_message_id'],
             )
         except (User.DoesNotExist, ValueError, Conversation.DoesNotExist):
-            return return_response(errors={'chat': get_err_msg('chat_not_exist')},
-                                   status_code=status.HTTP_404_NOT_FOUND)
-        return return_response(contents={'through_message_id': serializer.validated_data['through_message_id']})
+            return return_response(
+                errors={'chat': get_err_msg('chat_not_exist')}, status_code=status.HTTP_404_NOT_FOUND
+            )
+        return return_response(
+            contents={'through_message_id': serializer.validated_data['through_message_id']}
+        )
 
 
 class NotificationReadView(APIView):
@@ -348,59 +410,88 @@ class CourseTeacherSearchView(APIView):
         serializer = SearchSerializer(data=request.data)
 
         def course_search(search_keyword):
-            courses = Course.objects.search(search_keyword, page_size=page_size,
-                                            current_page=current_page,
-                                            prefetch_related_fields=['semester', 'teachers'])
-            search_result_list = [{'id': course.id, 'name': course.name,
-                                   'name_highlight_ranges': get_search_highlight_ranges(course.name, search_keyword),
-                                   'teacher': course.get_teachers(),
-                                   'classification': course.get_classification(),
-                                   'school': course.school.get_name(), 'semester': course.get_semester(),
-                                   'rating': {
-                                       'average_rating': course.average_rating,
-                                       'normalized_rating': course.normalized_rating},
-                                   'like': {
-                                       'like': course.like_count,
-                                       'dislike': course.dislike_count
-                                   },
-                                   'review_count': course.review_count,
-                                   'latest_review_time': course.last_review_time} for course in
-                                  courses['results']]
+            courses = Course.objects.search(
+                search_keyword,
+                page_size=page_size,
+                current_page=current_page,
+                prefetch_related_fields=['semester', 'teachers'],
+            )
+            search_result_list = [
+                {
+                    'id': course.id,
+                    'name': course.name,
+                    'name_highlight_ranges': get_search_highlight_ranges(course.name, search_keyword),
+                    'teacher': course.get_teachers(),
+                    'classification': course.get_classification(),
+                    'school': course.school.get_name(),
+                    'semester': course.get_semester(),
+                    'rating': {
+                        'average_rating': course.average_rating,
+                        'normalized_rating': course.normalized_rating,
+                    },
+                    'like': {'like': course.like_count, 'dislike': course.dislike_count},
+                    'review_count': course.review_count,
+                    'latest_review_time': course.last_review_time,
+                }
+                for course in courses['results']
+            ]
             page_info = {k: v for k, v in courses.items() if k != 'results'}
             return page_info, search_result_list
 
         def review_search(search_keyword):
             try:
-                reviews = Review.objects.search(search_keyword, page_size=page_size,
-                                                current_page=current_page,
-                                                select_related_fields=['course', 'semester', 'created_by'])
+                reviews = Review.objects.search(
+                    search_keyword,
+                    page_size=page_size,
+                    current_page=current_page,
+                    select_related_fields=['course', 'semester', 'created_by'],
+                )
             except SearchModuleErrorException:
-                return return_response(errors={'module': get_err_msg('invalid_search_type')}, )
-            search_result_list = [{'id': review.id,
-                                   'course': {'id': review.course.id, 'name': review.course.get_name(), },
-                                   'content': review.content,
-                                   'content_highlight_ranges': get_search_highlight_ranges(
-                                       get_search_display_text(review.content), search_keyword),
-                                   'rating': review.rating,
-                                   'created_by': userUtils.get_user_info_in_review(review),
-                                   'modify_time': review.modify_time,
-                                   'like': {
-                                       'like': review.like_count,
-                                       'dislike': review.dislike_count,
-                                   },
-                                   'semester': review.semester.name,
-                                   } for review in reviews['results']]
+                return return_response(
+                    errors={'module': get_err_msg('invalid_search_type')},
+                )
+            search_result_list = [
+                {
+                    'id': review.id,
+                    'course': {
+                        'id': review.course.id,
+                        'name': review.course.get_name(),
+                    },
+                    'content': review.content,
+                    'content_highlight_ranges': get_search_highlight_ranges(
+                        get_search_display_text(review.content), search_keyword
+                    ),
+                    'rating': review.rating,
+                    'created_by': userUtils.get_user_info_in_review(review),
+                    'modify_time': review.modify_time,
+                    'like': {
+                        'like': review.like_count,
+                        'dislike': review.dislike_count,
+                    },
+                    'semester': review.semester.name,
+                }
+                for review in reviews['results']
+            ]
             page_info = {k: v for k, v in reviews.items() if k != 'results'}
             return page_info, search_result_list
 
         def teacher_search(search_keyword):
-            teachers = Teacher.objects.search(search_keyword, page_size=page_size,
-                                              current_page=current_page, select_related_fields=['school'])
-            search_result_list = [{'id': teacher.id, 'name': teacher.name,
-                                   'name_highlight_ranges': get_search_highlight_ranges(teacher.name, search_keyword),
-                                   'school': teacher.school.get_name(),
-                                   'avatar_uuid': teacher.avatar_uuid} for
-                                  teacher in teachers['results']]
+            teachers = Teacher.objects.search(
+                search_keyword,
+                page_size=page_size,
+                current_page=current_page,
+                select_related_fields=['school'],
+            )
+            search_result_list = [
+                {
+                    'id': teacher.id,
+                    'name': teacher.name,
+                    'name_highlight_ranges': get_search_highlight_ranges(teacher.name, search_keyword),
+                    'school': teacher.school.get_name(),
+                    'avatar_uuid': teacher.avatar_uuid,
+                }
+                for teacher in teachers['results']
+            ]
             page_info = {k: v for k, v in teachers.items() if k != 'results'}
             return page_info, search_result_list
 
@@ -416,9 +507,12 @@ class CourseTeacherSearchView(APIView):
             elif search_type == 'review':
                 page_info, search_result_list = review_search(search_keyword)
             elif search_type == 'resource':
-                page_info, search_result_list = search_resources(search_keyword, current_page, page_size, request.user)
+                page_info, search_result_list = search_resources(
+                    search_keyword, current_page, page_size, request.user
+                )
             else:
-                return return_response(errors=get_err_msg('invalid_type_field'),
-                                       status_code=status.HTTP_400_BAD_REQUEST)
+                return return_response(
+                    errors=get_err_msg('invalid_type_field'), status_code=status.HTTP_400_BAD_REQUEST
+                )
             return return_response(contents={'search_result': search_result_list, **page_info})
         return return_response(errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)

@@ -15,7 +15,11 @@ from common.file.models import (
 )
 from common.file.resource_directories import write_resource_directory_cache
 from common.file.resource_notifications import queue_resource_upload_notifications
-from common.file.resource_tasks import _mark_notifications_sent, process_one_notification, process_one_publish_job
+from common.file.resource_tasks import (
+    _mark_notifications_sent,
+    process_one_notification,
+    process_one_publish_job,
+)
 from common.file.resource_workflow import (
     ResourceReviewError,
     approve_resource_upload,
@@ -48,7 +52,9 @@ class ResourceUploadWorkflowTests(TestCase):
         self.addCleanup(self.settings_override.disable)
         write_resource_directory_cache(['/'])
         self.user = create_user(is_active=True)
-        self.reviewer = create_user(username='reviewer', email='reviewer@example.com', is_active=True, is_staff=True)
+        self.reviewer = create_user(
+            username='reviewer', email='reviewer@example.com', is_active=True, is_staff=True
+        )
 
     def create_request(self):
         request = ResourceUploadRequest.objects.create(
@@ -116,11 +122,15 @@ class ResourceUploadWorkflowTests(TestCase):
         self.assertIsNotNone(request.files_deleted_at)
         self.assertFalse(bool(upload_file.file))
         self.assertEqual(upload_file.published_path, '/courses/new-course/notes.txt')
-        self.assertEqual((self.storage_root / 'courses' / 'new-course' / 'notes.txt').read_bytes(), b'content')
+        self.assertEqual(
+            (self.storage_root / 'courses' / 'new-course' / 'notes.txt').read_bytes(), b'content'
+        )
 
         notifications = ResourceNotificationOutbox.objects.filter(upload_request=request)
         self.assertEqual(notifications.count(), 2)
-        self.assertTrue(all(notification.available_at > timezone.now() for notification in notifications))
+        self.assertTrue(
+            all(notification.available_at > timezone.now() for notification in notifications)
+        )
         self.assertFalse(process_one_notification())
 
     @patch('common.file.resource_tasks.send_mail')
@@ -130,11 +140,15 @@ class ResourceUploadWorkflowTests(TestCase):
         for index, upload_request in enumerate(rejected, start=1):
             upload_request.rejection_reason = f'拒绝理由 {index}'
             upload_request.save(update_fields=('rejection_reason', 'updated_at'))
-            queue_resource_upload_notifications(upload_request, event='rejected', reviewer=self.reviewer)
+            queue_resource_upload_notifications(
+                upload_request, event='rejected', reviewer=self.reviewer
+            )
         for index, upload_request in enumerate(approved, start=1):
             upload_request.target_path = f'/courses/approved-{index}'
             upload_request.save(update_fields=('target_path', 'updated_at'))
-            queue_resource_upload_notifications(upload_request, event='approved', reviewer=self.reviewer)
+            queue_resource_upload_notifications(
+                upload_request, event='approved', reviewer=self.reviewer
+            )
         ResourceNotificationOutbox.objects.update(available_at=timezone.now() - timedelta(seconds=1))
 
         self.assertTrue(process_one_notification())
@@ -170,7 +184,9 @@ class ResourceUploadWorkflowTests(TestCase):
         self.assertNotIn('查看资料', html_body)
         self.assertIn('>/courses/approved-1</a>。', html_body)
         self.assertEqual(
-            ResourceNotificationOutbox.objects.filter(status=ResourceNotificationOutbox.STATUS_SENT).count(),
+            ResourceNotificationOutbox.objects.filter(
+                status=ResourceNotificationOutbox.STATUS_SENT
+            ).count(),
             24,
         )
 
@@ -187,17 +203,21 @@ class ResourceUploadWorkflowTests(TestCase):
 
         notifications = ResourceNotificationOutbox.objects.order_by('pk')
         self.assertEqual(notifications.count(), 4)
-        self.assertTrue(all(
-            notification.available_at == initial_time + timedelta(minutes=10)
-            for notification in notifications
-        ))
+        self.assertTrue(
+            all(
+                notification.available_at == initial_time + timedelta(minutes=10)
+                for notification in notifications
+            )
+        )
 
     @patch('common.file.resource_tasks.send_mail')
     def test_result_snapshots_survive_resubmission_and_preserve_revision_order(self, send_mail):
         request = self.create_request()
         reject_resource_upload(
-            upload_request_id=request.pk, reviewer=self.reviewer,
-            expected_revision=1, reason='补充 <script>课程</script> 信息',
+            upload_request_id=request.pk,
+            reviewer=self.reviewer,
+            expected_revision=1,
+            reason='补充 <script>课程</script> 信息',
         )
         request.refresh_from_db()
         request.revision = 2
@@ -231,7 +251,8 @@ class ResourceUploadWorkflowTests(TestCase):
         request.rejection_reason = '旧理由 <课程>'
         queue_resource_upload_notifications(request, event='rejected', reviewer=self.reviewer)
         ResourceNotificationOutbox.objects.update(
-            result_snapshot={}, available_at=timezone.now() - timedelta(seconds=1),
+            result_snapshot={},
+            available_at=timezone.now() - timedelta(seconds=1),
         )
         request.rejection_reason = ''
         request.revision += 1
@@ -306,7 +327,9 @@ class ResourceUploadWorkflowTests(TestCase):
         completed_rows = list(site_batch.values('pk', 'status', 'sent_at', 'attempts'))
 
         with (
-            patch('common.file.resource_tasks.claim_notification', return_value=(completed_rows[0]['pk'],)),
+            patch(
+                'common.file.resource_tasks.claim_notification', return_value=(completed_rows[0]['pk'],)
+            ),
             patch('common.file.resource_tasks._deliver') as deliver,
         ):
             self.assertTrue(process_one_notification())
@@ -323,10 +346,12 @@ class ResourceUploadWorkflowTests(TestCase):
         queue_resource_upload_notifications(first, event='approved', reviewer=self.reviewer)
         queue_resource_upload_notifications(second, event='rejected', reviewer=self.reviewer)
         first_row = ResourceNotificationOutbox.objects.get(
-            upload_request=first, channel=ResourceNotificationOutbox.CHANNEL_SITE_MESSAGE,
+            upload_request=first,
+            channel=ResourceNotificationOutbox.CHANNEL_SITE_MESSAGE,
         )
         second_row = ResourceNotificationOutbox.objects.get(
-            upload_request=second, channel=ResourceNotificationOutbox.CHANNEL_SITE_MESSAGE,
+            upload_request=second,
+            channel=ResourceNotificationOutbox.CHANNEL_SITE_MESSAGE,
         )
         ResourceNotificationOutbox.objects.filter(pk=first_row.pk).update(
             available_at=timezone.now() - timedelta(seconds=1),
@@ -338,10 +363,13 @@ class ResourceUploadWorkflowTests(TestCase):
         first_notice.read_at = timezone.now()
         first_notice.save(update_fields=('read_at',))
         ResourceNotificationOutbox.objects.filter(pk=second_row.pk).update(
-            status=ResourceNotificationOutbox.STATUS_PROCESSING, locked_at=timezone.now(),
+            status=ResourceNotificationOutbox.STATUS_PROCESSING,
+            locked_at=timezone.now(),
         )
 
-        with patch('common.file.resource_tasks.claim_notification', return_value=(first_row.pk, second_row.pk)):
+        with patch(
+            'common.file.resource_tasks.claim_notification', return_value=(first_row.pk, second_row.pk)
+        ):
             self.assertTrue(process_one_notification())
 
         self.assertEqual(Notification.objects.count(), 2)
@@ -360,7 +388,8 @@ class ResourceUploadWorkflowTests(TestCase):
             channel=ResourceNotificationOutbox.CHANNEL_SITE_MESSAGE,
         )
         ResourceNotificationOutbox.objects.filter(pk=site_row.pk).update(
-            status=ResourceNotificationOutbox.STATUS_PROCESSING, locked_at=timezone.now(),
+            status=ResourceNotificationOutbox.STATUS_PROCESSING,
+            locked_at=timezone.now(),
         )
         select_for_update = ResourceNotificationOutbox.objects.select_for_update
         lock_calls = 0
@@ -375,7 +404,11 @@ class ResourceUploadWorkflowTests(TestCase):
         with (
             patch('common.file.resource_tasks.claim_notification', return_value=(site_row.pk,)),
             patch('common.file.resource_tasks._deliver', side_effect=RuntimeError('delivery failed')),
-            patch.object(ResourceNotificationOutbox.objects, 'select_for_update', side_effect=complete_before_retry_lock),
+            patch.object(
+                ResourceNotificationOutbox.objects,
+                'select_for_update',
+                side_effect=complete_before_retry_lock,
+            ),
         ):
             self.assertTrue(process_one_notification())
 
@@ -402,7 +435,10 @@ class ResourceUploadWorkflowTests(TestCase):
             _mark_notifications_sent(notification_ids)
             raise RuntimeError('acknowledgement failed')
 
-        with patch('common.file.resource_tasks._mark_notifications_sent', side_effect=fail_after_acknowledgement):
+        with patch(
+            'common.file.resource_tasks._mark_notifications_sent',
+            side_effect=fail_after_acknowledgement,
+        ):
             self.assertTrue(process_one_notification())
 
         self.assertFalse(Notification.objects.exists())
@@ -447,10 +483,12 @@ class ResourceUploadWorkflowTests(TestCase):
             ResourceNotificationOutbox.objects.filter(upload_request=request).count(),
             2,
         )
-        self.assertTrue(all(
-            notification.available_at > timezone.now()
-            for notification in ResourceNotificationOutbox.objects.filter(upload_request=request)
-        ))
+        self.assertTrue(
+            all(
+                notification.available_at > timezone.now()
+                for notification in ResourceNotificationOutbox.objects.filter(upload_request=request)
+            )
+        )
         self.assertFalse(process_one_notification())
 
     def test_publish_failed_can_change_target_and_retry(self):
@@ -530,4 +568,6 @@ class ResourceUploadWorkflowTests(TestCase):
         request.refresh_from_db()
         self.assertEqual(request.status, ResourceUploadRequest.STATUS_APPROVED)
         self.assertIsNone(request.files_deleted_at)
-        self.assertEqual((self.storage_root / 'courses' / 'new-course' / 'notes.txt').read_bytes(), b'content')
+        self.assertEqual(
+            (self.storage_root / 'courses' / 'new-course' / 'notes.txt').read_bytes(), b'content'
+        )

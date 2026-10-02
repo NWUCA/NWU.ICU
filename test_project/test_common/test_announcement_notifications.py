@@ -26,18 +26,28 @@ from test_project.common import create_user
 
 class AnnouncementSystemNotificationTests(APITestCase):
     def setUp(self):
-        self.author = create_user(username='announcement-author', email='author@example.com', is_staff=True)
+        self.author = create_user(
+            username='announcement-author', email='author@example.com', is_staff=True
+        )
         self.reader = create_user(username='announcement-reader', email='reader@example.com')
         self.inactive = create_user(
-            username='announcement-inactive', email='inactive@example.com', is_active=False,
+            username='announcement-inactive',
+            email='inactive@example.com',
+            is_active=False,
         )
         self.client.force_authenticate(self.reader)
 
     def publish(self, **kwargs):
-        return publish_announcement(author=self.author, data={
-            'title': '站点公告', 'content': '<p><strong>完整公告内容</strong></p>',
-            'priority': 0, 'submission_id': uuid4(), **kwargs,
-        })
+        return publish_announcement(
+            author=self.author,
+            data={
+                'title': '站点公告',
+                'content': '<p><strong>完整公告内容</strong></p>',
+                'priority': 0,
+                'submission_id': uuid4(),
+                **kwargs,
+            },
+        )
 
     def system_list(self):
         return self.client.get(reverse('api:check_all_message', args=['system']))
@@ -49,9 +59,14 @@ class AnnouncementSystemNotificationTests(APITestCase):
         entry, created = self.publish()
         self.assertTrue(created)
         notices = Notification.objects.filter(kind=Notification.KIND_SYSTEM)
-        self.assertEqual(set(notices.values_list('recipient_id', flat=True)), {
-            self.author.pk, self.reader.pk, self.inactive.pk,
-        })
+        self.assertEqual(
+            set(notices.values_list('recipient_id', flat=True)),
+            {
+                self.author.pk,
+                self.reader.pk,
+                self.inactive.pk,
+            },
+        )
         self.assertFalse(notices.exclude(actor=None, read_at=None).exists())
         note = notices.get(recipient=self.reader)
         self.assertNotIn('content', note.payload)
@@ -65,9 +80,13 @@ class AnnouncementSystemNotificationTests(APITestCase):
         self.assertNotIn('created_by', item)
         note.refresh_from_db()
         self.assertIsNone(note.read_at)
-        self.assertEqual(self.unread(), {
-            'unread': {'user': 0, 'system': 1, 'like': 0, 'reply': 0}, 'total': 1,
-        })
+        self.assertEqual(
+            self.unread(),
+            {
+                'unread': {'user': 0, 'system': 1, 'like': 0, 'reply': 0},
+                'total': 1,
+            },
+        )
 
     def test_duplicate_submission_preserves_read_state_and_new_users_get_no_history(self):
         submission_id = uuid4()
@@ -76,11 +95,15 @@ class AnnouncementSystemNotificationTests(APITestCase):
         other_client = APIClient()
         other_client.force_authenticate(self.author)
         foreign_read = other_client.post(
-            reverse('api:read_notifications'), {'ids': [note.pk]}, format='json',
+            reverse('api:read_notifications'),
+            {'ids': [note.pk]},
+            format='json',
         )
         self.assertEqual(foreign_read.data['contents']['updated'], 0)
         read_response = self.client.post(
-            reverse('api:read_notifications'), {'ids': [note.pk]}, format='json',
+            reverse('api:read_notifications'),
+            {'ids': [note.pk]},
+            format='json',
         )
         self.assertEqual(read_response.data['contents']['updated'], 1)
         note.refresh_from_db()
@@ -99,9 +122,15 @@ class AnnouncementSystemNotificationTests(APITestCase):
         entry, _ = self.publish()
         note = Notification.objects.get(recipient=self.reader)
         self.client.post(reverse('api:read_notifications'), {'ids': [note.pk]}, format='json')
-        updated = update_announcement(entry_id=entry.pk, editor=self.author, data={
-            'title': '修改后的标题', 'content': '<p>替换后的公告内容</p>', 'priority': 10,
-        })
+        updated = update_announcement(
+            entry_id=entry.pk,
+            editor=self.author,
+            data={
+                'title': '修改后的标题',
+                'content': '<p>替换后的公告内容</p>',
+                'priority': 10,
+            },
+        )
         item = self.system_list().data['contents']['results'][0]
         self.assertEqual(item['title'], updated.title)
         self.assertEqual(item['content'], updated.content)
@@ -120,7 +149,9 @@ class AnnouncementSystemNotificationTests(APITestCase):
         self.assertFalse(Notification.objects.exists())
 
     def test_publication_and_notifications_roll_back_together(self):
-        with patch('common.announcement_notifications._broadcast', side_effect=RuntimeError('send failed')):
+        with patch(
+            'common.announcement_notifications._broadcast', side_effect=RuntimeError('send failed')
+        ):
             with self.assertRaises(RuntimeError):
                 self.publish()
         self.assertFalse(GuestbookEntry.objects.exists())
@@ -180,15 +211,22 @@ class AnnouncementSystemNotificationTests(APITestCase):
 
     def test_delayed_first_enable_uses_publication_time_and_sorts_above_recent_notes(self):
         bulletin = Bulletin.objects.create(
-            title='延迟发布的公告', content='公告正文', publisher=self.author, enabled=False,
+            title='延迟发布的公告',
+            content='公告正文',
+            publisher=self.author,
+            enabled=False,
         )
         old_time = timezone.now() - timedelta(days=5)
         Bulletin.objects.filter(pk=bulletin.pk).update(create_time=old_time)
         recent_note = Notification.objects.create(
-            recipient=self.reader, kind=Notification.KIND_SYSTEM,
-            payload={'title': '近期系统通知', 'content': '其它事件'}, dedupe_key='recent-system-event',
+            recipient=self.reader,
+            kind=Notification.KIND_SYSTEM,
+            payload={'title': '近期系统通知', 'content': '其它事件'},
+            dedupe_key='recent-system-event',
         )
-        Notification.objects.filter(pk=recent_note.pk).update(updated_at=timezone.now() - timedelta(days=1))
+        Notification.objects.filter(pk=recent_note.pk).update(
+            updated_at=timezone.now() - timedelta(days=1)
+        )
         published_at = timezone.now()
         bulletin.enabled = True
         with patch('common.announcement_notifications.timezone.now', return_value=published_at):
@@ -208,8 +246,10 @@ class AnnouncementSystemNotificationTests(APITestCase):
         bulletin = Bulletin.objects.create(title='旧公告', content='正文', publisher=self.author)
         notify_bulletin_published(bulletin)
         unrelated = Notification.objects.create(
-            recipient=self.reader, kind=Notification.KIND_REPLY,
-            payload={'source': 'bulletin', 'bulletin': {'id': bulletin.pk}}, dedupe_key='other-kind',
+            recipient=self.reader,
+            kind=Notification.KIND_REPLY,
+            payload={'source': 'bulletin', 'bulletin': {'id': bulletin.pk}},
+            dedupe_key='other-kind',
         )
         bulletin.delete()
         self.assertEqual(list(Notification.objects.values_list('pk', flat=True)), [unrelated.pk])
@@ -219,11 +259,18 @@ class AnnouncementSystemNotificationTests(APITestCase):
         bulletin = Bulletin.objects.create(title='旧公告', content='当前正文', publisher=self.author)
         notify_bulletin_published(bulletin)
         generic = Notification.objects.create(
-            recipient=self.reader, kind=Notification.KIND_SYSTEM,
-            payload={'title': '其它系统事件', 'content': '保留这段正文'}, dedupe_key='other-system-event',
+            recipient=self.reader,
+            kind=Notification.KIND_SYSTEM,
+            payload={'title': '其它系统事件', 'content': '保留这段正文'},
+            dedupe_key='other-system-event',
         )
         notes = list(Notification.objects.filter(recipient=self.reader))
         with self.assertNumQueries(2):
             hydrate_announcement_notifications(notes)
         self.assertEqual(next(note.payload for note in notes if note.pk == generic.pk), generic.payload)
-        self.assertEqual(next(note.payload for note in notes if note.payload.get('source') == 'announcement')['title'], entry.title)
+        self.assertEqual(
+            next(note.payload for note in notes if note.payload.get('source') == 'announcement')[
+                'title'
+            ],
+            entry.title,
+        )

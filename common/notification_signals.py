@@ -10,7 +10,8 @@ from .models import Bulletin, Notification
 def remove_bulletin_notifications(sender, instance, **kwargs):
     Notification.objects.filter(
         kind=Notification.KIND_SYSTEM,
-        payload__source='bulletin', payload__bulletin__id=instance.pk,
+        payload__source='bulletin',
+        payload__bulletin__id=instance.pk,
     ).delete()
 
 

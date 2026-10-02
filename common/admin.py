@@ -9,11 +9,10 @@ from django.db.models import Sum
 from django.shortcuts import redirect
 from django.template.response import TemplateResponse
 from django.urls import path, reverse
-from django.utils import timezone
 from django.utils.html import format_html, format_html_join
 
-from common.file.models import ResourceUploadFile, ResourceUploadRequest
 from common.file.admin import AttachmentReferenceAdminMixin
+from common.file.models import ResourceUploadFile, ResourceUploadRequest
 from common.file.resource_workflow import (
     ResourceReviewError,
     approve_resource_upload,
@@ -21,8 +20,8 @@ from common.file.resource_workflow import (
     retry_resource_publish,
 )
 from utils.utils import format_file_size
-from .models import Announcement, Bulletin, About
 
+from .models import About, Announcement, Bulletin
 
 logger = logging.getLogger(__name__)
 
@@ -35,20 +34,31 @@ class ResourceUploadReviewForm(forms.Form):
     ACTION_APPROVE = 'approve'
     ACTION_REJECT = 'reject'
     ACTION_RETRY = 'retry'
-    action = forms.ChoiceField(choices=(
-        (ACTION_APPROVE, '通过并发布'),
-        (ACTION_REJECT, '拒绝并通知'),
-        (ACTION_RETRY, '重新发布'),
-    ), widget=forms.HiddenInput)
+    action = forms.ChoiceField(
+        choices=(
+            (ACTION_APPROVE, '通过并发布'),
+            (ACTION_REJECT, '拒绝并通知'),
+            (ACTION_RETRY, '重新发布'),
+        ),
+        widget=forms.HiddenInput,
+    )
     expected_revision = forms.IntegerField(widget=forms.HiddenInput, min_value=1)
     target_path = forms.CharField(label='最终目标目录', required=False, max_length=2048)
-    rejection_reason = forms.CharField(label='拒绝理由', required=False, max_length=2000, widget=forms.Textarea)
+    rejection_reason = forms.CharField(
+        label='拒绝理由', required=False, max_length=2000, widget=forms.Textarea
+    )
 
     def clean(self):
         cleaned = super().clean()
-        if cleaned.get('action') in {self.ACTION_APPROVE, self.ACTION_RETRY} and not cleaned.get('target_path', '').strip():
+        if (
+            cleaned.get('action') in {self.ACTION_APPROVE, self.ACTION_RETRY}
+            and not cleaned.get('target_path', '').strip()
+        ):
             self.add_error('target_path', '发布投稿时必须填写最终目标目录')
-        if cleaned.get('action') == self.ACTION_REJECT and not cleaned.get('rejection_reason', '').strip():
+        if (
+            cleaned.get('action') == self.ACTION_REJECT
+            and not cleaned.get('rejection_reason', '').strip()
+        ):
             self.add_error('rejection_reason', '拒绝投稿时必须填写理由')
         return cleaned
 
@@ -81,14 +91,41 @@ class ResourceUploadRequestAdmin(admin.ModelAdmin):
     actions = ('approve_requests', 'reject_requests')
     inlines = (ResourceUploadFileInline,)
     list_display = (
-        'id', 'uploaded_by', 'target_path', 'creates_new_folder', 'file_links', 'status', 'revision', 'review_link', 'total_size_display',
-        'created_at', 'reviewed_by', 'reviewed_at', 'files_deleted_at',
+        'id',
+        'uploaded_by',
+        'target_path',
+        'creates_new_folder',
+        'file_links',
+        'status',
+        'revision',
+        'review_link',
+        'total_size_display',
+        'created_at',
+        'reviewed_by',
+        'reviewed_at',
+        'files_deleted_at',
     )
     list_filter = ('status', 'created_at', 'reviewed_at', 'files_deleted_at')
-    search_fields = ('uploaded_by__username', 'uploaded_by__nickname', 'target_path', 'files__relative_path')
+    search_fields = (
+        'uploaded_by__username',
+        'uploaded_by__nickname',
+        'target_path',
+        'files__relative_path',
+    )
     readonly_fields = (
-        'uploaded_by', 'target_path', 'creates_new_folder', 'status', 'total_size_display', 'created_at',
-        'revision', 'updated_at', 'reviewed_at', 'reviewed_by', 'rejection_reason', 'publish_error', 'files_deleted_at',
+        'uploaded_by',
+        'target_path',
+        'creates_new_folder',
+        'status',
+        'total_size_display',
+        'created_at',
+        'revision',
+        'updated_at',
+        'reviewed_at',
+        'reviewed_by',
+        'rejection_reason',
+        'publish_error',
+        'files_deleted_at',
     )
     date_hierarchy = 'created_at'
 
@@ -117,7 +154,10 @@ class ResourceUploadRequestAdmin(admin.ModelAdmin):
 
     @admin.display(description='审核')
     def review_link(self, obj):
-        return format_html('<a href="{}">打开审核页</a>', reverse('admin:common_resourceuploadrequest_review', args=(obj.pk,)))
+        return format_html(
+            '<a href="{}">打开审核页</a>',
+            reverse('admin:common_resourceuploadrequest_review', args=(obj.pk,)),
+        )
 
     def review_view(self, request, object_id):
         if not request.user.has_perm('common.review_resource_uploads'):
@@ -155,14 +195,18 @@ class ResourceUploadRequestAdmin(admin.ModelAdmin):
                             target_path=form.cleaned_data['target_path'],
                         )
                         self.message_user(request, '已重新进入发布队列。', messages.SUCCESS)
-                    return redirect('admin:common_resourceuploadrequest_review', object_id=upload_request.pk)
+                    return redirect(
+                        'admin:common_resourceuploadrequest_review', object_id=upload_request.pk
+                    )
                 except ResourceReviewError as error:
                     form.add_error(None, str(error))
         else:
-            form = ResourceUploadReviewForm(initial={
-                'expected_revision': upload_request.revision,
-                'target_path': upload_request.target_path,
-            })
+            form = ResourceUploadReviewForm(
+                initial={
+                    'expected_revision': upload_request.revision,
+                    'target_path': upload_request.target_path,
+                }
+            )
         context = {
             **self.admin_site.each_context(request),
             'title': f'审核投稿 #{upload_request.pk}',
@@ -201,9 +245,12 @@ class ResourceUploadRequestAdmin(admin.ModelAdmin):
         return False
 
     def changelist_view(self, request, extra_context=None):
-        current_size = ResourceUploadRequest.objects.filter(files_deleted_at__isnull=True).aggregate(
-            total=Sum('total_size')
-        )['total'] or 0
+        current_size = (
+            ResourceUploadRequest.objects.filter(files_deleted_at__isnull=True).aggregate(
+                total=Sum('total_size')
+            )['total']
+            or 0
+        )
         extra_context = extra_context or {}
         extra_context['title'] = f'上传请求（当前暂存文件总大小：{format_file_size(current_size)}）'
         return super().changelist_view(request, extra_context=extra_context)

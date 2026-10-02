@@ -2,14 +2,15 @@ from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
 
-from common.file.models import UploadedFile
 from common.announcement_notifications import notify_announcement_published
+from common.file.models import UploadedFile
 from common.file.references import (
     ensure_file_references,
     ensure_owned_rich_content_references,
     file_lifecycle,
     file_reference_ids,
 )
+
 from .models import GuestbookEntry
 from .serializers import announcement_image_ids
 from .submissions import create_submission
@@ -68,8 +69,7 @@ def update_announcement(*, entry_id, editor, data):
         entry = _announcement_for_update(entry_id)
         previous_content = entry.content
         changed = any(
-            getattr(entry, field) != data[field]
-            for field in ('title', 'content', 'priority')
+            getattr(entry, field) != data[field] for field in ('title', 'content', 'priority')
         )
         if not changed:
             return entry

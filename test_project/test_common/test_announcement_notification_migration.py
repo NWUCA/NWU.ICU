@@ -31,43 +31,67 @@ class AnnouncementNotificationMigrationTests(TransactionTestCase):
         Bulletin = old_apps.get_model('common', 'Bulletin')
         Notification = old_apps.get_model('common', 'Notification')
         self.publisher = create_user(username='migration-publisher', email='publisher@example.com')
-        self.reader = create_user(username='migration-reader', email='reader@example.com', is_active=False)
+        self.reader = create_user(
+            username='migration-reader', email='reader@example.com', is_active=False
+        )
         self.announcement_time = timezone.now() - timedelta(days=3)
         self.bulletin_time = timezone.now() - timedelta(days=4)
         self.existing_time = timezone.now() - timedelta(days=2)
 
         entry = GuestbookEntry.objects.create(
-            author_id=self.publisher.pk, board='announcement', title='历史新公告', content='<p>当前内容</p>',
+            author_id=self.publisher.pk,
+            board='announcement',
+            title='历史新公告',
+            content='<p>当前内容</p>',
         )
         GuestbookEntry.objects.filter(pk=entry.pk).update(created_at=self.announcement_time)
         self.announcement_id = entry.pk
         GuestbookEntry.objects.create(
-            author_id=self.publisher.pk, board='announcement', title='隐藏', content='不可见', is_visible=False,
+            author_id=self.publisher.pk,
+            board='announcement',
+            title='隐藏',
+            content='不可见',
+            is_visible=False,
         )
         GuestbookEntry.objects.create(
-            author_id=self.publisher.pk, board='announcement', title='删除', content='不可见', is_deleted=True,
+            author_id=self.publisher.pk,
+            board='announcement',
+            title='删除',
+            content='不可见',
+            is_deleted=True,
         )
         GuestbookEntry.objects.create(
-            author_id=self.publisher.pk, board='announcement', parent_id=entry.pk,
-            root_id=entry.pk, content='公告回复',
+            author_id=self.publisher.pk,
+            board='announcement',
+            parent_id=entry.pk,
+            root_id=entry.pk,
+            content='公告回复',
         )
         GuestbookEntry.objects.create(author_id=self.publisher.pk, board='guestbook', content='普通留言')
         bulletin = Bulletin.objects.create(
-            title='历史旧公告', content='旧公告内容', publisher_id=self.publisher.pk,
+            title='历史旧公告',
+            content='旧公告内容',
+            publisher_id=self.publisher.pk,
         )
         Bulletin.objects.filter(pk=bulletin.pk).update(create_time=self.bulletin_time)
         self.bulletin_id = bulletin.pk
         self.hidden_bulletin_id = Bulletin.objects.create(
-            title='历史禁用公告', content='不可见', publisher_id=self.publisher.pk, enabled=False,
+            title='历史禁用公告',
+            content='不可见',
+            publisher_id=self.publisher.pk,
+            enabled=False,
         ).pk
         self.existing_payload = {'title': '已有通知', 'content': '保留原内容'}
         existing = Notification.objects.create(
-            recipient_id=self.publisher.pk, actor_id=self.publisher.pk, kind='system',
+            recipient_id=self.publisher.pk,
+            actor_id=self.publisher.pk,
+            kind='system',
             dedupe_key=f'announcement:publish:{entry.pk}:{self.publisher.pk}',
             payload=self.existing_payload,
         )
         Notification.objects.filter(pk=existing.pk).update(
-            created_at=self.existing_time, updated_at=self.existing_time,
+            created_at=self.existing_time,
+            updated_at=self.existing_time,
         )
         self.existing_id = existing.pk
         executor = MigrationExecutor(connection)
@@ -89,7 +113,11 @@ class AnnouncementNotificationMigrationTests(TransactionTestCase):
             self.assertIsNotNone(note.read_at)
             self.assertIsNone(note.actor_id)
             self.assertEqual(note.kind, 'system')
-            published_at = self.announcement_time if note.payload['source'] == 'announcement' else self.bulletin_time
+            published_at = (
+                self.announcement_time
+                if note.payload['source'] == 'announcement'
+                else self.bulletin_time
+            )
             self.assertEqual(note.created_at, published_at)
             self.assertEqual(note.updated_at, published_at)
             self.assertEqual(note.payload['datetime'], published_at.isoformat())
@@ -104,18 +132,27 @@ class AnnouncementNotificationMigrationTests(TransactionTestCase):
         with connection.schema_editor() as schema_editor:
             migration.backfill_announcement_notifications(self.apps, schema_editor)
         self.assertEqual(list(Notification.objects.order_by('pk').values()), before)
-        self.assertEqual(list(Notification.objects.filter(
-            recipient_id=self.reader.pk,
-        ).order_by('-updated_at', '-id').values_list('payload', flat=True)), [
-            {
-                'source': 'announcement', 'guestbook': {'root_id': self.announcement_id},
-                'datetime': self.announcement_time.isoformat(),
-            },
-            {
-                'source': 'bulletin', 'bulletin': {'id': self.bulletin_id},
-                'datetime': self.bulletin_time.isoformat(),
-            },
-        ])
+        self.assertEqual(
+            list(
+                Notification.objects.filter(
+                    recipient_id=self.reader.pk,
+                )
+                .order_by('-updated_at', '-id')
+                .values_list('payload', flat=True)
+            ),
+            [
+                {
+                    'source': 'announcement',
+                    'guestbook': {'root_id': self.announcement_id},
+                    'datetime': self.announcement_time.isoformat(),
+                },
+                {
+                    'source': 'bulletin',
+                    'bulletin': {'id': self.bulletin_id},
+                    'datetime': self.bulletin_time.isoformat(),
+                },
+            ],
+        )
         newcomer = create_user(username='after-backfill', email='after@example.com')
         self.assertFalse(Notification.objects.filter(recipient_id=newcomer.pk).exists())
 

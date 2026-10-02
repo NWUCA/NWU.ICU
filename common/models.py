@@ -3,7 +3,13 @@ from django.db import models
 from django.db.models import Q
 
 from user.models import User
-from .archive_models import ResourceArchive, ResourceArchiveNotice, ResourceArchiveReceipt, ResourceArchiveState
+
+from .archive_models import (  # noqa: F401
+    ResourceArchive,
+    ResourceArchiveNotice,
+    ResourceArchiveReceipt,
+    ResourceArchiveState,
+)
 
 
 class Announcement(models.Model):

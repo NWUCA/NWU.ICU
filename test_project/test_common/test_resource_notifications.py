@@ -15,7 +15,6 @@ from common.file.resource_notifications import (
     get_resource_public_url,
     notify_resource_upload_result,
 )
-from common.file.resource_publish import ResourcePublishError
 from common.models import Conversation, DirectMessage, Notification
 from test_project.common import create_user
 
@@ -134,7 +133,9 @@ class ResourceLegacyNotificationTests(TestCase):
         notify_resource_upload_result(self.user, self.upload_request, RESULT_APPROVED)
         notify_resource_upload_result(None, self.upload_request, RESULT_REJECTED)
 
-        self.assertEqual(Notification.objects.filter(actor__isnull=True, read_at__isnull=True).count(), 2)
+        self.assertEqual(
+            Notification.objects.filter(actor__isnull=True, read_at__isnull=True).count(), 2
+        )
         self.assertFalse(Conversation.objects.exists())
         self.assertFalse(DirectMessage.objects.exists())
 

@@ -9,7 +9,6 @@ from user.models import User
 
 from .models import Bulletin, Notification
 
-
 NOTIFICATION_BATCH_SIZE = 1000
 
 
@@ -20,21 +19,31 @@ def _broadcast(source, source_id, published_at):
     else:
         payload['bulletin'] = {'id': source_id}
 
-    recipients = User.objects.order_by('pk').values_list('pk', flat=True).iterator(
-        chunk_size=NOTIFICATION_BATCH_SIZE,
+    recipients = (
+        User.objects.order_by('pk')
+        .values_list('pk', flat=True)
+        .iterator(
+            chunk_size=NOTIFICATION_BATCH_SIZE,
+        )
     )
     while recipient_ids := list(islice(recipients, NOTIFICATION_BATCH_SIZE)):
         keys = {user_id: f'{source}:publish:{source_id}:{user_id}' for user_id in recipient_ids}
-        existing_keys = set(Notification.objects.filter(
-            dedupe_key__in=keys.values(),
-        ).values_list('dedupe_key', flat=True))
-        notices = [Notification(
-            recipient_id=user_id,
-            actor=None,
-            kind=Notification.KIND_SYSTEM,
-            payload=payload,
-            dedupe_key=key,
-        ) for user_id, key in keys.items() if key not in existing_keys]
+        existing_keys = set(
+            Notification.objects.filter(
+                dedupe_key__in=keys.values(),
+            ).values_list('dedupe_key', flat=True)
+        )
+        notices = [
+            Notification(
+                recipient_id=user_id,
+                actor=None,
+                kind=Notification.KIND_SYSTEM,
+                payload=payload,
+                dedupe_key=key,
+            )
+            for user_id, key in keys.items()
+            if key not in existing_keys
+        ]
         if not notices:
             continue
         Notification.objects.bulk_create(notices, batch_size=NOTIFICATION_BATCH_SIZE)
@@ -44,7 +53,9 @@ def _broadcast(source, source_id, published_at):
             notice.created_at = published_at
             notice.updated_at = published_at
         Notification.objects.bulk_update(
-            notices, ('created_at', 'updated_at'), batch_size=NOTIFICATION_BATCH_SIZE,
+            notices,
+            ('created_at', 'updated_at'),
+            batch_size=NOTIFICATION_BATCH_SIZE,
         )
 
 
@@ -53,7 +64,11 @@ def notify_announcement_published(entry):
     from guestbook.models import GuestbookEntry
 
     current = GuestbookEntry.objects.select_for_update().get(pk=entry.pk)
-    if current.board != GuestbookEntry.BOARD_ANNOUNCEMENT or not current.is_root or not current.is_visible:
+    if (
+        current.board != GuestbookEntry.BOARD_ANNOUNCEMENT
+        or not current.is_root
+        or not current.is_visible
+    ):
         return
     _broadcast('announcement', current.pk, current.created_at)
 
