@@ -1,6 +1,7 @@
 """Database-backed task processing for resource publishing and notifications."""
 import logging
 from datetime import timedelta
+from hashlib import sha256
 
 from django.conf import settings
 from django.core.mail import send_mail
@@ -8,14 +9,17 @@ from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
-from common.messaging import send_direct_message
 from management_panel.telegram_notifications import send_mail_with_telegram_alert
 from settings.log import TelegramBotHandler
 from user.models import User
 
 from .models import ResourceNotificationOutbox, ResourcePublishJob, ResourceUploadRequest
 from .resource_locks import lock_resource_upload_request
-from .resource_notifications import build_resource_upload_result_batch, queue_resource_upload_notifications
+from .resource_notifications import (
+    build_resource_upload_result_batch,
+    create_resource_system_notification,
+    queue_resource_upload_notifications,
+)
 from .resource_publish import (
     ResourcePublishError,
     delete_resource_upload_staging_files,
@@ -169,9 +173,15 @@ def _deliver(notifications):
         handler.handle(logging.LogRecord(__name__, logging.INFO, '', 0, body, (), None))
         return
     if notification.channel == ResourceNotificationOutbox.CHANNEL_SITE_MESSAGE:
-        if not notification.sender or not notification.recipient:
-            raise ValueError('站内信缺少发送者或接收者')
-        send_direct_message(notification.sender, notification.recipient, body)
+        if not notification.recipient:
+            raise ValueError('系统通知缺少接收者')
+        batch_key = '\n'.join(sorted(item.event_key for item in notifications))
+        create_resource_system_notification(
+            recipient=notification.recipient,
+            subject=subject,
+            body=body,
+            dedupe_key=f'resource-upload:result-batch:{sha256(batch_key.encode("utf-8")).hexdigest()}',
+        )
         return
     if notification.channel == ResourceNotificationOutbox.CHANNEL_EMAIL:
         if not notification.recipient:
@@ -190,6 +200,15 @@ def _deliver(notifications):
     raise ValueError('未知通知渠道')
 
 
+def _mark_notifications_sent(notification_ids):
+    ResourceNotificationOutbox.objects.filter(pk__in=notification_ids).update(
+        status=ResourceNotificationOutbox.STATUS_SENT,
+        sent_at=timezone.now(),
+        locked_at=None,
+        last_error='',
+    )
+
+
 def process_one_notification():
     notification_ids = claim_notification()
     if not notification_ids:
@@ -200,11 +219,36 @@ def process_one_notification():
         .filter(pk__in=notification_ids)
         .order_by('pk')
     )
+    if not notifications:
+        return True
+    site_delivery = notifications[0].channel == ResourceNotificationOutbox.CHANNEL_SITE_MESSAGE
     try:
-        _deliver(notifications)
+        if site_delivery:
+            # Creating the system notice and acknowledging its outbox batch must
+            # commit together so a worker crash cannot leave a duplicate retry.
+            with transaction.atomic():
+                notifications = list(
+                    ResourceNotificationOutbox.objects
+                    .select_for_update(of=('self',))
+                    .select_related('recipient', 'sender', 'upload_request')
+                    .filter(pk__in=notification_ids, status=ResourceNotificationOutbox.STATUS_PROCESSING)
+                    .order_by('pk')
+                )
+                if not notifications:
+                    return True
+                notification_ids = tuple(notification.pk for notification in notifications)
+                _deliver(notifications)
+                _mark_notifications_sent(notification_ids)
+        else:
+            _deliver(notifications)
     except Exception as error:
         with transaction.atomic():
             claimed_notifications = ResourceNotificationOutbox.objects.select_for_update().filter(pk__in=notification_ids)
+            if site_delivery:
+                claimed_notifications = claimed_notifications.filter(status=ResourceNotificationOutbox.STATUS_PROCESSING)
+            claimed_notifications = list(claimed_notifications)
+            if not claimed_notifications:
+                return True
             retry_at = _next_retry(max(notification.attempts for notification in claimed_notifications) + 1)
             for notification in claimed_notifications:
                 notification.attempts += 1
@@ -220,10 +264,6 @@ def process_one_notification():
                 ))
         logger.exception('Resource notifications %s failed', notification_ids)
         return True
-    ResourceNotificationOutbox.objects.filter(pk__in=notification_ids).update(
-        status=ResourceNotificationOutbox.STATUS_SENT,
-        sent_at=timezone.now(),
-        locked_at=None,
-        last_error='',
-    )
+    if not site_delivery:
+        _mark_notifications_sent(notification_ids)
     return True

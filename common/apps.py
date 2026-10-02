@@ -5,3 +5,4 @@ class CommonConfig(AppConfig):
     name = 'common'
     def ready(self):
         import common.file.signals
+        import common.notification_signals

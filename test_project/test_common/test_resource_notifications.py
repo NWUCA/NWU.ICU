@@ -2,7 +2,8 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from django.contrib.admin.sites import AdminSite
-from django.test import SimpleTestCase, override_settings
+from django.test import SimpleTestCase, TestCase, override_settings
+from django.utils import timezone
 
 from common.admin import ResourceUploadRequestAdmin
 from common.file.models import ResourceUploadRequest
@@ -15,6 +16,8 @@ from common.file.resource_notifications import (
     notify_resource_upload_result,
 )
 from common.file.resource_publish import ResourcePublishError
+from common.models import Conversation, DirectMessage, Notification
+from test_project.common import create_user
 
 
 @override_settings(
@@ -66,20 +69,6 @@ class ResourceUploadNotificationTests(SimpleTestCase):
         self.assertIn('已退回修改', message)
         self.assertIn(self.upload_request.rejection_reason, message)
 
-    @patch('common.file.resource_notifications.send_mail')
-    @patch('common.file.resource_notifications.send_direct_message')
-    def test_all_results_send_site_message_and_email(
-            self, send_site_message, send_mail):
-
-        for result in (RESULT_APPROVED, RESULT_PUBLISH_FAILED, RESULT_REJECTED):
-            notify_resource_upload_result(self.reviewer, self.upload_request, result)
-
-        self.assertEqual(send_site_message.call_count, 3)
-        self.assertEqual(send_mail.call_count, 3)
-        for call in send_mail.call_args_list:
-            self.assertEqual(call.args[2], 'notify@nwu.icu')
-            self.assertEqual(call.args[3], ['student@example.com'])
-
     @patch('common.admin.approve_resource_upload')
     def test_bulk_approval_queues_publish_workflow(self, approve_resource_upload):
         upload_request = SimpleNamespace(
@@ -107,3 +96,63 @@ class ResourceUploadNotificationTests(SimpleTestCase):
             expected_revision=1,
             target_path=upload_request.target_path,
         )
+
+
+@override_settings(WEBSITE_NAME='NWU.ICU', EMAIL_HOST_USER='notify@nwu.icu')
+class ResourceLegacyNotificationTests(TestCase):
+    def setUp(self):
+        self.user = create_user(is_active=True, email='student@example.com')
+        self.reviewer = create_user(username='reviewer', email='reviewer@example.com', is_active=True)
+        self.upload_request = ResourceUploadRequest.objects.create(
+            uploaded_by=self.user,
+            target_path='/courses',
+            rejection_reason='请补充课程信息',
+        )
+
+    @patch('common.file.resource_notifications.send_mail')
+    def test_all_results_send_system_notice_and_email(self, send_mail):
+        for result in (RESULT_APPROVED, RESULT_PUBLISH_FAILED, RESULT_REJECTED):
+            notify_resource_upload_result(self.reviewer, self.upload_request, result)
+
+        self.assertEqual(Notification.objects.count(), 3)
+        for notice in Notification.objects.all():
+            self.assertEqual(notice.recipient, self.user)
+            self.assertEqual(notice.kind, Notification.KIND_SYSTEM)
+            self.assertIsNone(notice.actor_id)
+            self.assertIsNone(notice.read_at)
+            self.assertIn('资料投稿', notice.payload['title'])
+            self.assertIn(f'投稿 #{self.upload_request.pk}', notice.payload['content'])
+        self.assertFalse(Conversation.objects.exists())
+        self.assertFalse(DirectMessage.objects.exists())
+        self.assertEqual(send_mail.call_count, 3)
+        for call in send_mail.call_args_list:
+            self.assertEqual(call.args[2], 'notify@nwu.icu')
+            self.assertEqual(call.args[3], ['student@example.com'])
+
+    @patch('common.file.resource_notifications.send_mail')
+    def test_self_review_and_missing_reviewer_send_system_notices(self, send_mail):
+        notify_resource_upload_result(self.user, self.upload_request, RESULT_APPROVED)
+        notify_resource_upload_result(None, self.upload_request, RESULT_REJECTED)
+
+        self.assertEqual(Notification.objects.filter(actor__isnull=True, read_at__isnull=True).count(), 2)
+        self.assertFalse(Conversation.objects.exists())
+        self.assertFalse(DirectMessage.objects.exists())
+
+    @patch('common.file.resource_notifications.send_mail')
+    def test_repeat_result_preserves_read_notice_and_new_revision_is_unread(self, send_mail):
+        notify_resource_upload_result(self.reviewer, self.upload_request, RESULT_REJECTED)
+        notice = Notification.objects.get()
+        read_at = timezone.now()
+        notice.read_at = read_at
+        notice.save(update_fields=('read_at',))
+
+        notify_resource_upload_result(None, self.upload_request, RESULT_REJECTED)
+        notice.refresh_from_db()
+        self.assertEqual(Notification.objects.count(), 1)
+        self.assertEqual(notice.read_at, read_at)
+
+        self.upload_request.revision += 1
+        self.upload_request.save(update_fields=('revision', 'updated_at'))
+        notify_resource_upload_result(self.reviewer, self.upload_request, RESULT_REJECTED)
+        self.assertEqual(Notification.objects.count(), 2)
+        self.assertEqual(Notification.objects.filter(read_at__isnull=True).count(), 1)

@@ -10,7 +10,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from .models import ResourceNotificationOutbox
-from common.messaging import send_direct_message
+from common.models import Notification
 from management_panel.telegram_notifications import send_mail_with_telegram_alert
 from user.models import User
 from utils.utils import format_file_size
@@ -198,11 +198,32 @@ def build_resource_upload_result_batch(notifications):
     )
 
 
+def create_resource_system_notification(*, recipient, subject, body, dedupe_key):
+    notification, _ = Notification.objects.get_or_create(
+        dedupe_key=dedupe_key,
+        defaults={
+            'recipient': recipient,
+            'actor': None,
+            'kind': Notification.KIND_SYSTEM,
+            'payload': {
+                'title': subject,
+                'content': body,
+                'datetime': timezone.now().isoformat(),
+            },
+        },
+    )
+    return notification
+
+
 def notify_resource_upload_result(reviewer, upload_request, result):
     """Legacy synchronous notifier retained for integrations outside the task workflow."""
     content = build_resource_upload_result_message(upload_request, result)
-    if reviewer != upload_request.uploaded_by:
-        send_direct_message(sender=reviewer, recipient=upload_request.uploaded_by, content=content)
+    create_resource_system_notification(
+        recipient=upload_request.uploaded_by,
+        subject=get_resource_upload_result_subject(result),
+        body=content,
+        dedupe_key=f'resource-upload:{upload_request.pk}:revision:{upload_request.revision}:{result}:system',
+    )
     recipient = upload_request.uploaded_by.email or upload_request.uploaded_by.college_email
     if recipient:
         send_mail_with_telegram_alert(

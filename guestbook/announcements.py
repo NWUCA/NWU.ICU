@@ -3,6 +3,7 @@ from django.db.models import F
 from django.utils import timezone
 
 from common.file.models import UploadedFile
+from common.announcement_notifications import notify_announcement_published
 from common.file.references import (
     ensure_file_references,
     ensure_owned_rich_content_references,
@@ -57,6 +58,7 @@ def publish_announcement(*, author, data):
             UploadedFile.objects.filter(id__in=references).update(
                 ref_count=F('ref_count') + 1,
             )
+            notify_announcement_published(entry)
         return entry, created
 
 

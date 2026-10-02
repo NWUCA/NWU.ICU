@@ -25,6 +25,7 @@ class Bulletin(models.Model):
     create_time = models.DateTimeField(auto_now_add=True)
     update_time = models.DateTimeField(auto_now=True)
     enabled = models.BooleanField(default=True)
+    system_notification_sent = models.BooleanField(default=False, editable=False)
     publisher = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
 
 

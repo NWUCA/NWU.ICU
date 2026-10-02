@@ -15,13 +15,14 @@ from common.file.models import (
 )
 from common.file.resource_directories import write_resource_directory_cache
 from common.file.resource_notifications import queue_resource_upload_notifications
-from common.file.resource_tasks import process_one_notification, process_one_publish_job
+from common.file.resource_tasks import _mark_notifications_sent, process_one_notification, process_one_publish_job
 from common.file.resource_workflow import (
     ResourceReviewError,
     approve_resource_upload,
     reject_resource_upload,
     retry_resource_publish,
 )
+from common.models import Conversation, DirectMessage, Notification
 from test_project.common import create_user
 
 
@@ -123,8 +124,7 @@ class ResourceUploadWorkflowTests(TestCase):
         self.assertFalse(process_one_notification())
 
     @patch('common.file.resource_tasks.send_mail')
-    @patch('common.file.resource_tasks.send_direct_message')
-    def test_review_results_for_same_user_are_batched_per_channel(self, send_direct_message, send_mail):
+    def test_review_results_for_same_user_are_batched_per_channel(self, send_mail):
         rejected = [self.create_request() for _ in range(2)]
         approved = [self.create_request() for _ in range(10)]
         for index, upload_request in enumerate(rejected, start=1):
@@ -140,9 +140,15 @@ class ResourceUploadWorkflowTests(TestCase):
         self.assertTrue(process_one_notification())
         self.assertTrue(process_one_notification())
         self.assertFalse(process_one_notification())
-        self.assertEqual(send_direct_message.call_count, 1)
+        notice = Notification.objects.get()
+        self.assertEqual(notice.recipient, self.user)
+        self.assertEqual(notice.kind, Notification.KIND_SYSTEM)
+        self.assertIsNone(notice.actor_id)
+        self.assertIsNone(notice.read_at)
+        self.assertFalse(Conversation.objects.exists())
+        self.assertFalse(DirectMessage.objects.exists())
         self.assertEqual(send_mail.call_count, 1)
-        site_message = send_direct_message.call_args.args[2]
+        site_message = notice.payload['content']
         email_subject, email_body = send_mail.call_args.args[:2]
         html_body = send_mail.call_args.kwargs['html_message']
         self.assertTrue(site_message.startswith('[审核拒绝]\n'))
@@ -187,8 +193,7 @@ class ResourceUploadWorkflowTests(TestCase):
         ))
 
     @patch('common.file.resource_tasks.send_mail')
-    @patch('common.file.resource_tasks.send_direct_message')
-    def test_result_snapshots_survive_resubmission_and_preserve_revision_order(self, send_direct_message, send_mail):
+    def test_result_snapshots_survive_resubmission_and_preserve_revision_order(self, send_mail):
         request = self.create_request()
         reject_resource_upload(
             upload_request_id=request.pk, reviewer=self.reviewer,
@@ -209,7 +214,7 @@ class ResourceUploadWorkflowTests(TestCase):
 
         self.assertTrue(process_one_notification())
         self.assertTrue(process_one_notification())
-        body = send_direct_message.call_args.args[2]
+        body = Notification.objects.get().payload['content']
         html = send_mail.call_args.kwargs['html_message']
         self.assertIn('补充 <script>课程</script> 信息', body)
         self.assertIn('/courses/approved & original', body)
@@ -221,8 +226,7 @@ class ResourceUploadWorkflowTests(TestCase):
         self.assertEqual(ResourceNotificationOutbox.objects.filter(status='sent').count(), 6)
 
     @patch('common.file.resource_tasks.send_mail')
-    @patch('common.file.resource_tasks.send_direct_message')
-    def test_legacy_pending_results_use_saved_body_after_request_changes(self, send_direct_message, send_mail):
+    def test_legacy_pending_results_use_saved_body_after_request_changes(self, send_mail):
         request = self.create_request()
         request.rejection_reason = '旧理由 <课程>'
         queue_resource_upload_notifications(request, event='rejected', reviewer=self.reviewer)
@@ -235,8 +239,184 @@ class ResourceUploadWorkflowTests(TestCase):
 
         self.assertTrue(process_one_notification())
         self.assertTrue(process_one_notification())
-        self.assertIn('旧理由 <课程>', send_direct_message.call_args.args[2])
+        self.assertIn('旧理由 <课程>', Notification.objects.get().payload['content'])
         self.assertIn('旧理由 &lt;课程&gt;', send_mail.call_args.kwargs['html_message'])
+
+    def test_site_results_support_self_review_and_missing_sender(self):
+        approved = self.create_request()
+        rejected = self.create_request()
+        rejected.rejection_reason = '请补充课程信息'
+        rejected.save(update_fields=('rejection_reason', 'updated_at'))
+        queue_resource_upload_notifications(approved, event='approved', reviewer=self.user)
+        queue_resource_upload_notifications(rejected, event='rejected')
+        ResourceNotificationOutbox.objects.filter(
+            channel=ResourceNotificationOutbox.CHANNEL_SITE_MESSAGE,
+        ).update(available_at=timezone.now() - timedelta(seconds=1))
+
+        self.assertTrue(process_one_notification())
+        notice = Notification.objects.get()
+        self.assertEqual(notice.recipient, self.user)
+        self.assertEqual(notice.kind, Notification.KIND_SYSTEM)
+        self.assertIsNone(notice.actor_id)
+        self.assertIsNone(notice.read_at)
+        self.assertIn('已审核通过', notice.payload['content'])
+        self.assertIn('未通过审核', notice.payload['content'])
+        self.assertFalse(Conversation.objects.exists())
+        self.assertFalse(DirectMessage.objects.exists())
+        self.assertEqual(ResourceNotificationOutbox.objects.filter(status='sent').count(), 2)
+
+    def test_reclaimed_site_batch_does_not_duplicate_or_reset_read_notice(self):
+        request = self.create_request()
+        queue_resource_upload_notifications(request, event='approved', reviewer=self.reviewer)
+        site_batch = ResourceNotificationOutbox.objects.filter(
+            channel=ResourceNotificationOutbox.CHANNEL_SITE_MESSAGE,
+        )
+        site_batch.update(available_at=timezone.now() - timedelta(seconds=1))
+        self.assertTrue(process_one_notification())
+        notice = Notification.objects.get()
+        read_at = timezone.now()
+        notice.read_at = read_at
+        notice.save(update_fields=('read_at',))
+
+        site_batch.update(
+            status=ResourceNotificationOutbox.STATUS_PROCESSING,
+            locked_at=timezone.now() - timedelta(minutes=16),
+        )
+        self.assertTrue(process_one_notification())
+
+        notice.refresh_from_db()
+        self.assertEqual(Notification.objects.count(), 1)
+        self.assertEqual(notice.read_at, read_at)
+        self.assertEqual(site_batch.get().status, ResourceNotificationOutbox.STATUS_SENT)
+
+    def test_stale_claim_for_sent_subset_does_not_redeliver_completed_batch(self):
+        first = self.create_request()
+        second = self.create_request()
+        queue_resource_upload_notifications(first, event='approved', reviewer=self.reviewer)
+        queue_resource_upload_notifications(second, event='rejected', reviewer=self.reviewer)
+        site_batch = ResourceNotificationOutbox.objects.filter(
+            channel=ResourceNotificationOutbox.CHANNEL_SITE_MESSAGE,
+        ).order_by('pk')
+        site_batch.update(available_at=timezone.now() - timedelta(seconds=1))
+        self.assertTrue(process_one_notification())
+        notice = Notification.objects.get()
+        read_at = timezone.now()
+        notice.read_at = read_at
+        notice.save(update_fields=('read_at',))
+        completed_rows = list(site_batch.values('pk', 'status', 'sent_at', 'attempts'))
+
+        with (
+            patch('common.file.resource_tasks.claim_notification', return_value=(completed_rows[0]['pk'],)),
+            patch('common.file.resource_tasks._deliver') as deliver,
+        ):
+            self.assertTrue(process_one_notification())
+
+        deliver.assert_not_called()
+        notice.refresh_from_db()
+        self.assertEqual(Notification.objects.count(), 1)
+        self.assertEqual(notice.read_at, read_at)
+        self.assertEqual(list(site_batch.values('pk', 'status', 'sent_at', 'attempts')), completed_rows)
+
+    def test_partially_completed_claim_delivers_only_still_processing_rows(self):
+        first = self.create_request()
+        second = self.create_request()
+        queue_resource_upload_notifications(first, event='approved', reviewer=self.reviewer)
+        queue_resource_upload_notifications(second, event='rejected', reviewer=self.reviewer)
+        first_row = ResourceNotificationOutbox.objects.get(
+            upload_request=first, channel=ResourceNotificationOutbox.CHANNEL_SITE_MESSAGE,
+        )
+        second_row = ResourceNotificationOutbox.objects.get(
+            upload_request=second, channel=ResourceNotificationOutbox.CHANNEL_SITE_MESSAGE,
+        )
+        ResourceNotificationOutbox.objects.filter(pk=first_row.pk).update(
+            available_at=timezone.now() - timedelta(seconds=1),
+        )
+        self.assertTrue(process_one_notification())
+        first_row.refresh_from_db()
+        first_sent_at = first_row.sent_at
+        first_notice = Notification.objects.get()
+        first_notice.read_at = timezone.now()
+        first_notice.save(update_fields=('read_at',))
+        ResourceNotificationOutbox.objects.filter(pk=second_row.pk).update(
+            status=ResourceNotificationOutbox.STATUS_PROCESSING, locked_at=timezone.now(),
+        )
+
+        with patch('common.file.resource_tasks.claim_notification', return_value=(first_row.pk, second_row.pk)):
+            self.assertTrue(process_one_notification())
+
+        self.assertEqual(Notification.objects.count(), 2)
+        second_notice = Notification.objects.exclude(pk=first_notice.pk).get()
+        self.assertIn(f'投稿 #{second.pk}（', second_notice.payload['content'])
+        self.assertNotIn(f'投稿 #{first.pk}（', second_notice.payload['content'])
+        first_row.refresh_from_db()
+        second_row.refresh_from_db()
+        self.assertEqual(first_row.sent_at, first_sent_at)
+        self.assertEqual(second_row.status, ResourceNotificationOutbox.STATUS_SENT)
+
+    def test_site_retry_does_not_reset_rows_completed_after_delivery_error(self):
+        request = self.create_request()
+        queue_resource_upload_notifications(request, event='approved', reviewer=self.reviewer)
+        site_row = ResourceNotificationOutbox.objects.get(
+            channel=ResourceNotificationOutbox.CHANNEL_SITE_MESSAGE,
+        )
+        ResourceNotificationOutbox.objects.filter(pk=site_row.pk).update(
+            status=ResourceNotificationOutbox.STATUS_PROCESSING, locked_at=timezone.now(),
+        )
+        select_for_update = ResourceNotificationOutbox.objects.select_for_update
+        lock_calls = 0
+
+        def complete_before_retry_lock(*args, **kwargs):
+            nonlocal lock_calls
+            lock_calls += 1
+            if lock_calls == 2:
+                _mark_notifications_sent((site_row.pk,))
+            return select_for_update(*args, **kwargs)
+
+        with (
+            patch('common.file.resource_tasks.claim_notification', return_value=(site_row.pk,)),
+            patch('common.file.resource_tasks._deliver', side_effect=RuntimeError('delivery failed')),
+            patch.object(ResourceNotificationOutbox.objects, 'select_for_update', side_effect=complete_before_retry_lock),
+        ):
+            self.assertTrue(process_one_notification())
+
+        site_row.refresh_from_db()
+        self.assertEqual(site_row.status, ResourceNotificationOutbox.STATUS_SENT)
+        self.assertEqual(site_row.attempts, 0)
+        self.assertEqual(site_row.last_error, '')
+
+    def test_removed_claimed_outbox_rows_are_ignored(self):
+        with patch('common.file.resource_tasks.claim_notification', return_value=(987654321,)):
+            self.assertTrue(process_one_notification())
+        self.assertFalse(Notification.objects.exists())
+
+    def test_site_notice_and_sent_status_roll_back_together_then_retry(self):
+        request = self.create_request()
+        queue_resource_upload_notifications(request, event='rejected', reviewer=self.reviewer)
+        site_batch = ResourceNotificationOutbox.objects.filter(
+            channel=ResourceNotificationOutbox.CHANNEL_SITE_MESSAGE,
+        )
+        site_batch.update(available_at=timezone.now() - timedelta(seconds=1))
+
+        def fail_after_acknowledgement(notification_ids):
+            self.assertTrue(Notification.objects.exists())
+            _mark_notifications_sent(notification_ids)
+            raise RuntimeError('acknowledgement failed')
+
+        with patch('common.file.resource_tasks._mark_notifications_sent', side_effect=fail_after_acknowledgement):
+            self.assertTrue(process_one_notification())
+
+        self.assertFalse(Notification.objects.exists())
+        outbox = site_batch.get()
+        self.assertEqual(outbox.status, ResourceNotificationOutbox.STATUS_RETRY)
+        self.assertEqual(outbox.attempts, 1)
+        self.assertEqual(outbox.last_error, 'acknowledgement failed')
+        self.assertIsNone(outbox.sent_at)
+        self.assertIsNone(outbox.locked_at)
+
+        site_batch.update(available_at=timezone.now() - timedelta(seconds=1))
+        self.assertTrue(process_one_notification())
+        self.assertEqual(Notification.objects.count(), 1)
+        self.assertEqual(site_batch.get().status, ResourceNotificationOutbox.STATUS_SENT)
 
     def test_stale_review_version_is_rejected(self):
         request = self.create_request()

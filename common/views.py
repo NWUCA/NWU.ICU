@@ -223,7 +223,9 @@ class MessageBoxView(GenericAPIView):
         ).order_by('-updated_at', '-id')
         page = self.paginate_queryset(notices)
         from guestbook.notifications import hydrate_guestbook_notifications
+        from .announcement_notifications import hydrate_announcement_notifications
         hydrate_guestbook_notifications(page)
+        hydrate_announcement_notifications(page)
         result = []
         for notice in page:
             item = {'id': notice.id, **notice.payload}

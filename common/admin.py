@@ -4,6 +4,7 @@ from django import forms
 from django.contrib import admin, messages
 from django.contrib.admin.helpers import ActionForm
 from django.core.exceptions import PermissionDenied
+from django.db import transaction
 from django.db.models import Sum
 from django.shortcuts import redirect
 from django.template.response import TemplateResponse
@@ -267,6 +268,17 @@ class BulletinsAdmin(AttachmentReferenceAdminMixin, admin.ModelAdmin):
     list_display = ('content', 'title', 'update_time', 'enabled')
     list_filter = ('enabled',)
     readonly_fields = ('create_time', 'update_time')
+
+    @transaction.atomic
+    def save_model(self, request, obj, form, change):
+        from .announcement_notifications import notify_bulletin_published
+
+        if change:
+            # A form opened before publication must not reset the send marker.
+            current = Bulletin.objects.select_for_update().get(pk=obj.pk)
+            obj.system_notification_sent = current.system_notification_sent
+        super().save_model(request, obj, form, change)
+        notify_bulletin_published(obj)
 
 
 @admin.register(About)
