@@ -1,11 +1,15 @@
 import re
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from django.core.management import call_command
 from django.test import override_settings
 from django.urls import reverse
 from rest_framework.test import APITestCase, APIClient
+from rest_framework.exceptions import ValidationError
 
 from course_assessment.models import Semeseter, Teacher, Course
+from course_assessment.serializer import AddCourseSerializer
 from test_project.common import create_user, login_user
 
 
@@ -81,6 +85,98 @@ class CourseTests(APITestCase):
         course_id = course_response.data['contents']['course_id']
         self.assertEqual(Course.objects.get(id=course_id).name, course_data['name'])
         self.assertEqual(Course.objects.get(id=course_id).classification, course_data['classification'])
+        self.assertEqual(list(Course.objects.get(id=course_id).teachers.values_list('id', flat=True)), [1])
+
+    def multi_teacher_course_data(self):
+        first = Teacher.objects.create(name='第一位教师', school_id=1)
+        second = Teacher.objects.create(name='第二位教师', school_id=2)
+        return {
+            'name': '多教师课程',
+            'school': 1,
+            'classification': 'general',
+            'teacher_ids': [first.id, second.id],
+        }
+
+    def test_add_course_with_multiple_teachers(self):
+        data = self.multi_teacher_course_data()
+        response = self.client.post(self.add_course_url, data=data, format='json')
+
+        self.assertEqual(response.status_code, 200)
+        course = Course.objects.get(id=response.data['contents']['course_id'])
+        self.assertEqual(set(course.teachers.values_list('id', flat=True)), set(data['teacher_ids']))
+        self.assertEqual(course.created_by, self.user)
+        for teacher_id in data['teacher_ids']:
+            detail = self.client.get(reverse('api:teacher', args=[teacher_id]))
+            self.assertEqual([item['course']['id'] for item in detail.data['contents']['course_list']], [course.id])
+
+    def test_add_course_deduplicates_teacher_ids(self):
+        data = self.multi_teacher_course_data()
+        data['teacher_ids'] += data['teacher_ids']
+        response = self.client.post(self.add_course_url, data=data, format='json')
+
+        self.assertEqual(response.status_code, 200)
+        course = Course.objects.get(id=response.data['contents']['course_id'])
+        self.assertEqual(set(course.teachers.values_list('id', flat=True)), set(data['teacher_ids']))
+
+    def test_add_course_rejects_missing_teachers_without_creating_course(self):
+        data = self.multi_teacher_course_data()
+        data['teacher_ids'].append(max(data['teacher_ids']) + 1)
+        response = self.client.post(self.add_course_url, data=data, format='json')
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data['errors'][0]['field'], 'teacher')
+        self.assertEqual(response.data['errors'][0]['err_code'], 'teacher_not_exist')
+        self.assertFalse(Course.objects.exists())
+
+    def test_add_course_rejects_both_teacher_fields(self):
+        data = self.multi_teacher_course_data()
+        data['teacher_id'] = data['teacher_ids'][0]
+        response = self.client.post(self.add_course_url, data=data, format='json')
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data['errors'][0]['field'], 'teacher')
+        self.assertFalse(Course.objects.exists())
+
+    def test_add_course_requires_at_least_one_teacher(self):
+        data = self.multi_teacher_course_data()
+        data.pop('teacher_ids')
+        response = self.client.post(self.add_course_url, data=data, format='json')
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data['errors'][0]['field'], 'teacher')
+        self.assertFalse(Course.objects.exists())
+
+    def test_add_course_rejects_invalid_teacher_lists_with_api_error_envelope(self):
+        data = self.multi_teacher_course_data()
+        invalid_lists = [[], None, 1, '1,2', [None], ['not-an-id'], [1.5], [True], [{}], [[1]]]
+        for teacher_ids in invalid_lists:
+            with self.subTest(teacher_ids=teacher_ids):
+                response = self.client.post(
+                    self.add_course_url,
+                    data={**data, 'teacher_ids': teacher_ids},
+                    format='json',
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(response.data['errors'][0]['field'], 'teacher_ids')
+                self.assertTrue(response.data['errors'][0]['err_msg'])
+                self.assertFalse(Course.objects.exists())
+
+    def test_course_creation_rolls_back_if_teacher_relations_fail(self):
+        data = self.multi_teacher_course_data()
+        with patch.object(Course.teachers.related_manager_cls, 'add', side_effect=RuntimeError('relation failure')):
+            with self.assertRaisesRegex(RuntimeError, 'relation failure'):
+                self.client.post(self.add_course_url, data=data, format='json')
+        self.assertFalse(Course.objects.exists())
+
+    def test_course_creation_does_not_omit_teacher_deleted_after_validation(self):
+        data = self.multi_teacher_course_data()
+        serializer = AddCourseSerializer(data=data, context={'request': SimpleNamespace(user=self.user)})
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        Teacher.objects.get(id=data['teacher_ids'][1]).delete()
+
+        with self.assertRaises(ValidationError):
+            serializer.save()
+        self.assertFalse(Course.objects.exists())
 
     def test_course_like(self):
         self.test_add_teacher()

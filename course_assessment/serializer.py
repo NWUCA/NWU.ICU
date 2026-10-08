@@ -1,3 +1,4 @@
+from django.db import transaction
 from rest_framework import serializers
 
 from utils.utils import get_err_msg
@@ -125,17 +126,32 @@ class CourseTeacherSearchSerializer(serializers.Serializer):
     search_flag = serializers.CharField(required=True)
 
 
+class TeacherIdsField(serializers.ListField):
+    def run_child_validation(self, data):
+        try:
+            return super().run_child_validation(data)
+        except serializers.ValidationError:
+            # The API error envelope expects a flat list of field errors.
+            raise serializers.ValidationError('教师 ID 必须为整数', code='invalid')
+
+
 class AddCourseSerializer(serializers.Serializer):
     name = serializers.CharField(required=True)
     school = serializers.IntegerField(required=True)
     classification = serializers.CharField(required=True)
-    teacher_id = serializers.IntegerField(required=True)
+    teacher_id = serializers.IntegerField(required=False)
+    teacher_ids = TeacherIdsField(child=serializers.IntegerField(), required=False, allow_empty=False)
 
     def validate(self, data):
-        try:
-            Teacher.objects.get(id=data.get('teacher_id'))
-        except Teacher.DoesNotExist:
+        if 'teacher_id' in data and 'teacher_ids' in data:
+            raise serializers.ValidationError({'teacher': '请只提交 teacher_id 或 teacher_ids 中的一个字段'})
+        if 'teacher_id' not in data and 'teacher_ids' not in data:
+            raise serializers.ValidationError({'teacher': '请选择至少一位授课教师'})
+        teacher_ids = list(dict.fromkeys(data.pop('teacher_ids', [data.get('teacher_id')])))
+        data.pop('teacher_id', None)
+        if Teacher.objects.filter(id__in=teacher_ids).count() != len(teacher_ids):
             raise serializers.ValidationError({'teacher': get_err_msg('teacher_not_exist')})
+        data['teacher_ids'] = teacher_ids
         school_exist(data.get('school'))
         classification_exist(data.get('classification'))
         try:
@@ -146,12 +162,16 @@ class AddCourseSerializer(serializers.Serializer):
             return data
         raise serializers.ValidationError({'course': get_err_msg('course_has_exist')})
 
+    @transaction.atomic
     def create(self, validated_data):
         created_by = self.context['request'].user
-        teacher = Teacher.objects.get(id=validated_data.pop('teacher_id'))
+        teacher_ids = validated_data.pop('teacher_ids')
+        teachers = list(Teacher.objects.select_for_update().filter(id__in=teacher_ids))
+        if len(teachers) != len(teacher_ids):
+            raise serializers.ValidationError({'teacher': get_err_msg('teacher_not_exist')})
         school = School.objects.get(id=validated_data.pop('school'))
         course = Course.objects.create(created_by=created_by, school=school, **validated_data)
-        course.teachers.add(teacher)
+        course.teachers.add(*teachers)
         return course
 
 
