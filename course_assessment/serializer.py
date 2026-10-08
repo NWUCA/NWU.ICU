@@ -2,7 +2,8 @@ from django.db import transaction
 from rest_framework import serializers
 
 from utils.utils import get_err_msg
-from .models import Review, ReviewHistory, ReviewReply, School, Teacher, Course
+
+from .models import Course, Review, ReviewHistory, ReviewReply, School, Teacher
 
 
 def school_exist(school):
@@ -27,15 +28,41 @@ class MyReviewSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Review
-        fields = ['id', 'course', 'content', 'rating', 'created_by', 'anonymous', 'create_time', 'modify_time',
-                  'edited', 'like_count', 'dislike_count', 'difficulty', 'grade', 'homework', 'reward', 'source',
-                  'review_history']
+        fields = [
+            'id',
+            'course',
+            'content',
+            'rating',
+            'created_by',
+            'anonymous',
+            'create_time',
+            'modify_time',
+            'edited',
+            'like_count',
+            'dislike_count',
+            'difficulty',
+            'grade',
+            'homework',
+            'reward',
+            'source',
+            'review_history',
+        ]
 
 
 class AddReviewSerializer(serializers.ModelSerializer):
     class Meta:
         model = Review
-        fields = ['course', 'content', 'rating', 'anonymous', 'difficulty', 'grade', 'homework', 'reward', 'semester']
+        fields = [
+            'course',
+            'content',
+            'rating',
+            'anonymous',
+            'difficulty',
+            'grade',
+            'homework',
+            'reward',
+            'semester',
+        ]
         extra_kwargs = {'content': {'max_length': 10_000}}
 
     def validate(self, data):
@@ -155,9 +182,11 @@ class AddCourseSerializer(serializers.Serializer):
         school_exist(data.get('school'))
         classification_exist(data.get('classification'))
         try:
-            Course.objects.get(name=data.get('name'),
-                               school=data.get('school'),
-                               classification=data.get('classification'))
+            Course.objects.get(
+                name=data.get('name'),
+                school=data.get('school'),
+                classification=data.get('classification'),
+            )
         except Course.DoesNotExist:
             return data
         raise serializers.ValidationError({'course': get_err_msg('course_has_exist')})
@@ -181,7 +210,7 @@ class CourseLikeSerializer(serializers.Serializer):
 
     def validate(self, data):
         try:
-            course = Course.objects.get(id=data.get('course_id'))
+            Course.objects.get(id=data.get('course_id'))
         except Course.DoesNotExist:
             raise serializers.ValidationError({'course': get_err_msg('course_not_exist')})
         if data.get('like') not in [-1, 1]:

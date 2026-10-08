@@ -5,10 +5,10 @@ from unittest.mock import patch
 from django.core.management import call_command
 from django.test import override_settings
 from django.urls import reverse
-from rest_framework.test import APITestCase, APIClient
 from rest_framework.exceptions import ValidationError
+from rest_framework.test import APIClient, APITestCase
 
-from course_assessment.models import Semeseter, Teacher, Course
+from course_assessment.models import Course, Semeseter, Teacher
 from course_assessment.serializer import AddCourseSerializer
 from test_project.common import create_user, login_user
 
@@ -52,7 +52,9 @@ class CourseTests(APITestCase):
 
     def test_add_teacher(self):
         teacher_name = 'testTeacher'
-        teacher_response = self.client.post(self.add_teacher_url, data={'name': teacher_name, 'school': 1})
+        teacher_response = self.client.post(
+            self.add_teacher_url, data={'name': teacher_name, 'school': 1}
+        )
         teacher_id = teacher_response.data['contents']['teacher_id']
         self.assertEqual(Teacher.objects.get(id=teacher_id).name, teacher_name)
 
@@ -75,17 +77,14 @@ class CourseTests(APITestCase):
 
     def test_add_course(self):
         self.test_add_teacher()
-        course_data = {
-            "name": "testCourse",
-            "school": 1,
-            "classification": "general",
-            "teacher_id": 1
-        }
+        course_data = {"name": "testCourse", "school": 1, "classification": "general", "teacher_id": 1}
         course_response = self.client.post(self.add_course_url, data=course_data)
         course_id = course_response.data['contents']['course_id']
         self.assertEqual(Course.objects.get(id=course_id).name, course_data['name'])
         self.assertEqual(Course.objects.get(id=course_id).classification, course_data['classification'])
-        self.assertEqual(list(Course.objects.get(id=course_id).teachers.values_list('id', flat=True)), [1])
+        self.assertEqual(
+            list(Course.objects.get(id=course_id).teachers.values_list('id', flat=True)), [1]
+        )
 
     def multi_teacher_course_data(self):
         first = Teacher.objects.create(name='第一位教师', school_id=1)
@@ -107,7 +106,9 @@ class CourseTests(APITestCase):
         self.assertEqual(course.created_by, self.user)
         for teacher_id in data['teacher_ids']:
             detail = self.client.get(reverse('api:teacher', args=[teacher_id]))
-            self.assertEqual([item['course']['id'] for item in detail.data['contents']['course_list']], [course.id])
+            self.assertEqual(
+                [item['course']['id'] for item in detail.data['contents']['course_list']], [course.id]
+            )
 
     def test_add_course_deduplicates_teacher_ids(self):
         data = self.multi_teacher_course_data()
@@ -163,14 +164,18 @@ class CourseTests(APITestCase):
 
     def test_course_creation_rolls_back_if_teacher_relations_fail(self):
         data = self.multi_teacher_course_data()
-        with patch.object(Course.teachers.related_manager_cls, 'add', side_effect=RuntimeError('relation failure')):
+        with patch.object(
+            Course.teachers.related_manager_cls, 'add', side_effect=RuntimeError('relation failure')
+        ):
             with self.assertRaisesRegex(RuntimeError, 'relation failure'):
                 self.client.post(self.add_course_url, data=data, format='json')
         self.assertFalse(Course.objects.exists())
 
     def test_course_creation_does_not_omit_teacher_deleted_after_validation(self):
         data = self.multi_teacher_course_data()
-        serializer = AddCourseSerializer(data=data, context={'request': SimpleNamespace(user=self.user)})
+        serializer = AddCourseSerializer(
+            data=data, context={'request': SimpleNamespace(user=self.user)}
+        )
         self.assertTrue(serializer.is_valid(), serializer.errors)
         Teacher.objects.get(id=data['teacher_ids'][1]).delete()
 
@@ -180,12 +185,7 @@ class CourseTests(APITestCase):
 
     def test_course_like(self):
         self.test_add_teacher()
-        course_data = {
-            "name": "testCourse",
-            "school": 1,
-            "classification": "general",
-            "teacher_id": 1
-        }
+        course_data = {"name": "testCourse", "school": 1, "classification": "general", "teacher_id": 1}
         course_response = self.client.post(self.add_course_url, data=course_data)
         course_id = course_response.data['contents']['course_id']
         course_like_data = {"course_id": course_id, "like": "1"}
@@ -219,23 +219,22 @@ class CourseTests(APITestCase):
         schools = response.data['contents']['schools']
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(schools[0], {
-            'id': 2,
-            'name': '101文学院',
-        })
+        self.assertEqual(
+            schools[0],
+            {
+                'id': 2,
+                'name': '101文学院',
+            },
+        )
 
-        numbered_schools = [
-            school for school in schools
-            if re.match(r'^\d+', school['name'])
-        ]
+        numbered_schools = [school for school in schools if re.match(r'^\d+', school['name'])]
         self.assertEqual(
             [int(re.match(r'^\d+', school['name']).group()) for school in numbered_schools],
             sorted(int(re.match(r'^\d+', school['name']).group()) for school in numbered_schools),
         )
 
         unnumbered_school_ids = [
-            school['id'] for school in schools
-            if not re.match(r'^\d+', school['name'])
+            school['id'] for school in schools if not re.match(r'^\d+', school['name'])
         ]
         self.assertEqual(
             unnumbered_school_ids,
