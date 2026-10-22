@@ -14,7 +14,7 @@ concurrency:
 
 env:
   PYTHON_VERSION: '3.11'
-  UV_VERSION: '0.10.12'
+  UV_VERSION: '0.13.4'
   DJANGO_SETTINGS_MODULE: settings.test
   SECRET_KEY: github-actions-only-secret-key
   DEBUG: 'True'
