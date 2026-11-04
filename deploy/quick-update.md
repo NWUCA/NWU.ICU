@@ -1,7 +1,8 @@
 # NWU.ICU 日常更新速查
 
 适用于普通前后端代码更新。默认域名和端口不变，因此**不修改、不重载 OpenResty**。
-若涉及破坏性迁移、端口、域名或上传规则变更，改用
+仅适用于无迁移或已经验证新结构/数据语义兼容所有旧应用进程的迁移。
+若迁移兼容性未知、存在长时间锁表/数据重写，或涉及端口、域名、上传规则变更，改用
 [完整生产发布 Runbook](production-runbook.md)。
 
 默认由 GitHub Actions 构建镜像，服务器主动拉取固定摘要。首次配置和前后端配对发布见
@@ -79,7 +80,13 @@ Compose >= 2.24.4 支持模板中的 `!reset`。重新登录该发布目录操�
 ```bash
 dc run --rm --no-deps web python manage.py showmigrations --plan
 dc run --rm --no-deps web python manage.py check --deploy
+```
 
+记录迁移计划与 [Runbook 回滚方案](production-runbook.md#12-回滚边界)，确认属于上述在线
+更新范围后再执行下面的备份。需要维护时按 Runbook 先阻断入口、排空并停止全部五个写入服务；
+不能在本速查中跳过这一步直接迁移。
+
+```bash
 BACKUP_TIME=$(date +%Y%m%d_%H%M%S)
 BACKUP_DIR=/root/nwuicuBack/update_$BACKUP_TIME
 set -euo pipefail
@@ -116,38 +123,37 @@ done
 
 ```bash
 dc run --rm --no-deps web python manage.py migrate --noinput
-dc run --rm --no-deps web bash -c \
-  "python manage.py create_super_user && \
-   python manage.py create_init_avatar && \
-   python manage.py createcachetable && \
-   python manage.py init_school && \
-   python manage.py update_semester && \
-   python manage.py collectstatic --noinput"
+dc run --rm --no-deps web python manage.py collectstatic --noinput
 
-dc up -d --no-deps --no-build --pull never --wait web gateway
+CUTOVER_STARTED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+export CUTOVER_STARTED_AT
+dc up -d --no-deps --no-build --pull never --wait --wait-timeout 180 web gateway
 dc ps
-curl -fsS https://nwu.icu/ > /dev/null
-curl -fsS https://nwu.icu/api/user/csrf/ > /dev/null
+python3 deploy/verify-release-http.py
 
+# 先按 release-validation.md 的“后台任务”记录队列基线并检查活动任务。
+# 有活动发布/打包/清理任务时，不直接重建 worker；按 Runbook 排空或采用已确认的中止策略。
 dc up -d --no-deps --no-build --pull never resource-worker cron archive-worker archive-cleaner
 ```
 
+管理员、头像、缓存表、学院和学期初始化仅在首次安装或独立维护时执行，普通发布不运行。
+单实例替换存在短暂中断；`--wait` 仅等待健康状态，不保证零停机。
 不要执行 `docker compose down`，不要重启 `pgsql`，不要删除 `nwuicu_pgdata`。
 
 ## 6. 验收固定版本
 
+完整执行 [发布验收说明](release-validation.md)。HTTP 脚本拒绝重定向，验证响应结构、
+首页引用的 JS/CSS 和只读业务接口；还须核对下载 Range、队列进展与浏览器功能。
+后台切换并通过即时验收后，持续观察至少 15 分钟；读取过去日志不能代替持续观察。
+
 ```bash
-curl -fsS https://nwu.icu/ > /dev/null
-curl -fsS https://nwu.icu/review/timeline > /dev/null
-curl -fsS https://nwu.icu/review/course/3040 > /dev/null
-curl -fsS https://nwu.icu/api/user/csrf/ > /dev/null
-curl -fsS https://api.nwu.icu/api/user/csrf/ > /dev/null
+python3 deploy/verify-release-http.py
 
 dc ps
 docker inspect nwuicu-web-1 nwuicu-gateway-1 nwuicu-resource-worker-1 nwuicu-cron-1 \
   nwuicu-archive-worker-1 nwuicu-archive-cleaner-1 \
   --format '{{.Name}} restarts={{.RestartCount}} health={{if .State.Health}}{{.State.Health.Status}}{{end}} image={{.Config.Image}}'
-dc logs --since 10m web gateway resource-worker cron archive-worker archive-cleaner
+dc logs --since "$CUTOVER_STARTED_AT" web gateway resource-worker cron archive-worker archive-cleaner
 
 docker exec nwuicu-gateway-1 sh -lc \
   "grep -R -q '$FRONTEND_COMMIT' /usr/share/nginx/html/assets && \
@@ -157,7 +163,8 @@ free -h
 swapon --show
 ```
 
-确认两个域名的 CSRF 接口均为 200、容器健康、重启次数为 0、前端产物包含两个完整提交号，
+确认两个域名的 CSRF 接口均为 200、核心容器健康、后台运行且队列正常、前端产物包含两个完整提交号，
+新容器重启次数为 0，未重建服务的历史重启计数在观察期不增加，
 并且没有持续 5xx 或迁移错误。容器镜像摘要必须与本次 `release-images.env` 一致。
 拉取式发布不调整既有 Swap；仅明确选择 Runbook 中的服务器备用构建时才创建和清理临时 Swap。
 

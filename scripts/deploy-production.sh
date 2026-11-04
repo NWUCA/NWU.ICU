@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+# This legacy local-build flow is only for an empty host, never a release update.
+if [[ "${1:-}" != --fresh-install || $# -gt 2 ]]; then
+    echo 'First installation only: deploy-production.sh --fresh-install [env-file]' >&2
+    echo 'Existing production: follow deploy/quick-update.md instead.' >&2
+    exit 2
+fi
+shift
+
 backend_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 env_file="${1:-${backend_root}/.env.production}"
 compose_file="${backend_root}/docker-compose.production.yaml"
@@ -11,6 +19,22 @@ for command_name in docker grep install realpath; do
     exit 1
   fi
 done
+
+# Fail before creating configuration, directories, networks or containers.
+if [[ -e /etc/nwuicu/production.env || "$backend_root" == /opt/nwuicu/releases/* ]]; then
+    echo 'Refusing first installation on the managed production host/release.' >&2
+    exit 2
+fi
+existing_containers=$(docker ps -aq --filter label=com.docker.compose.project=nwuicu)
+existing_names=$(docker ps -a --format '{{.Names}}')
+existing_volumes=$(docker volume ls --format '{{.Name}}')
+if [[ -n "$existing_containers" ]] ||
+    grep -Eq '^(pgsql|nwuicu-.+)$' <<< "$existing_names" ||
+    grep -Eq '^nwuicu_' <<< "$existing_volumes"; then
+    echo 'Existing NWU.ICU containers or persistent volumes found; refusing first installation.' >&2
+    echo 'No resources were changed. Use deploy/production-runbook.md.' >&2
+    exit 2
+fi
 
 if [[ "${EUID}" -ne 0 ]]; then
   echo "Run this deployment script with sudo so it can prepare the persistent directories." >&2
@@ -64,11 +88,11 @@ fi
 export ENV_FILE="$(realpath --relative-to="${backend_root}" "${env_file}")"
 cd "${backend_root}"
 
-docker compose --env-file "${env_file}" -f "${compose_file}" up -d --build --remove-orphans
-docker compose --env-file "${env_file}" -f "${compose_file}" exec -T web \
+docker compose -p nwuicu --env-file "${env_file}" -f "${compose_file}" up -d --build
+docker compose -p nwuicu --env-file "${env_file}" -f "${compose_file}" exec -T web \
   python manage.py check --deploy --fail-level ERROR
-docker compose --env-file "${env_file}" -f "${compose_file}" exec -T resource-worker \
+docker compose -p nwuicu --env-file "${env_file}" -f "${compose_file}" exec -T resource-worker \
   test -w /resource-storage
 
-docker compose --env-file "${env_file}" -f "${compose_file}" ps
+docker compose -p nwuicu --env-file "${env_file}" -f "${compose_file}" ps
 echo "Application containers are ready. Configure/reload OpenResty as described in deploy/openresty.md."

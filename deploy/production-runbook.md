@@ -24,6 +24,8 @@ Internet
 - `nwuicu-gateway-1`：生产前端与内部反向代理；
 - `nwuicu-resource-worker-1`：资源投稿发布队列；
 - `nwuicu-cron-1`：定时更新和临时投稿清理；
+- `nwuicu-archive-worker-1`：资源 ZIP 打包队列；
+- `nwuicu-archive-cleaner-1`：归档缓存、任务记录清理与通知；
 - `pgsql`：PostgreSQL，使用既有卷 `nwuicu_pgdata`。
 
 重要路径：
@@ -83,6 +85,7 @@ git rev-parse HEAD
 以下示例变量必须替换为本次真实值：
 
 ```bash
+OLD=<根据运行中容器的Compose标签核对的当前发布目录>
 RELEASE_ID=$(date +%Y%m%d_%H%M%S)
 BACKEND_COMMIT=<完整后端提交号>
 FRONTEND_COMMIT=<完整前端提交号>
@@ -123,6 +126,11 @@ git -C "$RELEASE/new_nwu_icu_frontend" checkout --detach "$FRONTEND_COMMIT"
 services:
   web:
     image: nwuicu-web:<backend-short-sha>
+    # 即使备用构建也不在 web 重启时执行迁移或业务初始化。
+    command: >-
+      bash -c "exec gunicorn settings.wsgi:application --bind 0.0.0.0:8000
+      --workers $${GUNICORN_WORKERS:-3} --timeout $${GUNICORN_TIMEOUT:-300}
+      --access-logfile - --error-logfile -"
     ports:
       - "127.0.0.1:8000:8000"
 
@@ -130,6 +138,12 @@ services:
     image: nwuicu-web:<backend-short-sha>
 
   resource-worker:
+    image: nwuicu-web:<backend-short-sha>
+
+  archive-worker:
+    image: nwuicu-web:<backend-short-sha>
+
+  archive-cleaner:
     image: nwuicu-web:<backend-short-sha>
 
   gateway:
@@ -207,10 +221,43 @@ docker compose --env-file /etc/nwuicu/production.env \
 Umami 全量快照应包含完整结构与数据，包括账号、网站配置、访问事件以及已有的回放/热图数据；
 不要只导出事件表或选择性业务表。
 
-普通更新可在线备份，不需要为备份停止或重启 PostgreSQL。有需要维护窗口的迁移时，先让
-`nwu.icu` 和 `api.nwu.icu` 返回 503，执行 `openresty -t` 成功后平滑重载，确认两个域名
-均为 503 后停止旧 `web` 与 `cron`，再制作快照；保持 `pgsql` 运行。若本次升级 Umami
-并执行迁移，也应先暂停其写入，再备份 `umami` 库。
+先记录待执行的迁移及第 12 节的回滚方案。只有已确认新结构、数据语义与旧版 web、全部
+后台进程兼容的迁移，才可走日常在线更新；不能仅凭“没有删除字段”判断安全。未知兼容性、
+长时间锁表或数据重写的迁移走维护窗口。普通在线备份不需要停止或重启 PostgreSQL。
+
+维护窗口必须按以下顺序停写，不能只停 web/cron：
+
+1. 备份入口配置，让 `nwu.icu` 和 `api.nwu.icu` 的业务入口均返回 503；通过
+   `openresty -t` 后平滑重载，确认包括 API、投稿和归档入口在内均被阻断。
+2. 停止旧 web 和 cron。确认已开始的请求、上传和 cron 子任务退出；检查
+   [发布验收说明](release-validation.md) 中的任务统计。现有 worker 没有暂停领取/优雅排空
+   开关：必须让可执行队列和活动任务排空，或事先确定中止与重试方案，不能把 SIGTERM 当作排空。
+3. 停止 `resource-worker`、`archive-worker`、`archive-cleaner`，再次检查全部五个写入服务
+   已停止且没有遗留写入进程。检查未完成任务和文件状态；存在中断任务时先处置，不继续迁移。
+   不为了清空统计而删除任务或改状态。其他临时管理命令/外部写入者也必须结束。
+4. 保持 `pgsql` 运行，确认停写后再制作下面的双库快照。若升级 Umami 并迁移其数据库，
+   同时暂停 Umami 写入；否则不更换、不停止 Umami。
+
+停止命令必须在旧发布目录中加载旧 manifest 和 override 执行：
+
+```bash
+# 仅在维护已获确认、入口已阻断后执行。
+old_dc() {
+  (set -euo pipefail
+   cd "$OLD/NWU.ICU"
+   if [ -f ../release-images.env ]; then
+     set -a; source ../release-images.env; set +a
+   fi
+   export ENV_FILE=/etc/nwuicu/production.env
+   docker compose --env-file /etc/nwuicu/production.env \
+     -f docker-compose.production.yaml -f ../docker-compose.server.yaml "$@")
+}
+# OLD 必须事先根据运行中容器的 Compose 标签核对，不能拿历史发布记录代替。
+old_dc stop web cron
+# 按上述第 2 步确认队列、请求和子任务已排空后再执行：
+old_dc stop resource-worker archive-worker archive-cleaner
+old_dc ps -a
+```
 
 以下命令在服务器 Bash 中执行，生成两个 PostgreSQL 自定义格式全量快照、对象清单与校验文件：
 
@@ -274,29 +321,32 @@ docker compose --env-file /etc/nwuicu/production.env \
   run --rm --no-deps web python manage.py migrate --noinput
 ```
 
-随后执行初始化与静态文件收集：
+日常更新只收集静态文件，不重复创建管理员、初始化学院或改写学期：
 
 ```bash
 docker compose --env-file /etc/nwuicu/production.env \
   -f docker-compose.production.yaml -f ../docker-compose.server.yaml \
-  run --rm --no-deps web bash -c \
-  "python manage.py create_super_user && \
-   python manage.py create_init_avatar && \
-   python manage.py createcachetable && \
-   python manage.py init_school && \
-   python manage.py update_semester && \
-   python manage.py collectstatic --noinput"
+  run --rm --no-deps web python manage.py collectstatic --noinput
 ```
+
+`create_super_user`、`create_init_avatar`、`createcachetable`、`init_school` 和
+`update_semester` 属于空数据库首次初始化或独立维护任务，已有生产库不要每次运行。
+尤其 `update_semester` 会按 ID 重写现有名称；确需修正业务数据时必须单独检查前后差异。
+首次初始化前检查管理员参数、默认头像文件、数据库缓存配置和预期学院/学期列表，
+逐项执行并验收，不把初始化串放回 web 启动命令。
 
 仅启动核心服务，不让 Compose 触碰 PostgreSQL：
 
 ```bash
+CUTOVER_STARTED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+export CUTOVER_STARTED_AT
 docker compose --env-file /etc/nwuicu/production.env \
   -f docker-compose.production.yaml -f ../docker-compose.server.yaml \
-  up -d --no-deps --no-build web gateway
+  up -d --no-deps --no-build --pull never --wait --wait-timeout 180 web gateway
 ```
 
-在解除维护前检查：
+在解除维护前严格检查本机入口的状态与 JSON 内容，命令见
+[发布验收说明](release-validation.md)。以下命令仅用于人工查看，不替代断言：
 
 ```bash
 curl -H 'Host: nwu.icu' -H 'X-Forwarded-Proto: https' \
@@ -384,12 +434,13 @@ curl -I https://api.nwu.icu/api/user/csrf/
 
 ## 10. 分阶段启动后台服务
 
-先统计待处理资源任务；确认没有异常积压后启动 worker：
+按 [发布验收说明](release-validation.md) 保存队列基线；确认核心接口通过后启动三个后台服务。
+维护发布先保持公网 503，验证后台恢复和待处理任务，再恢复入口配置；验证失败继续维护。
 
 ```bash
 docker compose --env-file /etc/nwuicu/production.env \
   -f docker-compose.production.yaml -f ../docker-compose.server.yaml \
-  up -d --no-deps --no-build resource-worker
+  up -d --no-deps --no-build --pull never resource-worker archive-worker archive-cleaner
 ```
 
 cron 使用镜像内版本化的 `/app/deploy/nwuicu.crontab`，生产时区为 `Asia/Shanghai`：
@@ -405,7 +456,7 @@ cron 使用镜像内版本化的 `/app/deploy/nwuicu.crontab`，生产时区为 
 ```bash
 docker compose --env-file /etc/nwuicu/production.env \
   -f docker-compose.production.yaml -f ../docker-compose.server.yaml \
-  up -d --no-deps --no-build cron
+  up -d --no-deps --no-build --pull never cron
 ```
 
 业务库和 `umami` 库的每日全量备份由宿主机的 `nwuicu-db-backup.timer` 管理，每天 04:00（`Asia/Shanghai`）
@@ -443,6 +494,11 @@ latest=$(find /root/nwuicuBack/daily -mindepth 1 -maxdepth 1 -type d \
 
 ## 11. 验收与观察
 
+统一执行 [发布验收说明](release-validation.md)：精确 HTTP 状态和响应结构、实际 JS/CSS、
+核心业务接口、下载 Range、六个服务的镜像/状态、队列进展，以及持续 15 分钟观察。
+后台服务没有 healthcheck，`running` 或重启数为零不能单独证明消费正常。
+单实例 Compose 替换有短暂中断；`--wait` 不提供零停机保证。
+
 至少检查：
 
 - 首页、登录和验证码；
@@ -452,9 +508,10 @@ latest=$(find /root/nwuicuBack/daily -mindepth 1 -maxdepth 1 -type d \
 - `/manage` Passkey；
 - `api.nwu.icu` 兼容接口；
 - `/media/` 返回 404；
-- 所有容器重启次数保持为 0。
+- 新容器重启次数为 0；未重建容器的历史计数在观察期不增加。
 
-切流后观察日志至少 15 分钟：
+从 `$CUTOVER_STARTED_AT` 开始记录，后台切换和公网验收通过后再连续观察至少 15 分钟。
+读取过去 15 分钟日志不是等待观察 15 分钟。以下辅助命令不能替代上述完整验收：
 
 ```bash
 docker compose --env-file /etc/nwuicu/production.env \
@@ -463,9 +520,10 @@ docker compose --env-file /etc/nwuicu/production.env \
 
 docker compose --env-file /etc/nwuicu/production.env \
   -f docker-compose.production.yaml -f ../docker-compose.server.yaml \
-  logs --since 15m web gateway resource-worker cron
+  logs --since "$CUTOVER_STARTED_AT" web gateway resource-worker cron archive-worker archive-cleaner
 
 docker inspect nwuicu-web-1 nwuicu-gateway-1 nwuicu-resource-worker-1 nwuicu-cron-1 \
+  nwuicu-archive-worker-1 nwuicu-archive-cleaner-1 \
   --format '{{.Name}} restarts={{.RestartCount}} image={{.Config.Image}}'
 
 docker exec nwuicu-gateway-1 sh -lc \
@@ -484,17 +542,27 @@ if [ "${LOCAL_BUILD_SWAP_CREATED:-0}" = 1 ]; then
 fi
 ```
 
-确认应用容器的重启次数均为 0、gateway 静态资源包含两个完整提交号、两个域名的 CSRF
+确认应用容器的重启次数符合上述基线、gateway 静态资源包含两个完整提交号、两个域名的 CSRF
 接口均为 200。固定摘要发布还需核对容器镜像与本次 `release-images.env` 一致。
 本节的 `swapoff`/删除命令仅适用于第 6 节备用构建创建的临时 Swap；默认拉取流程跳过它们。
 
 ## 12. 回滚边界
 
-- 尚未迁移数据库：可以恢复旧镜像和旧 OpenResty 配置；
-- 已执行迁移：不能只换回旧代码；必须保持维护页，停止新应用，恢复完整 `-Fc` 快照，
-  再恢复旧镜像和 OpenResty 配置；
-- 任何数据库恢复、旧配置覆盖或目录删除都必须再次确认；
-- 不自动删除旧发布目录、旧镜像和备份。
+发布前记录旧/新提交与镜像、快照目录、实际待执行迁移、旧代码兼容性、数据转换影响，
+以及每个失败阶段的恢复方案。不能仅凭执行过 `migrate` 命令就决定恢复整库；该命令可能无事可做。
+
+| 已发生的变化 | 恢复方式与前提 |
+| --- | --- |
+| 没有应用迁移，也没有其他不兼容数据/配置变更 | 可重新加载旧 manifest/override，按核心→后台顺序切回六个服务并验收；不触碰数据库 |
+| 已应用迁移，但验证过旧代码兼容当前结构和数据 | 可保留当前数据库，仅回退应用；兼容性须包含所有旧 worker/cleaner |
+| 旧代码不兼容，但有已演练且不会丢失所需数据的逆迁移 | 进入维护、排空并停止全部写入者，保留失败现场快照后，按指定迁移目标回退并验收；不自动猜测目标 |
+| 不可逆、数据已损坏，或没有验证过的兼容回退路径 | 保持维护，评估向前修复或恢复快照；数据库恢复须单独确认 |
+
+恢复快照会丢失快照时刻之后的写入。决定恢复前必须记录恢复点、损失窗口和需保留的新数据，
+并核对数据库与 media、已发布资源、归档缓存的一致性；两份数据库快照不包含这些文件。
+仅业务库受影响时不要连带恢复健康的 Umami 库。只有已验证兼容的应用回退才适合自动化；
+不得自动恢复数据库、覆盖生产配置或删除旧发布/镜像/备份。
+普通代码回退不修改 OpenResty；只有本次改过入口时才按保存的配置恢复并先执行语法检查。
 
 ## 13. 当前发布记录
 

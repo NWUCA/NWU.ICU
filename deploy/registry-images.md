@@ -114,12 +114,17 @@ print("Fixed images and existing database volume verified.")
 限制为事先校验的本地镜像。核心切换的 `dc up` 使用：
 
 ```bash
-dc up -d --no-deps --no-build --pull never --wait web gateway
+CUTOVER_STARTED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+export CUTOVER_STARTED_AT
+dc up -d --no-deps --no-build --pull never --wait --wait-timeout 180 web gateway
 # 核心接口、健康状态与提交号验收通过后再切换后台服务。
 dc up -d --no-deps --no-build --pull never resource-worker cron archive-worker archive-cleaner
 ```
 
 首次启用 archive 服务时按 [资源归档发布说明](resource-archives.md) 先核对挂载与队列。
+现有后台服务切换前也必须检查活动任务；停写迁移须覆盖 web、cron、resource-worker、
+archive-worker、archive-cleaner。日常发布不运行首次初始化命令。
+验收按 [发布验收说明](release-validation.md) 执行，全部后台服务切换后持续观察 15 分钟。
 不触碰 PostgreSQL，不修改 OpenResty，不删除旧镜像/发布/备份。任何数据库迁移仍按
 [完整 Runbook](production-runbook.md) 判断维护和回滚边界。服务器主动拉取是一次明确的
 发布操作，不轮询 `latest`，也不自动换掉线上容器。

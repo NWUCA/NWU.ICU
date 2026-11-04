@@ -61,7 +61,11 @@ docker compose --env-file .env.windows -f docker-compose.yaml down
 Remove-Item Env:ENV_FILE
 ```
 
-## Debian 自动化生产部署
+## 其他空白主机的首次安装
+
+以下本地构建脚本仅适用于没有 NWU.ICU 容器和持久卷的空白主机，不用于现有生产更新。
+脚本要求显式 `--fresh-install`，发现既有生产配置、发布目录、容器或持久卷即停止，
+Docker 状态无法读取时也停止。不得删除既有数据来绕过检查。
 
 生产结构为：已有的 Docker OpenResty → 共享 Docker 网络 → 前端 gateway → Django。
 PostgreSQL、Django 和 gateway 均不直接暴露到公网。gateway 同时提供 SPA、Django
@@ -83,7 +87,7 @@ cp .env.production.example .env.production
 chmod 600 .env.production
 openssl rand -base64 48
 # 将输出写入 SECRET_KEY，并替换所有 CHANGE_ME 项及实际宿主机路径
-sudo bash ./scripts/deploy-production.sh .env.production
+sudo bash ./scripts/deploy-production.sh --fresh-install .env.production
 ```
 
 ## 管理员 Passkey
@@ -122,20 +126,10 @@ docker compose exec web python manage.py admin_passkey_revoke <username> --all
 脚本不会修改或重载 OpenResty，也不会申请证书。首次上线需要按
 [OpenResty 接入说明](openresty.md) 将现有 OpenResty 容器加入共享网络并添加站点配置。
 
-部署脚本是幂等的。以后更新两个仓库后，再执行同一命令即可重新构建和滚动替换容器：
-
-```bash
-sudo bash ./scripts/deploy-production.sh .env.production
-```
-
-生产 Compose 也可以手动运行：
-
-```bash
-export ENV_FILE=.env.production
-docker compose --env-file .env.production -f docker-compose.production.yaml config
-docker compose --env-file .env.production -f docker-compose.production.yaml up -d --build
-docker compose --env-file .env.production -f docker-compose.production.yaml ps
-```
+首次安装完成后的更新应另行制定符合该主机拓扑的发布流程；安装中断留下容器或卷时，
+先检查已完成步骤，不直接重跑安装脚本。当前 `nwu.icu` 的更新使用
+[日常更新速查](quick-update.md)，不使用此脚本，也不运行不限定服务的全栈 `up`。
+单实例 Compose 替换会停止并重建容器，不能承诺滚动更新或零停机。
 
 查看关键日志：
 
