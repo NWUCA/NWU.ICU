@@ -59,7 +59,8 @@ set -euo pipefail
 cd "$RELEASE/NWU.ICU"
 # 填入 Summary 中的 gateway 摘要，可避免后续重建相同标签影响本次发布。
 GATEWAY_REF=ghcr.io/moowantfree/new_nwu_icu_frontend@sha256:<Summary中的摘要>
-bash deploy/pull-release-images "$BACKEND_COMMIT" "$FRONTEND_COMMIT" "$GATEWAY_REF" \
+bash deploy/pull-release-images --env-file /etc/nwuicu/production.env \
+  "$BACKEND_COMMIT" "$FRONTEND_COMMIT" "$GATEWAY_REF" \
   > ../release-images.env.tmp
 mv ../release-images.env.tmp ../release-images.env
 set -a
@@ -128,3 +129,16 @@ archive-worker、archive-cleaner。日常发布不运行首次初始化命令。
 不触碰 PostgreSQL，不修改 OpenResty，不删除旧镜像/发布/备份。任何数据库迁移仍按
 [完整 Runbook](production-runbook.md) 判断维护和回滚边界。服务器主动拉取是一次明确的
 发布操作，不轮询 `latest`，也不自动换掉线上容器。
+
+## 自定义仓库和运行配置
+
+拉取脚本通过 `--env-file` 选择服务器配置文件，读取 `BACKEND_IMAGE_REPOSITORY`、
+`GATEWAY_IMAGE_REPOSITORY`、`BACKEND_GITHUB_URL` 和 `FRONTEND_GITHUB_URL`。
+自定义仓库仍需通过提交号、来源标签和前后端配套摘要校验。
+
+服务器覆盖模板读取 `POSTGRES_VOLUME_NAME`、`BACKEND_PORT` 和 `GATEWAY_PORT`，
+端口保持绑定到回环地址。升级已有站点时沿用原数据库卷名。
+
+构建自己的镜像时，后端 CI 从 `.env.production.example` 读取 `UPLOAD_UID` 和
+`UPLOAD_GID`；前端 CI 从其仓库的同名文件读取 `BACKEND_IMAGE_REPOSITORY` 和
+`BACKEND_GITHUB_URL`。这些模板仅保存公开构建配置，不填入真实密码。

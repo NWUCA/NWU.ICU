@@ -139,7 +139,10 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Resolve image name
         id: release
-        run: echo "repository=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+        run: |
+          source .env.production.example
+          printf 'repository=ghcr.io/%s\n' "${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+          printf 'upload_uid=%s\nupload_gid=%s\n' "$UPLOAD_UID" "$UPLOAD_GID" >> "$GITHUB_OUTPUT"
       - name: Set up Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
       - name: Build and publish backend
@@ -151,6 +154,8 @@ jobs:
           push: true
           tags: ${{ steps.release.outputs.repository }}:sha-${{ github.sha }}
           build-args: |
+            UPLOAD_UID=${{ steps.release.outputs.upload_uid }}
+            UPLOAD_GID=${{ steps.release.outputs.upload_gid }}
             BACKEND_COMMIT=${{ github.sha }}
             BACKEND_GITHUB_URL=https://github.com/${{ github.repository }}
           cache-from: type=gha,scope=backend

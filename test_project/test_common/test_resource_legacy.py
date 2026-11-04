@@ -14,7 +14,7 @@ from common.file.resource_seo import resource_page_url
 from common.models import ResourceAccessRule
 
 
-@override_settings(SECURE_SSL_REDIRECT=False)
+@override_settings(SECURE_SSL_REDIRECT=False, SITE_ORIGIN='https://campus.example.org')
 class LegacyResourceTests(TestCase):
     def setUp(self):
         self.temp = TemporaryDirectory()
@@ -45,7 +45,7 @@ class LegacyResourceTests(TestCase):
         redirect = self.redirect('/' + kind + '/local' + path, '?sign=obsolete&access=invalid')
         self.assertEqual(redirect.status_code, 301)
         url = urlsplit(redirect['Location'])
-        self.assertEqual(url.netloc, 'nwu.icu')
+        self.assertEqual(url.netloc, 'campus.example.org')
         response = self.client.get(url.path + '?' + url.query, **headers)
         self.addCleanup(self.close_response, response)
         return response
@@ -64,7 +64,9 @@ class LegacyResourceTests(TestCase):
                     new = '/【3】学院课程/' + current + suffix.rstrip('/')
                     response = self.redirect(old)
                     self.assertEqual(response.status_code, 301)
-                    self.assertEqual(response['Location'], 'https://nwu.icu' + resource_page_url(new))
+                    self.assertEqual(
+                        response['Location'], 'https://campus.example.org' + resource_page_url(new)
+                    )
         old = '/【3】学院课程/物理学院/' + self.filename
         response = self.redirect(old)
         final = self.client.get(response['Location'])
@@ -74,15 +76,26 @@ class LegacyResourceTests(TestCase):
     def test_canonical_names_and_unrelated_segments_are_preserved(self):
         for path in (self.path, '/其他目录/物理学院', '/【3】学院课程/物理学院资料', '/locality/file.zip'):
             response = self.redirect(path)
-            self.assertEqual(response['Location'], 'https://nwu.icu' + resource_page_url(path))
+            self.assertEqual(
+                response['Location'], 'https://campus.example.org' + resource_page_url(path)
+            )
 
     def test_mount_root_queries_head_and_crawler_use_same_destination(self):
         for path in ('/', '/local', '/local/'):
-            self.assertEqual(self.redirect(path)['Location'], 'https://nwu.icu/disk')
-        response = self.redirect('/local' + self.path, '?page=2&sign=old&%74oken=secret&x=a%26b', method='head')
-        self.assertEqual(response['Location'], 'https://nwu.icu' + resource_page_url(self.path) + '?page=2&x=a%26b')
+            self.assertEqual(self.redirect(path)['Location'], 'https://campus.example.org/disk')
+        response = self.redirect(
+            '/local' + self.path, '?page=2&sign=old&%74oken=secret&x=a%26b', method='head'
+        )
+        self.assertEqual(
+            response['Location'],
+            'https://campus.example.org' + resource_page_url(self.path) + '?page=2&x=a%26b',
+        )
         self.assertEqual(response.content, b'')
-        bot = self.client.get('/api/resources/legacy-redirect/', HTTP_X_LEGACY_URI=quote(self.path), HTTP_USER_AGENT='Googlebot')
+        bot = self.client.get(
+            '/api/resources/legacy-redirect/',
+            HTTP_X_LEGACY_URI=quote(self.path),
+            HTTP_USER_AGENT='Googlebot',
+        )
         self.assertEqual(bot['Location'], self.redirect(self.path)['Location'])
 
     def test_download_and_preview_return_bytes_ranges_and_disposition(self):
@@ -130,7 +143,9 @@ class LegacyResourceTests(TestCase):
                         params = {'path': path}
                         if kind == 'p':
                             params['inline'] = '1'
-                        expected = 'https://nwu.icu/api/resources/file/legacy/?' + urlencode(params)
+                        expected = 'https://campus.example.org/api/resources/file/legacy/?' + urlencode(
+                            params
+                        )
                         self.assertEqual(response.status_code, 301)
                         self.assertEqual(response['Location'], expected)
                         self.assertTrue(response['Location'].isascii())
@@ -140,8 +155,11 @@ class LegacyResourceTests(TestCase):
                         self.assertEqual(final.status_code, 206)
                         self.assertEqual(final['Content-Range'], 'bytes 2-5/10')
                         self.assertEqual(b''.join(final.streaming_content), b'2345')
-                        self.assertTrue(final['Content-Disposition'].startswith(
-                            'inline;' if kind == 'p' else 'attachment;'))
+                        self.assertTrue(
+                            final['Content-Disposition'].startswith(
+                                'inline;' if kind == 'p' else 'attachment;'
+                            )
+                        )
 
     def test_pdf_with_recorded_legacy_302_reaches_pdf_without_intermediate_redirect(self):
         # The only /d/ or /p/ URL with 302 records in the annual audit. Do not
@@ -151,12 +169,15 @@ class LegacyResourceTests(TestCase):
         fixture = self.root / path.lstrip('/')
         fixture.parent.mkdir(parents=True)
         fixture.write_bytes(content)
-        expected = 'https://nwu.icu/api/resources/file/legacy/?' + urlencode({'path': path, 'inline': '1'})
+        expected = 'https://campus.example.org/api/resources/file/legacy/?' + urlencode(
+            {'path': path, 'inline': '1'}
+        )
         for safe in ('/', '/()'):
             for secure in (False, True):
                 with self.subTest(encoded_parentheses=safe == '/', secure=secure):
                     response = self.client.get(
-                        '/api/resources/legacy-redirect/', secure=secure,
+                        '/api/resources/legacy-redirect/',
+                        secure=secure,
                         HTTP_X_LEGACY_URI=quote('/p/local' + path, safe=safe) + '?sign=obsolete',
                     )
                     self.assertEqual(response.status_code, 301)
@@ -176,7 +197,10 @@ class LegacyResourceTests(TestCase):
         for path in ('/../secret', '//evil.test/path', '/dir\\file', '/file\x00', '/dir//file'):
             self.assertIn(self.redirect(path).status_code, (400, 404))
         # A literal percent-encoded-looking filename is not decoded twice.
-        self.assertEqual(self.redirect('/%2e%2e/secret')['Location'], 'https://nwu.icu/disk/%252e%252e/secret')
+        self.assertEqual(
+            self.redirect('/%2e%2e/secret')['Location'],
+            'https://campus.example.org/disk/%252e%252e/secret',
+        )
         for name in ('readme.md', '.secret'):
             self.assertEqual(self.redirect('/p/local' + self.folder + '/' + name).status_code, 404)
         self.assertEqual(self.follow_file(self.folder + '/missing.pdf').status_code, 404)
@@ -207,5 +231,7 @@ class LegacyResourceTests(TestCase):
             self.assertEqual(blocked.status_code, 429)
             self.assertEqual(blocked.json()['contents']['captcha_scope'], 'resource_download')
             # The normal endpoint still requires its actor-bound authorization ticket.
-            normal = self.client.get('/api/resources/file/?' + urlencode({'path': self.path, 'sign': 'old'}))
+            normal = self.client.get(
+                '/api/resources/file/?' + urlencode({'path': self.path, 'sign': 'old'})
+            )
             self.assertEqual(normal.status_code, 429)

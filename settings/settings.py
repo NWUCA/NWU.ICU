@@ -71,9 +71,7 @@ REST_FRAMEWORK = {
         'utils.authentication.CSRFSafeSessionAuthentication',
         # 'rest_framework.authentication.TokenAuthentication',
     ),
-    'DEFAULT_PERMISSION_CLASSES': (
-        'rest_framework.permissions.IsAuthenticated',
-    ),
+    'DEFAULT_PERMISSION_CLASSES': ('rest_framework.permissions.IsAuthenticated',),
     # Production traffic crosses OpenResty and the internal gateway. Local
     # direct development keeps this at zero through its environment file.
     'NUM_PROXIES': env.int('TRUSTED_PROXY_COUNT', default=0),
@@ -216,10 +214,8 @@ CAPTCHA_IMAGE_BEFORE_FIELD = False
 CAPTCHA_IMAGE_SIZE = (120, 50)
 
 # 文件上传设置
-FILE_UPLOAD_SIZE_LIMIT = {'avatar': 66 * 1024,
-                          'file': 25 * 1024 * 1024,
-                          'img': 25 * 1024 * 1024}
-USER_UPLOAD_QUOTA_BYTES = env.int('USER_UPLOAD_QUOTA_BYTES', default=1024 ** 3)
+FILE_UPLOAD_SIZE_LIMIT = {'avatar': 66 * 1024, 'file': 25 * 1024 * 1024, 'img': 25 * 1024 * 1024}
+USER_UPLOAD_QUOTA_BYTES = env.int('USER_UPLOAD_QUOTA_BYTES', default=1024**3)
 
 # Windows bind mounts exposed to Linux containers do not consistently support
 # chmod(2). Keep chmod enabled by default for Debian/Linux production, while
@@ -255,20 +251,53 @@ UNIVERSITY_STUDENT_MAIL_SUFFIX = env('UNIVERSITY_STUDENT_MAIL_SUFFIX')
 UNIVERSITY_CHINESE_NAME = env('UNIVERSITY_CHINESE_NAME')
 UNIVERSITY_ENGLISH_NAME = env('UNIVERSITY_ENGLISH_NAME')
 UNIVERSITY_ENGLISH_ABBREVIATION_NAME = env('UNIVERSITY_ENGLISH_ABBREVIATION_NAME')
-WEBSITE_NAME = env('WEBSITE_NAME', default='NWU.ICU')
+WEBSITE_NAME = env('WEBSITE_NAME', default='本站')
 FRONTEND_URL = env(
     'FRONTEND_URL',
-    default='http://localhost:5173' if DEBUG else 'https://nwu.icu',
+    default='http://localhost:5173',
 )
+SITE_ORIGIN = env('SITE_ORIGIN', default=FRONTEND_URL).rstrip('/')
+site_origin_parts = urlsplit(SITE_ORIGIN)
+if (
+    site_origin_parts.scheme not in ({'http', 'https'} if DEBUG else {'https'})
+    or not site_origin_parts.hostname
+    or site_origin_parts.path
+    or site_origin_parts.query
+    or site_origin_parts.fragment
+    or site_origin_parts.username
+    or site_origin_parts.password
+):
+    raise ImproperlyConfigured(
+        'SITE_ORIGIN must be an exact HTTP(S) origin; production requires HTTPS.'
+    )
+UNIVERSITY_SHORT_NAME = env('UNIVERSITY_SHORT_NAME', default=UNIVERSITY_CHINESE_NAME)
+SITE_START_YEAR = env.int('SITE_START_YEAR', default=0)
+SITE_NAVIGATION_LINKS = env.json('SITE_NAVIGATION_LINKS', default=[])
+if not isinstance(SITE_NAVIGATION_LINKS, list) or any(
+    not isinstance(link, dict)
+    or set(link) != {'label', 'url'}
+    or not isinstance(link['label'], str)
+    or not link['label'].strip()
+    or not isinstance(link['url'], str)
+    or urlsplit(link['url']).scheme not in {'http', 'https'}
+    or not urlsplit(link['url']).hostname
+    for link in SITE_NAVIGATION_LINKS
+):
+    raise ImproperlyConfigured('SITE_NAVIGATION_LINKS must be a JSON list of labels and HTTP(S) URLs.')
+ANALYTICS_WEBSITE_ID = env('ANALYTICS_WEBSITE_ID', default='')
+ANALYTICS_DOMAINS = env.list('ANALYTICS_DOMAINS', default=[site_origin_parts.hostname])
+SENTRY_DSN = env('SENTRY_DSN', default='')
+FRONTEND_GITHUB_URL = env('FRONTEND_GITHUB_URL', default='')
+BACKEND_GITHUB_URL = env('BACKEND_GITHUB_URL', default='')
 ADMIN_PUBLIC_URL = env('ADMIN_PUBLIC_URL', default=FRONTEND_URL)
-WEBAUTHN_RP_ID = env('WEBAUTHN_RP_ID', default='localhost' if DEBUG else 'nwu.icu')
+WEBAUTHN_RP_ID = env('WEBAUTHN_RP_ID', default=urlsplit(FRONTEND_URL).hostname or '')
 WEBAUTHN_RP_NAME = env('WEBAUTHN_RP_NAME', default=WEBSITE_NAME)
 WEBAUTHN_EXPECTED_ORIGINS = [
     origin.strip()
     for origin in env('WEBAUTHN_EXPECTED_ORIGINS', default=FRONTEND_URL).split(',')
     if origin.strip()
 ]
-if not WEBAUTHN_RP_ID or any(character in WEBAUTHN_RP_ID for character in ('/', ':')):
+if not WEBAUTHN_RP_ID or any(character in WEBAUTHN_RP_ID for character in ('/', ':', ',', ' ')):
     raise ImproperlyConfigured('WEBAUTHN_RP_ID must be a hostname without a scheme, port, or path.')
 if not WEBAUTHN_EXPECTED_ORIGINS:
     raise ImproperlyConfigured('WEBAUTHN_EXPECTED_ORIGINS must contain at least one exact origin.')
@@ -288,9 +317,13 @@ for webauthn_origin in WEBAUTHN_EXPECTED_ORIGINS:
         )
     origin_hostname = parsed_origin.hostname or ''
     if parsed_origin.scheme == 'http' and origin_hostname not in {'localhost', '127.0.0.1', '::1'}:
-        raise ImproperlyConfigured('Plain HTTP WebAuthn origins are only allowed for local development hosts.')
+        raise ImproperlyConfigured(
+            'Plain HTTP WebAuthn origins are only allowed for local development hosts.'
+        )
     if origin_hostname != WEBAUTHN_RP_ID and not origin_hostname.endswith(f'.{WEBAUTHN_RP_ID}'):
-        raise ImproperlyConfigured('Each WebAuthn origin hostname must equal or be a subdomain of WEBAUTHN_RP_ID.')
+        raise ImproperlyConfigured(
+            'Each WebAuthn origin hostname must equal or be a subdomain of WEBAUTHN_RP_ID.'
+        )
 ADMIN_PASSKEY_USER_THROTTLE = env('ADMIN_PASSKEY_USER_THROTTLE', default='10/minute')
 ADMIN_PASSKEY_IP_THROTTLE = env('ADMIN_PASSKEY_IP_THROTTLE', default='30/minute')
 
@@ -306,8 +339,13 @@ API_RATE_LIMITS = {
     'captcha_proof': {
         'ttl': env.int('CAPTCHA_PROOF_TTL', default=120),
         'allowed_scopes': (
-            'login', 'review_write', 'guestbook_write', 'reply_write',
-            'catalog_write', 'resource_download', 'resource_archive',
+            'login',
+            'review_write',
+            'guestbook_write',
+            'reply_write',
+            'catalog_write',
+            'resource_download',
+            'resource_archive',
         ),
     },
     'login': {
@@ -316,7 +354,9 @@ API_RATE_LIMITS = {
         'captcha_attempts': env.int('LOGIN_CAPTCHA_ATTEMPTS', default=3),
         'captcha_ttl': env.int('LOGIN_CAPTCHA_TTL', default=600),
         'failure_ttl': env.int('LOGIN_FAILURE_TTL', default=3600),
-        'backoff_seconds': tuple(env.list('LOGIN_BACKOFF_SECONDS', default=['30', '60', '120', '300'], cast=int)),
+        'backoff_seconds': tuple(
+            env.list('LOGIN_BACKOFF_SECONDS', default=['30', '60', '120', '300'], cast=int)
+        ),
         'emergency_ip': env('LOGIN_EMERGENCY_IP_RATE', default='300/minute'),
         # Compatibility rate used by callers/tests that still instantiate the
         # legacy username throttle directly.
@@ -419,10 +459,12 @@ ANONYMOUS_USER_AVATAR_UUID = uuid.UUID(env('ANONYMOUS_USER_AVATAR_UUID'))
 
 # 站外链接
 RESOURCES_WEBSITE_URL = env('RESOURCES_WEBSITE_URL')
-RESOURCE_DIRECTORY_CACHE_FILE = Path(env(
-    'RESOURCE_DIRECTORY_CACHE_FILE',
-    default=str(BASE_DIR / 'data' / 'resource_directories.json'),
-))
+RESOURCE_DIRECTORY_CACHE_FILE = Path(
+    env(
+        'RESOURCE_DIRECTORY_CACHE_FILE',
+        default=str(BASE_DIR / 'data' / 'resource_directories.json'),
+    )
+)
 _resource_storage_root = env('RESOURCE_STORAGE_ROOT', default='').strip()
 RESOURCE_STORAGE_ROOT = Path(_resource_storage_root) if _resource_storage_root else None
 

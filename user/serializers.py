@@ -4,7 +4,6 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.db.models import Q
 from rest_framework import serializers
-from soupsieve.util import lower
 
 import settings.settings
 from common.file.models import UploadedFile
@@ -41,12 +40,8 @@ def password_complexity_checker(password):
 
 
 class RegisterSerializer(serializers.ModelSerializer):
-    username = serializers.CharField(
-        required=True
-    )
-    email = serializers.EmailField(
-        required=True
-    )
+    username = serializers.CharField(required=True)
+    email = serializers.EmailField(required=True)
     password = serializers.CharField(write_only=True, required=True)
     captcha_key = serializers.CharField(required=True)
     captcha_value = serializers.CharField(required=True)
@@ -57,10 +52,12 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     def validate(self, data):
         # 先验证验证码
-        captcha_serializer = CaptchaSerializer(data={
-            'captcha_key': data.get('captcha_key'),
-            'captcha_value': data.get('captcha_value'),
-        })
+        captcha_serializer = CaptchaSerializer(
+            data={
+                'captcha_key': data.get('captcha_key'),
+                'captcha_value': data.get('captcha_value'),
+            }
+        )
 
         if not captcha_serializer.is_valid():
             raise serializers.ValidationError(captcha_serializer.errors)
@@ -70,7 +67,9 @@ class RegisterSerializer(serializers.ModelSerializer):
         email = data.get('email').strip().lower()
         data['email'] = email
         username_checker(username)
-        if lower(email).endswith(settings.settings.UNIVERSITY_MAIL_SUFFIX):
+        domain = email.rsplit('@', 1)[-1]
+        blocked = settings.settings.UNIVERSITY_MAIL_SUFFIX.lower()
+        if domain == blocked or domain.endswith('.' + blocked):
             raise serializers.ValidationError({"email": get_err_msg('invalid_college_email')})
         if user_model.objects.filter(email__iexact=email).exists():
             raise serializers.ValidationError({'email': get_err_msg('email_duplicate')})
@@ -112,10 +111,12 @@ class PasswordResetRequestSerializer(serializers.Serializer):  # 找回密码界
     captcha_value = serializers.CharField(required=True)
 
     def validate(self, data):
-        captcha_serializer = CaptchaSerializer(data={
-            'captcha_key': data.get('captcha_key'),
-            'captcha_value': data.get('captcha_value'),
-        })
+        captcha_serializer = CaptchaSerializer(
+            data={
+                'captcha_key': data.get('captcha_key'),
+                'captcha_value': data.get('captcha_value'),
+            }
+        )
 
         if not captcha_serializer.is_valid():
             raise serializers.ValidationError('Invalid captcha')
@@ -130,10 +131,12 @@ class PasswordResetMailRequestSerializer(serializers.Serializer):  # 点击邮�
     captcha_value = serializers.CharField(required=True)
 
     def validate(self, data):
-        captcha_serializer = CaptchaSerializer(data={
-            'captcha_key': data.get('captcha_key'),
-            'captcha_value': data.get('captcha_value'),
-        })
+        captcha_serializer = CaptchaSerializer(
+            data={
+                'captcha_key': data.get('captcha_key'),
+                'captcha_value': data.get('captcha_value'),
+            }
+        )
 
         if not captcha_serializer.is_valid():
             raise serializers.ValidationError('Invalid captcha')
@@ -169,15 +172,19 @@ class BindCollegeEmailSerializer(serializers.Serializer):
     def validate(self, data):
         email = data.get('college_email').strip().lower()
         if not (
-                email.endswith('@' + settings.settings.UNIVERSITY_TEACHER_MAIL_SUFFIX.lower())
-                or email.endswith('@' + settings.settings.UNIVERSITY_STUDENT_MAIL_SUFFIX.lower())
+            email.endswith('@' + settings.settings.UNIVERSITY_TEACHER_MAIL_SUFFIX.lower())
+            or email.endswith('@' + settings.settings.UNIVERSITY_STUDENT_MAIL_SUFFIX.lower())
         ):
             raise serializers.ValidationError({'mail': get_err_msg('not_college_email')})
         current_user = self.context['request'].user
-        if User.objects.filter(
+        if (
+            User.objects.filter(
                 college_email__iexact=email,
                 college_email_verified=True,
-        ).exclude(pk=current_user.pk).exists():
+            )
+            .exclude(pk=current_user.pk)
+            .exists()
+        ):
             raise serializers.ValidationError({'college_email': get_err_msg('email_duplicate')})
         data['college_email'] = email
         return data
@@ -206,10 +213,11 @@ class UpdateProfileSerializer(serializers.Serializer):
                 raise serializers.ValidationError({'avatar_uuid': get_err_msg('avatar_uuid_error')})
         if 'nickname' in data:
             if not (2 <= len(data['nickname']) <= 30):
-                raise serializers.ValidationError({'nickname': get_err_msg('nickname_not_match_length')})
-            if not re.match(r'^[\u4e00-\u9fa5a-zA-Z0-9!@#$%^&*()_+~\-={}]+$', data['nickname']):
                 raise serializers.ValidationError(
-                    {'nickname': get_err_msg('nickname_invalid_char')})
+                    {'nickname': get_err_msg('nickname_not_match_length')}
+                )
+            if not re.match(r'^[\u4e00-\u9fa5a-zA-Z0-9!@#$%^&*()_+~\-={}]+$', data['nickname']):
+                raise serializers.ValidationError({'nickname': get_err_msg('nickname_invalid_char')})
             return data
         return data
 

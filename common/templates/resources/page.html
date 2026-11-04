@@ -16,7 +16,7 @@
 <body>
   <div id="app">
     <main class="mx-auto max-w-6xl px-4 py-8">
-      <a href="/">NWU.ICU</a>
+      <a href="/">{{ site_name }}</a>
       {% if error %}
         <h1>{{ title }}</h1><p role="alert">{{ error }}</p>
         {% if status == 401 %}<a href="/login">登录后访问</a>{% endif %}
@@ -37,5 +37,6 @@
     </main>
   </div>
   {% if contents %}{{ contents|json_script:"resource-bootstrap" }}{% endif %}
+  {{ site_config|json_script:"site-config-bootstrap" }}
 </body>
 </html>

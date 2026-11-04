@@ -4,14 +4,25 @@
 set -Eeuo pipefail
 
 fail() { echo "$*" >&2; exit 1; }
-[[ $# -ge 2 && $# -le 3 ]] || fail 'Usage: pull-release-images BACKEND_COMMIT FRONTEND_COMMIT [GATEWAY_IMAGE@sha256:DIGEST]'
+if [[ "${1:-}" == --env-file ]]; then
+  [[ $# -ge 2 ]] || fail 'Missing env file.'
+  export ENV_FILE=$2
+  shift 2
+fi
+source "$(dirname "${BASH_SOURCE[0]}")/load-config.sh"
+[[ $# -ge 2 && $# -le 3 ]] || fail 'Usage: pull-release-images [--env-file FILE] BACKEND_COMMIT FRONTEND_COMMIT [GATEWAY_IMAGE@sha256:DIGEST]'
 backend_commit=$1
 frontend_commit=$2
 [[ "$backend_commit" =~ ^[0-9a-f]{40}$ ]] || fail 'Backend commit must be a full lowercase SHA.'
 [[ "$frontend_commit" =~ ^[0-9a-f]{40}$ ]] || fail 'Frontend commit must be a full lowercase SHA.'
 
-backend_repository=ghcr.io/nwuca/nwu.icu
-gateway_repository=ghcr.io/moowantfree/new_nwu_icu_frontend
+backend_repository=${BACKEND_IMAGE_REPOSITORY:?Set BACKEND_IMAGE_REPOSITORY in the env file}
+gateway_repository=${GATEWAY_IMAGE_REPOSITORY:?Set GATEWAY_IMAGE_REPOSITORY in the env file}
+backend_source=${BACKEND_GITHUB_URL:?Set BACKEND_GITHUB_URL in the env file}
+gateway_source=${FRONTEND_GITHUB_URL:?Set FRONTEND_GITHUB_URL in the env file}
+for repository in "$backend_repository" "$gateway_repository"; do
+  [[ "$repository" =~ ^[a-z0-9][a-z0-9./_-]+$ ]] || fail 'Invalid image repository.'
+done
 gateway_ref="$gateway_repository:sha-$frontend_commit-backend-$backend_commit"
 if [[ $# == 3 ]]; then
   gateway_ref=$3
@@ -25,7 +36,7 @@ verify_platform() {
 
 docker pull --platform linux/amd64 "$gateway_ref" >&2
 verify_platform "$gateway_ref"
-[[ $(label "$gateway_ref" org.opencontainers.image.source) == https://github.com/MooWantFree/new_nwu_icu_frontend ]] || fail 'Gateway source mismatch.'
+[[ $(label "$gateway_ref" org.opencontainers.image.source) == "$gateway_source" ]] || fail 'Gateway source mismatch.'
 [[ $(label "$gateway_ref" org.opencontainers.image.revision) == "$frontend_commit" ]] || fail 'Gateway frontend revision mismatch.'
 [[ $(label "$gateway_ref" io.nwuicu.backend-commit) == "$backend_commit" ]] || fail 'Gateway backend revision mismatch.'
 backend_image=$(label "$gateway_ref" io.nwuicu.backend-image)
@@ -47,7 +58,7 @@ fi
 # Pull the backend bound into this gateway, even if its commit tag was rebuilt later.
 docker pull --platform linux/amd64 "$backend_image" >&2
 verify_platform "$backend_image"
-[[ $(label "$backend_image" org.opencontainers.image.source) == https://github.com/NWUCA/NWU.ICU ]] || fail 'Backend source mismatch.'
+[[ $(label "$backend_image" org.opencontainers.image.source) == "$backend_source" ]] || fail 'Backend source mismatch.'
 [[ $(label "$backend_image" org.opencontainers.image.revision) == "$backend_commit" ]] || fail 'Backend revision mismatch.'
 
 printf 'BACKEND_COMMIT=%s\nFRONTEND_COMMIT=%s\nBACKEND_IMAGE=%s\nGATEWAY_IMAGE=%s\n' \

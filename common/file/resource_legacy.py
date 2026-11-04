@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 from urllib.parse import unquote, urlencode
 
+from django.conf import settings
 from django.http import HttpResponse, HttpResponsePermanentRedirect
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import AllowAny
@@ -10,8 +11,7 @@ from rest_framework.views import APIView
 
 from .resource_browser import ResourceFileView, normalize_resource_path
 from .resource_limits import authorize_resource
-from .resource_seo import SITE_ORIGIN, resource_page_url
-
+from .resource_seo import resource_page_url
 
 # Versioned alongside code, loaded once per worker rather than per request.
 with Path(__file__).with_name('resource_legacy_aliases.json').open(encoding='utf-8') as source:
@@ -47,11 +47,14 @@ def legacy_destination(raw_uri):
         params = {'path': path}
         if kind == 'p':
             params['inline'] = '1'
-        return SITE_ORIGIN + '/api/resources/file/legacy/?' + urlencode(params)
+        return settings.SITE_ORIGIN + '/api/resources/file/legacy/?' + urlencode(params)
     # Retain ordinary page parameters without copying obsolete credentials.
-    query = '&'.join(item for item in query.split('&') if item and
-                     unquote(item.partition('=')[0]).casefold() not in OLD_CREDENTIALS)
-    return SITE_ORIGIN + resource_page_url(path) + ('?' + query if query else '')
+    query = '&'.join(
+        item
+        for item in query.split('&')
+        if item and unquote(item.partition('=')[0]).casefold() not in OLD_CREDENTIALS
+    )
+    return settings.SITE_ORIGIN + resource_page_url(path) + ('?' + query if query else '')
 
 
 class LegacyResourceRedirectView(APIView):
@@ -60,7 +63,9 @@ class LegacyResourceRedirectView(APIView):
 
     def get(self, request):
         destination = legacy_destination(request.headers.get('X-Legacy-URI', ''))
-        response = HttpResponsePermanentRedirect(destination) if destination else HttpResponse(status=410)
+        response = (
+            HttpResponsePermanentRedirect(destination) if destination else HttpResponse(status=410)
+        )
         response['Cache-Control'] = 'no-store'
         return response
 

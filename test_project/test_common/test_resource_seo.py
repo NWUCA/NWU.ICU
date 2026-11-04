@@ -14,7 +14,7 @@ from common.models import ResourceAccessRule
 from scripts.export_resource_tree import build_resource_tree
 
 
-@override_settings(SECURE_SSL_REDIRECT=False)
+@override_settings(SECURE_SSL_REDIRECT=False, SITE_ORIGIN='https://nwu.icu', WEBSITE_NAME='NWU.ICU')
 class ResourceSEOTests(TestCase):
     def setUp(self):
         self.temp = TemporaryDirectory()
@@ -25,7 +25,9 @@ class ResourceSEOTests(TestCase):
         self.folder.mkdir()
         self.filename = '试卷 #1% &答案.zip'
         (self.folder / self.filename).write_bytes(b'example')
-        (self.folder / 'readme.md').write_text('说明 </script><script>alert(1)</script>', encoding='utf-8')
+        (self.folder / 'readme.md').write_text(
+            '说明 </script><script>alert(1)</script>', encoding='utf-8'
+        )
         (self.root / '.secret').write_text('hidden')
         self.settings_override = override_settings(
             RESOURCE_STORAGE_ROOT=self.root,
@@ -47,9 +49,13 @@ class ResourceSEOTests(TestCase):
         document = BeautifulSoup(response.content, 'html.parser')
         self.assertEqual(document.title.text, f'{self.filename} - 课程(一) - NWU.ICU')
         self.assertEqual(document.h1.text, self.filename)
-        self.assertEqual(document.find('link', rel='canonical')['href'], 'https://nwu.icu' + resource_page_url(path))
+        self.assertEqual(
+            document.find('link', rel='canonical')['href'], 'https://nwu.icu' + resource_page_url(path)
+        )
         self.assertIsNone(document.find('meta', attrs={'name': 'robots'}))
-        self.assertEqual(len(document.find_all('script')), 2)
+        self.assertEqual(len(document.find_all('script')), 3)
+        site_config = json.loads(document.find(id='site-config-bootstrap').string)
+        self.assertEqual(site_config, self.client.get('/api/site-config/').json())
         bootstrap = json.loads(document.find(id='resource-bootstrap').string)
         self.assertEqual(bootstrap['path'], path)
         self.assertIn('<script>', bootstrap['readme'])
@@ -67,12 +73,17 @@ class ResourceSEOTests(TestCase):
 
     def test_trailing_slash_redirects_directly_and_missing_resources_return_404(self):
         self.assertRedirects(self.client.get('/disk/'), '/disk', status_code=301)
-        self.assertRedirects(self.client.get(resource_page_url('/课程(一)') + '/'), resource_page_url('/课程(一)'), status_code=301)
+        self.assertRedirects(
+            self.client.get(resource_page_url('/课程(一)') + '/'),
+            resource_page_url('/课程(一)'),
+            status_code=301,
+        )
         for url in ('/disk/not-found', '/disk/.secret', '/disk/课程(一)/readme.md', '/disk/../secret'):
             response = self.client.get(url)
             self.assertEqual(response.status_code, 404)
             self.assertEqual(response['X-Robots-Tag'], 'noindex, follow')
             self.assertNotIn('id="resource-bootstrap"', response.content.decode())
+            self.assertIn('id="site-config-bootstrap"', response.content.decode())
 
     def test_permissions_apply_to_html_and_sitemap_even_for_logged_in_requests(self):
         ResourceAccessRule.objects.create(path='/课程(一)', mode='login')
@@ -113,13 +124,17 @@ class ResourceSEOTests(TestCase):
         robots = self.client.get('/robots.txt')
         self.assertEqual(robots['Content-Type'], 'text/plain; charset=utf-8')
         self.assertContains(robots, 'Sitemap: https://nwu.icu/sitemap.xml')
-        self.assertEqual(self.client.get('/sitemap.xml')['Content-Type'], 'application/xml; charset=utf-8')
+        self.assertEqual(
+            self.client.get('/sitemap.xml')['Content-Type'], 'application/xml; charset=utf-8'
+        )
         with override_settings(RESOURCE_STORAGE_ROOT=self.root / 'missing'):
             unavailable = self.client.get('/disk')
             self.assertEqual(unavailable.status_code, 503)
             self.assertEqual(unavailable['Retry-After'], '300')
             self.assertNotIn('X-Robots-Tag', unavailable)
-            self.assertIsNone(BeautifulSoup(unavailable.content, 'html.parser').find('meta', attrs={'name': 'robots'}))
+            self.assertIsNone(
+                BeautifulSoup(unavailable.content, 'html.parser').find('meta', attrs={'name': 'robots'})
+            )
             self.assertEqual(self.client.get('/sitemap.xml').status_code, 503)
         (Path(self.temp.name) / 'index.json').unlink()
         self.assertEqual(self.client.get('/sitemap.xml').status_code, 503)

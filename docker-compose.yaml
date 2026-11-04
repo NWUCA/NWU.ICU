@@ -19,7 +19,7 @@ services:
       - ${RESOURCE_INDEX_HOST_PATH:-./data}:/app/data
       - ${RESOURCE_STORAGE_HOST_PATH:?请在.env中配置AList本地存储物理目录}:/resource-storage
     ports:
-      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
     environment:
       - DJANGO_SETTINGS_MODULE=settings.settings
       - SECRET_KEY=${SECRET_KEY}

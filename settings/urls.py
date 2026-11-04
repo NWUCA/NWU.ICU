@@ -15,44 +15,64 @@ Including another URLconf
 """
 from django.conf import settings
 from django.contrib import admin
-from django.urls import include
-from django.urls import path
+from django.urls import include, path
 from django.views.generic import RedirectView
-from settings.admin_login import throttled_admin_login
 
+from common.file.archive_views import (
+    ArchiveAuthorizeView,
+    ArchiveCancelView,
+    ArchiveConfigView,
+    ArchiveDetailView,
+    ArchiveDownloadView,
+    ArchiveListView,
+)
+from common.file.resource_browser import (
+    ResourceBrowseView,
+    ResourceFileAuthorizeView,
+    ResourceFileView,
+    ResourceSearchView,
+)
+from common.file.resource_legacy import (
+    LegacyResourceFileView,
+    LegacyResourceRedirectView,
+)
+from common.file.resource_seo import resource_page, robots_txt, sitemap
 from common.file.view import (
+    FileDeleteView,
     FileDownloadView,
     FileUploadView,
-    FileDeleteView,
     ResourceDirectoryView,
     ResourceUploadConfigView,
     ResourceUploadFileDownloadView,
     ResourceUploadRequestDetailView,
     ResourceUploadRequestView,
 )
-from common.file.resource_browser import (
-    ResourceBrowseView, ResourceFileAuthorizeView, ResourceFileView, ResourceSearchView,
-)
-from common.file.resource_seo import resource_page, robots_txt, sitemap
-from common.file.archive_views import (
-    ArchiveConfigView, ArchiveListView, ArchiveDetailView, ArchiveCancelView,
-    ArchiveAuthorizeView, ArchiveDownloadView,
-)
-from common.file.resource_legacy import LegacyResourceFileView, LegacyResourceRedirectView
+from common.site_config import site_config, site_config_bootstrap
 from common.views import (
     AboutView,
+    BulletinListView,
     CaptchaView,
-    TextContentView, MessageBoxView, BulletinListView, MessageUnreadView, CourseTeacherSearchView, IndexView,
-    ConversationReadView, NotificationReadView,
+    ConversationReadView,
+    CourseTeacherSearchView,
+    IndexView,
+    MessageBoxView,
+    MessageUnreadView,
+    NotificationReadView,
+    TextContentView,
 )
 from course_assessment.views import (
-    MyReviewView,
-    ReviewView,
+    CourseLikeView,
+    CourseList,
     CourseView,
-    TeacherView,
+    LatestReviewView,
+    MyReviewView,
+    ReviewAnalysisView,
+    ReviewAndReplyLikeView,
     ReviewReplyView,
-    ReviewAndReplyLikeView, CourseList, CourseLikeView, SchoolView,
-    LatestReviewView, SemesterView, ReviewAnalysisView,
+    ReviewView,
+    SchoolView,
+    SemesterView,
+    TeacherView,
 )
 from guestbook.views import (
     AnnouncementContextView,
@@ -68,22 +88,30 @@ from guestbook.views import (
     GuestbookRepliesView,
     GuestbookReportView,
 )
+from settings.admin_login import throttled_admin_login
 from user.views import (
+    AccountActivationView,
+    ActiveUser,
+    BindCollegeEmailView,
+    CsrfTokenView,
     Login,
     Logout,
-    UsernameDuplicationView,
-    RegisterView, AccountActivationView,
+    PasswordMailResetVerifyView,
+    PasswordMailResetView,
     PasswordResetView,
-    PasswordMailResetView, PasswordMailResetVerifyView, ProfileView, PasswordResetWhenLoginView,
-    BindCollegeEmailView, VerifyCollegeEmailView, ActiveUser, PrivateView,
-    CsrfTokenView,
+    PasswordResetWhenLoginView,
+    PrivateView,
+    ProfileView,
+    RegisterView,
+    UsernameDuplicationView,
+    VerifyCollegeEmailView,
 )
 
 api_patterns = [
-
+    path('site-config/', site_config, name='site-config'),
+    path('site-config/bootstrap/', site_config_bootstrap, name='site-config-bootstrap'),
     # 管理员面板（普通登录后还需 Passkey 短时提权）
     path('management/', include('management_panel.urls')),
-
     # 留言板
     path('guestbook/', GuestbookListView.as_view(), name='guestbook'),
     path('guestbook/<int:entry_id>/', GuestbookDetailView.as_view(), name='guestbook-detail'),
@@ -91,17 +119,31 @@ api_patterns = [
     path('guestbook/<int:entry_id>/context/', GuestbookContextView.as_view(), name='guestbook-context'),
     path('guestbook/<int:entry_id>/like/', GuestbookLikeView.as_view(), name='guestbook-like'),
     path('guestbook/<int:entry_id>/reports/', GuestbookReportView.as_view(), name='guestbook-report'),
-
     # 公告栏（仅管理员可以发布，所有登录用户可以互动）
     path('announcements/', AnnouncementListView.as_view(), name='announcements'),
     path('announcements/<int:entry_id>/', AnnouncementDetailView.as_view(), name='announcement-detail'),
-    path('announcements/<int:entry_id>/replies/', AnnouncementRepliesView.as_view(), name='announcement-replies'),
-    path('announcements/<int:entry_id>/context/', AnnouncementContextView.as_view(), name='announcement-context'),
-    path('announcements/<int:entry_id>/like/', AnnouncementLikeView.as_view(), name='announcement-like'),
-    path('announcements/<int:entry_id>/reports/', AnnouncementReportView.as_view(), name='announcement-report'),
-
+    path(
+        'announcements/<int:entry_id>/replies/',
+        AnnouncementRepliesView.as_view(),
+        name='announcement-replies',
+    ),
+    path(
+        'announcements/<int:entry_id>/context/',
+        AnnouncementContextView.as_view(),
+        name='announcement-context',
+    ),
+    path(
+        'announcements/<int:entry_id>/like/', AnnouncementLikeView.as_view(), name='announcement-like'
+    ),
+    path(
+        'announcements/<int:entry_id>/reports/',
+        AnnouncementReportView.as_view(),
+        name='announcement-report',
+    ),
     # 课程评价
-    path('assessment/user/activities/review/<int:user_id>/', MyReviewView.as_view(), name='user_review'),
+    path(
+        'assessment/user/activities/review/<int:user_id>/', MyReviewView.as_view(), name='user_review'
+    ),
     path('assessment/user/activities/reply/<int:user_id>/', MyReviewView.as_view(), name='user_reply'),
     path('assessment/review/', ReviewView.as_view(), name='review'),
     path('assessment/latest-review/', LatestReviewView.as_view(), name='latest_review'),
@@ -119,7 +161,6 @@ api_patterns = [
     path('assessment/teacher_list/', SchoolView.as_view(), name='teacher_list'),
     path('assessment/semester/', SemesterView.as_view(), name='semester'),
     path('assessment/review/analysis/', ReviewAnalysisView.as_view(), name='review_analysis'),
-
     # 用户
     path('user/login/', Login.as_view(), name='login'),
     path('user/csrf/', CsrfTokenView.as_view(), name='csrf-token'),
@@ -133,30 +174,38 @@ api_patterns = [
     path('user/reset/', PasswordResetView.as_view(), name='reset'),
     path('user/mail-reset/', PasswordMailResetView.as_view(), name='mail-reset'),
     path('user/mail-reset/verify/', PasswordMailResetVerifyView.as_view(), name='mail-reset-verify'),
-    path('user/reset-login/', PasswordResetWhenLoginView.as_view(), name='reset-login'),  # 通过旧密码在登录时重置密码
-    path('user/bind-college-email/verify/', VerifyCollegeEmailView.as_view(),
-         name='bind-college-email-verify'),
-    path('user/bind-college-email/bind/', BindCollegeEmailView.as_view(),
-         name='bind-college-email-bind'),
+    path(
+        'user/reset-login/', PasswordResetWhenLoginView.as_view(), name='reset-login'
+    ),  # 通过旧密码在登录时重置密码
+    path(
+        'user/bind-college-email/verify/',
+        VerifyCollegeEmailView.as_view(),
+        name='bind-college-email-verify',
+    ),
+    path(
+        'user/bind-college-email/bind/', BindCollegeEmailView.as_view(), name='bind-college-email-bind'
+    ),
     path('user/private/', PrivateView.as_view(), name='user-private'),
-
     # 站内信
     path('message/', MessageBoxView.as_view(), name='send_message'),
     path('message/unread/', MessageUnreadView.as_view(), name='unread_message'),
     path('message/notifications/read/', NotificationReadView.as_view(), name='read_notifications'),
-    path('message/user/<int:chatter_id>/read/', ConversationReadView.as_view(), name='read_conversation'),
-    path('message/<str:classify>/<int:chatter_id>', MessageBoxView.as_view(), name='check_particular_message'),
+    path(
+        'message/user/<int:chatter_id>/read/', ConversationReadView.as_view(), name='read_conversation'
+    ),
+    path(
+        'message/<str:classify>/<int:chatter_id>',
+        MessageBoxView.as_view(),
+        name='check_particular_message',
+    ),
     path('message/<str:classify>/', MessageBoxView.as_view(), name='check_all_message'),
-
     # 验证码
     path('captcha/', CaptchaView.as_view(), name='captcha'),
-
     # tos
     path('blogs/', TextContentView.as_view(), name='blogs'),
     path('blogs/<int:blog_id>', TextContentView.as_view(), name='blog'),
     path('about/', AboutView.as_view(), name='about'),
     path('bulletins/', BulletinListView.as_view(), name='bulletins'),
-
     # 文件操作
     path('upload/', FileUploadView.as_view(), name='file-upload'),
     path('upload/request/', ResourceUploadRequestView.as_view(), name='resource-upload-request'),
@@ -181,14 +230,19 @@ api_patterns = [
     path('resources/file/', ResourceFileView.as_view(), name='resource-file'),
     path('resources/file/archives/<uuid:receipt_id>/', ArchiveDownloadView.as_view()),
     path('resources/file/legacy/', LegacyResourceFileView.as_view(), name='resource-file-legacy'),
-    path('resources/legacy-redirect/', LegacyResourceRedirectView.as_view(), name='resource-legacy-redirect'),
-    path('resources/file/authorize/', ResourceFileAuthorizeView.as_view(), name='resource-file-authorize'),
+    path(
+        'resources/legacy-redirect/',
+        LegacyResourceRedirectView.as_view(),
+        name='resource-legacy-redirect',
+    ),
+    path(
+        'resources/file/authorize/', ResourceFileAuthorizeView.as_view(), name='resource-file-authorize'
+    ),
     path('upload/directories/', ResourceDirectoryView.as_view(), name='resource-upload-directories'),
     path('upload/config/', ResourceUploadConfigView.as_view(), name='resource-upload-config'),
     path('download/<uuid:file_uuid>/', FileDownloadView.as_view(), name='file-download'),
     path('delete/<uuid:id>/', FileDeleteView.as_view(), name='file-delete'),
     # path('update/<uuid:id>/', FileUpdateView.as_view(), name='file-update'),
-
     # 搜索
     path('search/', CourseTeacherSearchView.as_view(), name='search'),
 ]
@@ -201,14 +255,15 @@ urlpatterns = [
     path('admin/login/', throttled_admin_login, name='admin-login'),
     path(
         'admin/upload/',
-        RedirectView.as_view(pattern_name='admin:common_resourceuploadrequest_changelist', permanent=False),
+        RedirectView.as_view(
+            pattern_name='admin:common_resourceuploadrequest_changelist', permanent=False
+        ),
         name='admin-resource-upload',
     ),
     path('admin/', admin.site.urls),
     # path('silk/', include('silk.urls', namespace='silk')),
     path('', IndexView.as_view(), name='homepage'),
     path('api/captcha/', include('captcha.urls')),
-
     path('api/', include((api_patterns, 'api'))),
 ]
 

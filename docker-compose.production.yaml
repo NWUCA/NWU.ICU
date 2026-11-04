@@ -1,7 +1,11 @@
-name: nwuicu
+name: ${COMPOSE_PROJECT_NAME:-nwuicu}
 
 x-backend-service: &backend-service
-  build: .
+  build:
+    context: .
+    args:
+      UPLOAD_UID: ${UPLOAD_UID:-10001}
+      UPLOAD_GID: ${UPLOAD_GID:-10001}
   restart: unless-stopped
   env_file:
     - ${ENV_FILE:-.env.production}
@@ -60,11 +64,7 @@ services:
       - ${RESOURCE_INDEX_HOST_PATH:?set RESOURCE_INDEX_HOST_PATH}:/app/data
       - ${RESOURCE_STORAGE_HOST_PATH:?set RESOURCE_STORAGE_HOST_PATH}:/resource-storage
     healthcheck:
-      test:
-        - CMD
-        - python
-        - -c
-        - "import urllib.request; request = urllib.request.Request('http://127.0.0.1:8000/api/user/csrf/', headers={'Host': 'nwu.icu', 'X-Forwarded-Proto': 'https'}); urllib.request.urlopen(request, timeout=3)"
+      test: ["CMD", "python", "scripts/healthcheck.py"]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -113,7 +113,7 @@ services:
       app-network:
       proxy-network:
         aliases:
-          - nwuicu-gateway
+          - ${GATEWAY_NETWORK_ALIAS:-nwuicu-gateway}
 
 volumes:
   archive-cache:

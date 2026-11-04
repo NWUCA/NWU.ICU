@@ -4,19 +4,27 @@ import posixpath
 from urllib.parse import quote, urlencode
 from xml.etree.ElementTree import Element, SubElement, tostring
 
+from django.conf import settings
 from django.http import Http404, HttpResponse, HttpResponsePermanentRedirect
 from django.shortcuts import render
 from django.utils.dateparse import parse_datetime
 from django.views.decorators.http import require_safe
 from rest_framework.exceptions import NotAuthenticated, ValidationError
 
+from common.site_config import public_site_config
+
 from .resource_access import ResourceAccess
 from .resource_browser import (
-    ResourceUnavailable, browse_resource, normalize_resource_path, resource_root,
+    ResourceUnavailable,
+    browse_resource,
+    normalize_resource_path,
+    resource_root,
 )
-from .resource_directories import ResourceDirectoryCacheError, read_resource_directory_cache
+from .resource_directories import (
+    ResourceDirectoryCacheError,
+    read_resource_directory_cache,
+)
 
-SITE_ORIGIN = 'https://nwu.icu'
 SITEMAP_PAGE_SIZE = 10000
 XMLNS = 'http://www.sitemaps.org/schemas/sitemap/0.9'
 
@@ -31,15 +39,18 @@ def resource_metadata(contents):
     name = contents['name']
     if contents['path'] == '/':
         title = '资料下载'
-        description = '浏览和下载 NWU.ICU 公开学习资料。'
+        description = f'浏览和下载 {settings.WEBSITE_NAME} 公开学习资料。'
     elif contents['type'] == 'file':
         title = f"{name} - {parent or '资料下载'}"
         description = f"{name}，所属目录：{parent or '全部资料'}。查看文件信息与下载入口。"
     else:
         title = f'{name} - 资料下载'
         description = f'{name}，浏览目录中的学习资料和文件。'
-    return {'title': title + ' - NWU.ICU', 'description': description,
-            'canonical': SITE_ORIGIN + resource_page_url(contents['path'])}
+    return {
+        'title': title + f' - {settings.WEBSITE_NAME}',
+        'description': description,
+        'canonical': settings.SITE_ORIGIN + resource_page_url(contents['path']),
+    }
 
 
 @require_safe
@@ -47,7 +58,7 @@ def resource_page(request, path=''):
     raw_path = '/' + path
     # Direct directory URLs use no trailing slash. Validate access before redirecting.
     requested_path = raw_path[:-1] if raw_path.endswith('/') and raw_path != '/' else raw_path
-    context = {'title': '资料暂不可用 - NWU.ICU', 'noindex': True}
+    context = {'title': f'资料暂不可用 - {settings.WEBSITE_NAME}', 'noindex': True}
     status = 200
     try:
         contents = browse_resource(requested_path, request.user)
@@ -60,19 +71,25 @@ def resource_page(request, path=''):
         parts = contents['path'].split('/')[1:]
         for index, name in enumerate(parts):
             if name:
-                context['breadcrumbs'].append({'name': name, 'url': resource_page_url('/' + '/'.join(parts[:index + 1]))})
-        context['entries'] = [{**entry, 'url': resource_page_url(entry['path'])} for entry in contents.get('entries', [])]
+                context['breadcrumbs'].append(
+                    {'name': name, 'url': resource_page_url('/' + '/'.join(parts[: index + 1]))}
+                )
+        context['entries'] = [
+            {**entry, 'url': resource_page_url(entry['path'])} for entry in contents.get('entries', [])
+        ]
         context['download_url'] = '/api/resources/file/?' + urlencode({'path': contents['path']})
     except NotAuthenticated:
         status = 401
-        context.update(title='资料需要登录 - NWU.ICU', error='此目录需要登录后访问。')
+        context.update(title=f'资料需要登录 - {settings.WEBSITE_NAME}', error='此目录需要登录后访问。')
     except (Http404, ValidationError):
         status = 404
-        context.update(title='资料未找到 - NWU.ICU', error='这个资料不存在、已移动或无权访问。')
+        context.update(title=f'资料未找到 - {settings.WEBSITE_NAME}', error='这个资料不存在、已移动或无权访问。')
     except ResourceUnavailable:
         status = 503
         context.update(noindex=False, error='资料暂时无法读取，请稍后重试。')
     context['status'] = status
+    context['site_name'] = settings.WEBSITE_NAME
+    context['site_config'] = public_site_config()
     response = render(request, 'resources/page.html', context, status=status)
     # HTML and bootstrap can contain session-specific listings; never share-cache them.
     response['Cache-Control'] = 'private, no-store'
@@ -87,7 +104,9 @@ def resource_page(request, path=''):
 def robots_txt(request):
     response = HttpResponse(
         f'User-agent: *\nAllow: /\nDisallow: /admin/\nDisallow: /manage\n'
-        f'Sitemap: {SITE_ORIGIN}/sitemap.xml\n', content_type='text/plain; charset=utf-8')
+        f'Sitemap: {settings.SITE_ORIGIN}/sitemap.xml\n',
+        content_type='text/plain; charset=utf-8',
+    )
     response['Cache-Control'] = 'public, max-age=300'
     return response
 
@@ -132,18 +151,28 @@ def sitemap(request):
     if page is None:
         root = Element('sitemapindex', xmlns=XMLNS)
         for number in range(1, page_count + 1):
-            SubElement(SubElement(root, 'sitemap'), 'loc').text = f'{SITE_ORIGIN}/sitemap.xml?page={number}'
+            SubElement(
+                SubElement(root, 'sitemap'), 'loc'
+            ).text = f'{settings.SITE_ORIGIN}/sitemap.xml?page={number}'
     else:
-        if not page.isascii() or not page.isdecimal() or len(page) > 8 or not 1 <= int(page) <= page_count:
+        if (
+            not page.isascii()
+            or not page.isdecimal()
+            or len(page) > 8
+            or not 1 <= int(page) <= page_count
+        ):
             return HttpResponse(status=404)
         start = (int(page) - 1) * SITEMAP_PAGE_SIZE
         root = Element('urlset', xmlns=XMLNS)
-        for path, modified in entries[start:start + SITEMAP_PAGE_SIZE]:
+        for path, modified in entries[start : start + SITEMAP_PAGE_SIZE]:
             item = SubElement(root, 'url')
-            SubElement(item, 'loc').text = SITE_ORIGIN + resource_page_url(path)
+            SubElement(item, 'loc').text = settings.SITE_ORIGIN + resource_page_url(path)
             if modified:
                 SubElement(item, 'lastmod').text = modified
-    response = HttpResponse(tostring(root, encoding='utf-8', xml_declaration=True), content_type='application/xml; charset=utf-8')
+    response = HttpResponse(
+        tostring(root, encoding='utf-8', xml_declaration=True),
+        content_type='application/xml; charset=utf-8',
+    )
     # Reapply current permissions and index changes on every request.
     response['Cache-Control'] = 'no-store'
     return response

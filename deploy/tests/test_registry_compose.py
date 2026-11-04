@@ -64,6 +64,48 @@ class RegistryComposeTests(unittest.TestCase):
         self.assertIn('exec gunicorn', services['web']['command'][2])
         self.assertNotIn('migrate', services['web']['command'][2])
 
+    def test_custom_project_network_uid_and_volume_are_read_from_configuration(self):
+        env_file = ROOT / '.env.production.example'
+        env = {
+            **os.environ,
+            'ENV_FILE': str(env_file),
+            'COMPOSE_PROJECT_NAME': 'campus-example',
+            'PROXY_NETWORK_NAME': 'campus-proxy',
+            'GATEWAY_NETWORK_ALIAS': 'campus-gateway',
+            'UPLOAD_UID': '12001',
+            'UPLOAD_GID': '12002',
+            'POSTGRES_VOLUME_NAME': 'campus-existing-db',
+            'BACKEND_PORT': '19000',
+            'GATEWAY_PORT': '19080',
+            'BACKEND_IMAGE': BACKEND_IMAGE,
+            'GATEWAY_IMAGE': GATEWAY_IMAGE,
+        }
+        command = [
+            'docker',
+            'compose',
+            '--env-file',
+            str(env_file),
+            '-f',
+            str(ROOT / 'docker-compose.production.yaml'),
+        ]
+        base = self.config(command, env)
+        self.assertEqual(base['name'], 'campus-example')
+        self.assertEqual(base['networks']['proxy-network']['name'], 'campus-proxy')
+        self.assertIn(
+            'campus-gateway', base['services']['gateway']['networks']['proxy-network']['aliases']
+        )
+        self.assertEqual(base['services']['web']['build']['args']['UPLOAD_UID'], '12001')
+        self.assertEqual(base['services']['web']['build']['args']['UPLOAD_GID'], '12002')
+        self.assertEqual(
+            base['services']['web']['healthcheck']['test'], ['CMD', 'python', 'scripts/healthcheck.py']
+        )
+        merged = self.config(
+            command + ['-f', str(ROOT / 'deploy/docker-compose.server.registry.example.yaml')], env
+        )
+        self.assertEqual(merged['volumes']['pgdata']['name'], 'campus-existing-db')
+        self.assertEqual(merged['services']['web']['ports'][0]['published'], '19000')
+        self.assertEqual(merged['services']['gateway']['ports'][0]['published'], '19080')
+
     def config(self, command, env):
         result = subprocess.run(
             command + ['config', '--format', 'json'], env=env, capture_output=True, text=True

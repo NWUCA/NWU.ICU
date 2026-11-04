@@ -42,8 +42,11 @@ RUN python -c "import hashlib, ssl; import certifi; \
 
 COPY . .
 
-RUN groupadd --gid 10001 app \
-    && useradd --uid 10001 --gid app --create-home --no-log-init app \
+ARG UPLOAD_UID=10001
+ARG UPLOAD_GID=10001
+RUN test "$UPLOAD_UID" -gt 0 && test "$UPLOAD_GID" -gt 0 \
+    && groupadd --gid "$UPLOAD_GID" app \
+    && useradd --uid "$UPLOAD_UID" --gid app --create-home --no-log-init app \
     && mkdir -p /app/data /app/media /app/static /app/archive-cache \
     && chown -R app:app /app
 

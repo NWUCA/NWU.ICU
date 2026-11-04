@@ -26,7 +26,7 @@ from pathlib import Path
 args = sys.argv[1:]
 with open(os.environ['CALLS'], 'a') as log:
     log.write(' '.join(args) + '\\n')
-backend = args[2].startswith('ghcr.io/nwuca/') if len(args) > 2 else False
+backend = args[2].startswith(os.environ['BACKEND_IMAGE'].split('@')[0]) if len(args) > 2 else False
 failure = os.environ.get('FAILURE', '')
 if args[0] == 'pull':
     print('pull progress')
@@ -41,7 +41,10 @@ elif '.RepoDigests' in fmt:
         if failure == 'multiple-digests':
             print('ghcr.io/moowantfree/new_nwu_icu_frontend@sha256:' + 'e'*64)
 elif 'org.opencontainers.image.source' in fmt:
-    print('https://github.com/' + ('NWUCA/NWU.ICU' if backend else 'MooWantFree/new_nwu_icu_frontend'))
+    configured = os.environ.get('EXPECTED_BACKEND_SOURCE' if backend else 'EXPECTED_GATEWAY_SOURCE')
+    default = 'https://github.com/'
+    default += 'NWUCA/NWU.ICU' if backend else 'MooWantFree/new_nwu_icu_frontend'
+    print(configured or default)
 elif 'org.opencontainers.image.revision' in fmt:
     revision = os.environ['BACKEND' if backend else 'FRONTEND']
     failed = failure == ('backend-revision' if backend else 'frontend-revision')
@@ -87,6 +90,32 @@ else:
         self.assertNotIn(f'ghcr.io/nwuca/nwu.icu:sha-{BACKEND}', calls)
         self.assertNotIn('compose', calls)
         self.assertNotIn('build', calls)
+
+    def test_custom_repositories_keep_digest_and_source_verification(self):
+        backend_image = 'registry.example.org/campus/backend@sha256:' + 'c' * 64
+        gateway_image = 'registry.example.org/campus/frontend@sha256:' + 'd' * 64
+        env_file = self.root / 'custom.env'
+        env_file.write_text(
+            'BACKEND_IMAGE_REPOSITORY=registry.example.org/campus/backend\n'
+            'GATEWAY_IMAGE_REPOSITORY=registry.example.org/campus/frontend\n'
+            'BACKEND_GITHUB_URL=https://github.com/campus/backend\n'
+            'FRONTEND_GITHUB_URL=https://github.com/campus/frontend\n'
+        )
+        self.env.update(
+            {
+                'BACKEND_IMAGE': backend_image,
+                'GATEWAY_IMAGE': gateway_image,
+                'EXPECTED_BACKEND_SOURCE': 'https://github.com/campus/backend',
+                'EXPECTED_GATEWAY_SOURCE': 'https://github.com/campus/frontend',
+            }
+        )
+        result = self.run_script('--env-file', str(env_file), BACKEND, FRONTEND, gateway_image)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('GATEWAY_IMAGE=' + gateway_image, result.stdout)
+        self.env['EXPECTED_BACKEND_SOURCE'] = 'https://github.com/wrong/backend'
+        result = self.run_script('--env-file', str(env_file), BACKEND, FRONTEND, gateway_image)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(result.stdout, '')
 
     def test_accepts_explicit_gateway_digest(self):
         result = self.run_script(BACKEND, FRONTEND, GATEWAY_IMAGE)

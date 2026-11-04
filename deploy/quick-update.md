@@ -38,7 +38,8 @@ git -C "$RELEASE/new_nwu_icu_frontend" checkout --detach "$FRONTEND_COMMIT"
 cd "$RELEASE/NWU.ICU"
 set -euo pipefail
 GATEWAY_REF=ghcr.io/moowantfree/new_nwu_icu_frontend@sha256:<Actions-Summary中的摘要>
-bash deploy/pull-release-images "$BACKEND_COMMIT" "$FRONTEND_COMMIT" "$GATEWAY_REF" \
+bash deploy/pull-release-images --env-file /etc/nwuicu/production.env \
+  "$BACKEND_COMMIT" "$FRONTEND_COMMIT" "$GATEWAY_REF" \
   > ../release-images.env.tmp
 mv ../release-images.env.tmp ../release-images.env
 set -a

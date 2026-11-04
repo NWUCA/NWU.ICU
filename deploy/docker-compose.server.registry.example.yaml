@@ -11,7 +11,7 @@ services:
       --workers $${GUNICORN_WORKERS:-3} --timeout $${GUNICORN_TIMEOUT:-300}
       --access-logfile - --error-logfile -"
     ports:
-      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
   cron:
     image: ${BACKEND_IMAGE:?source release-images.env before running Compose}
     pull_policy: never
@@ -33,8 +33,8 @@ services:
     pull_policy: never
     build: !reset null
     ports:
-      - "127.0.0.1:18080:80"
+      - "127.0.0.1:${GATEWAY_PORT:-18080}:80"
 volumes:
   pgdata:
     external: true
-    name: nwuicu_pgdata
+    name: ${POSTGRES_VOLUME_NAME:-nwuicu_pgdata}
