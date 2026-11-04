@@ -14,7 +14,9 @@ from common.file.resource_seo import resource_page_url
 from common.models import ResourceAccessRule
 
 
-@override_settings(SECURE_SSL_REDIRECT=False, SITE_ORIGIN='https://campus.example.org')
+@override_settings(
+    SECURE_SSL_REDIRECT=False, SITE_ORIGIN='https://campus.example.org', WEBSITE_NAME='Campus Test'
+)
 class LegacyResourceTests(TestCase):
     def setUp(self):
         self.temp = TemporaryDirectory()
@@ -71,7 +73,7 @@ class LegacyResourceTests(TestCase):
         response = self.redirect(old)
         final = self.client.get(response['Location'])
         self.assertEqual(final.status_code, 200)
-        self.assertContains(final, 'NWU.ICU')
+        self.assertContains(final, 'Campus Test')
 
     def test_canonical_names_and_unrelated_segments_are_preserved(self):
         for path in (self.path, '/其他目录/物理学院', '/【3】学院课程/物理学院资料', '/locality/file.zip'):
