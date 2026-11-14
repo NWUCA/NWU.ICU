@@ -92,7 +92,11 @@ sudo bash ./scripts/deploy-production.sh --fresh-install .env.production
 
 ## 管理员 Passkey
 
-管理员先以普通账号登录，再手动访问 `/manage`。管理操作和 Django Admin 均要求一次
+管理员先在主站登录，再访问 `/manage`，页面通过 `/api/management/` 调用管理接口。
+`nwu.icu` 和 `api.nwu.icu` 的 OpenResty 均对公网 `/admin` 和 `/admin/` 下的所有路径返回 404。
+站点配置见 [生产 Runbook](production-runbook.md#公网管理入口)。
+
+管理操作和 Django Admin 均要求一次
 Passkey 验证，提权有效期为 10 分钟，每次通过校验的管理请求都会重新计时；连续 10 分钟
 没有管理请求后需重新验证。生产环境需将 `WEBAUTHN_RP_ID` 设为站点域名，
 并在 `WEBAUTHN_EXPECTED_ORIGINS` 中逐项填写精确的 HTTPS origin。

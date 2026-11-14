@@ -36,6 +36,27 @@ python3 deploy/verify-release-http.py \
 
 后台恢复检查通过后解除维护，再执行默认公网检查。不要为了让公网检查通过而提前解除维护。
 
+### 公网管理入口
+
+从公网执行以下检查。两个域名在 HTTP 和 HTTPS 下都应直接返回 404，包含不带末尾斜杠的 `/admin` 和登录页：
+
+```bash
+for host in nwu.icu api.nwu.icu; do
+  for scheme in http https; do
+    for path in /admin /admin/ /admin/login/; do
+      url="$scheme://$host$path"
+      code=$(curl -sS --max-time 10 -o /dev/null -w '%{http_code}' "$url")
+      printf '%s %s\n' "$code" "$url"
+      test "$code" = 404 || exit 1
+    done
+  done
+done
+```
+
+浏览器打开 `https://nwu.icu/manage`，页面文档和管理页面的 JS 应返回 200。未登录时，
+`/api/management/session/` 应返回带 `detail` 的 JSON 404，页面显示“页面不存在”。
+使用已绑定 Passkey 的 staff 测试账号登录并完成验证后，应能打开该账号有权限的管理页签。
+
 ## 六个服务、固定镜像与重启基线
 
 切换前记录 PostgreSQL、Umami 的容器 ID、启动时间和重启次数，切换后确认未变化。

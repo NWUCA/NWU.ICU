@@ -70,13 +70,18 @@ docker network connect web-proxy <openresty-container-name>
 ## 3. OpenResty 站点配置
 
 将下面内容合并到现有 OpenResty 配置。证书路径按现有证书管理方案填写；如果 TLS 已在更外层
-终止，只保留对应的监听方式即可。
+终止，只保留对应的监听方式即可。若另设直连 Django 的 API 域名，也要在它的公网 `server` 中
+加入相同的 `/admin` 规则。主站日常管理使用 `/manage` 和 `/api/management/`。
 
 ```nginx
 server {
     listen 80;
     listen [::]:80;
     server_name nwu.icu www.nwu.icu;
+
+    if ($uri ~ ^/admin(/|$)) {
+        return 404;
+    }
 
     # 如果 ACME 客户端使用 HTTP-01，请同时保留它已有的 challenge location；
     # 更具体的 /.well-known/acme-challenge/ location 会优先于这里。
@@ -90,6 +95,10 @@ server {
     listen [::]:443 ssl;
     http2 on;
     server_name nwu.icu www.nwu.icu;
+
+    if ($uri ~ ^/admin(/|$)) {
+        return 404;
+    }
 
     ssl_certificate     /path/in/openresty/fullchain.pem;
     ssl_certificate_key /path/in/openresty/privkey.pem;

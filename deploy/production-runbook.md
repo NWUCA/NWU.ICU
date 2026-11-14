@@ -371,6 +371,23 @@ curl -H 'Host: nwu.icu' -H 'X-Forwarded-Proto: https' \
 
 日常前后端更新保持端口不变时，不需要修改 OpenResty，只需重建并替换 Docker 服务。
 
+### 公网管理入口
+
+日常管理从主站 `/manage` 进入，Passkey 和业务请求使用 `/api/management/`。
+公网的 `nwu.icu` 经过 gateway，`api.nwu.icu` 可直接到达 Django。两个站点均在各自的
+`conf.d/*.conf` 的 `server_name` 下一行设置以下规则，先处理 Django Admin，再执行 HTTP → HTTPS 跳转：
+
+```nginx
+if ($uri ~ ^/admin(/|$)) {
+    return 404;
+}
+```
+
+这样 HTTP 和 HTTPS 的 `/admin`、`/admin/` 及其子路径都由 OpenResty 直接返回 404。
+重建站点或从旧配置恢复后，按 [公网管理入口验收](release-validation.md#公网管理入口) 检查两个域名。
+
+### 站点代理
+
 `nwu.icu.conf` 的主路由应代理到 gateway：
 
 ```nginx
