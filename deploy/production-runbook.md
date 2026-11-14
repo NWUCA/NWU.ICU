@@ -455,7 +455,7 @@ curl -I https://api.nwu.icu/api/user/csrf/
 完成第 7 节双库备份和第 8 节的一次性准备后，使用同一发布目录的前后端配置。生产 Compose 已为 web 启用 `RESOURCE_DOWNLOAD_X_ACCEL=true`。普通文件通过 gateway 的内部路径发送，归档 ZIP 由 Django 传输并持有文件锁。
 
 1. 用 `docker exec 1Panel-openresty-lzym openresty -T` 核对宿主机挂载源、`http` 的 include 目录及两个站点的 `server`。把 `$RELEASE/new_nwu_icu_frontend/nginx/zip-download-limit.conf` 作为一份独立配置装入 `http` 上下文，只加载一次。两个站点共用其中的 `zip_downloads`。
-2. 在两个站点的代理配置中，用[下载路由配置](openresty-downloads.locations.conf)替换原文件下载 location，保留其他路由。确认普通文件、旧版文件入口和两个归档下载入口均转发至 `127.0.0.1:18080`，检查是否有更早的正则或 `^~` 前缀抢先匹配。按上面的步骤检查并重载外层配置。在线切换时，先通过两个域名确认旧 web 仍能提供已知文件的 206 响应。
+2. 在两个站点的代理配置中，用[下载路由配置](openresty-downloads.locations.conf)替换原文件下载 location。当前 1Panel 配置的通用 API 使用 `location ^~ /api/`，会跳过下载正则。在两个站点将该声明改为 `location /api/`，保留块内指令和各自的上游。核对同一 server 里其他正则、上传专用前缀和管理入口仍按预期匹配。普通文件、旧版文件入口和两个归档下载入口都应转发至 `127.0.0.1:18080`。按上面的步骤检查并重载外层配置。在线切换时，先通过两个域名确认旧 web 仍能提供已知文件的 206 响应。
 
 旧 web 仍在线时，执行下面的分步切换。先把 `RESOURCE_TEST_PATH` 设为已有测试资料的逻辑路径，以 `/` 开头。使用第 5 节的 `dc` 和已加载的镜像摘要。
 

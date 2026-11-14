@@ -1,14 +1,14 @@
+from copy import deepcopy
+from io import StringIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
-from io import StringIO
-from copy import deepcopy
 from urllib.parse import parse_qs, quote, urlparse
 
 from django.conf import settings
 from django.contrib.auth.models import AnonymousUser
 from django.core.cache import cache
-from django.core.management import call_command, CommandError
+from django.core.management import CommandError, call_command
 from django.test import TestCase, override_settings
 from rest_framework.test import APIRequestFactory
 
@@ -19,32 +19,47 @@ from common.file.resource_browser import (
     ResourceSearchView,
     search_resources,
 )
+from common.file.resource_directories import write_resource_directory_cache
 from common.models import ResourceAccessRule
 from scripts.export_resource_tree import build_resource_tree
-from common.file.resource_directories import write_resource_directory_cache
 from utils.throttle import issue_captcha_proof
 
 
 class ResourceBrowserTests(TestCase):
     def test_search_sort_direction_applies_before_pagination_and_preserves_grouping(self):
         entries = [
-            {'name': f'排序{i:03}.pdf', 'path': f'/排序{i:03}.pdf', 'type': 'file',
-             'size': i, 'modified_at': f'2026-01-01T00:{i // 60:02}:{i % 60:02}Z'}
+            {
+                'name': f'排序{i:03}.pdf',
+                'path': f'/排序{i:03}.pdf',
+                'type': 'file',
+                'size': i,
+                'modified_at': f'2026-01-01T00:{i // 60:02}:{i % 60:02}Z',
+            }
             for i in range(101)
         ]
-        entries.append({'name': '排序文件夹', 'path': '/排序文件夹', 'type': 'directory', 'size': None, 'modified_at': ''})
+        entries.append(
+            {'name': '排序文件夹', 'path': '/排序文件夹', 'type': 'directory', 'size': None, 'modified_at': ''}
+        )
         with patch('common.file.resource_browser.resource_search_entries', return_value=entries):
             for sort in ('name', 'modified', 'size'):
                 for direction in ('asc', 'desc'):
                     with self.subTest(sort=sort, direction=direction):
                         query = {'q': '排序', 'sort': sort, 'direction': direction}
-                        first = ResourceSearchView.as_view()(self.factory.get('/api/resources/search/', query)).data['contents']
-                        second = ResourceSearchView.as_view()(self.factory.get('/api/resources/search/', {**query, 'page': 2})).data['contents']
+                        first = ResourceSearchView.as_view()(
+                            self.factory.get('/api/resources/search/', query)
+                        ).data['contents']
+                        second = ResourceSearchView.as_view()(
+                            self.factory.get('/api/resources/search/', {**query, 'page': 2})
+                        ).data['contents']
                         combined = first['entries'] + second['entries']
                         self.assertEqual(combined[0]['type'], 'directory')
-                        expected = list(range(101)) if direction == 'asc' else list(reversed(range(101)))
+                        expected = (
+                            list(range(101)) if direction == 'asc' else list(reversed(range(101)))
+                        )
                         self.assertEqual([item['size'] for item in combined[1:]], expected)
-        invalid = ResourceSearchView.as_view()(self.factory.get('/api/resources/search/', {'q': '排序', 'direction': 'invalid'}))
+        invalid = ResourceSearchView.as_view()(
+            self.factory.get('/api/resources/search/', {'q': '排序', 'direction': 'invalid'})
+        )
         self.assertEqual(invalid.status_code, 400)
 
     def test_search_uses_only_index_and_refreshes_metadata_after_reindex(self):
@@ -52,8 +67,13 @@ class ResourceBrowserTests(TestCase):
             (self.root / '课程.2026' / f'试卷{number}.txt').write_text('old')
         payload = build_resource_tree(self.root)
         write_resource_directory_cache(payload['paths'], entries=payload['entries'])
-        with patch('common.file.resource_browser.resource_root', side_effect=AssertionError('search must not access storage')):
-            response = ResourceSearchView.as_view()(self.factory.get('/api/resources/search/', {'q': '试卷', 'path': '/课程.2026'}))
+        with patch(
+            'common.file.resource_browser.resource_root',
+            side_effect=AssertionError('search must not access storage'),
+        ):
+            response = ResourceSearchView.as_view()(
+                self.factory.get('/api/resources/search/', {'q': '试卷', 'path': '/课程.2026'})
+            )
         self.assertEqual(response.data['contents']['total_count'], 31)
         (self.root / '课程.2026' / '试卷0.txt').unlink()
         (self.root / '课程.2026' / '试卷1.txt').write_bytes(b'updated')
@@ -80,16 +100,23 @@ class ResourceBrowserTests(TestCase):
         except OSError:
             self.skipTest('Host does not permit creating symbolic links')
         payload = build_resource_tree(self.root)
-        write_resource_directory_cache(payload['paths'], entries=payload['entries'] + [
-            {'name': '试卷.txt', 'path': '/.hidden/试卷.txt', 'type': 'file'},
-            {'name': '试卷.txt', 'path': '/../outside/试卷.txt', 'type': 'file'},
-        ])
+        write_resource_directory_cache(
+            payload['paths'],
+            entries=payload['entries']
+            + [
+                {'name': '试卷.txt', 'path': '/.hidden/试卷.txt', 'type': 'file'},
+                {'name': '试卷.txt', 'path': '/../outside/试卷.txt', 'type': 'file'},
+            ],
+        )
         self.assertEqual([item['name'] for item in search_resources('试卷', 1, 100)[1]], ['试卷 #1%.pdf'])
 
     def test_failed_reindex_preserves_previous_search_index(self):
         call_command('reindex_resources', stdout=StringIO())
         before = search_resources('试卷', 1, 100)
-        with patch('common.management.commands.reindex_resources.build_resource_tree', side_effect=OSError('storage unavailable')):
+        with patch(
+            'common.management.commands.reindex_resources.build_resource_tree',
+            side_effect=OSError('storage unavailable'),
+        ):
             with self.assertRaises(CommandError):
                 call_command('reindex_resources', stdout=StringIO())
         self.assertEqual(search_resources('试卷', 1, 100), before)
@@ -101,23 +128,35 @@ class ResourceBrowserTests(TestCase):
             (elsewhere / f'试卷{number:03}').mkdir()
         payload = build_resource_tree(self.root)
         write_resource_directory_cache(payload['paths'], entries=payload['entries'])
-        request = self.factory.get('/api/resources/search/', {'q': '试卷', 'path': '/课程.2026', 'sort': 'name'})
+        request = self.factory.get(
+            '/api/resources/search/', {'q': '试卷', 'path': '/课程.2026', 'sort': 'name'}
+        )
         response = ResourceSearchView.as_view()(request)
         data = response.data['contents']
         self.assertEqual(response.status_code, 200)
         self.assertEqual(data['total_count'], 102)
         self.assertEqual(len(data['entries']), 100)
         self.assertEqual(data['entries'][0]['path'], '/课程.2026/试卷 #1%.pdf')
-        second = ResourceSearchView.as_view()(self.factory.get('/api/resources/search/', {'q': '试卷', 'path': '/课程.2026', 'page': 2})).data['contents']
+        second = ResourceSearchView.as_view()(
+            self.factory.get('/api/resources/search/', {'q': '试卷', 'path': '/课程.2026', 'page': 2})
+        ).data['contents']
         self.assertEqual(len(second['entries']), 2)
-        self.assertFalse({item['path'] for item in data['entries']} & {item['path'] for item in second['entries']})
-        file_context = ResourceSearchView.as_view()(self.factory.get('/api/resources/search/', {'q': '试卷', 'path': '/课程.2026/试卷 #1%.pdf'}))
+        self.assertFalse(
+            {item['path'] for item in data['entries']} & {item['path'] for item in second['entries']}
+        )
+        file_context = ResourceSearchView.as_view()(
+            self.factory.get('/api/resources/search/', {'q': '试卷', 'path': '/课程.2026/试卷 #1%.pdf'})
+        )
         self.assertEqual(file_context.status_code, 200)
         self.assertEqual(file_context.data['contents']['entries'][0]['path'], '/课程.2026/试卷 #1%.pdf')
-        files = ResourceSearchView.as_view()(self.factory.get('/api/resources/search/', {'q': '试卷', 'type': 'file'})).data['contents']
+        files = ResourceSearchView.as_view()(
+            self.factory.get('/api/resources/search/', {'q': '试卷', 'type': 'file'})
+        ).data['contents']
         self.assertEqual(files['total_count'], 1)
         self.assertEqual(files['entries'][0]['type'], 'file')
-        directories = ResourceSearchView.as_view()(self.factory.get('/api/resources/search/', {'q': '试卷', 'type': 'directory', 'page': 2})).data['contents']
+        directories = ResourceSearchView.as_view()(
+            self.factory.get('/api/resources/search/', {'q': '试卷', 'type': 'directory', 'page': 2})
+        ).data['contents']
         self.assertEqual(directories['total_count'], 101)
         self.assertEqual(len(directories['entries']), 1)
         self.assertEqual(directories['entries'][0]['type'], 'directory')
@@ -127,11 +166,28 @@ class ResourceBrowserTests(TestCase):
         write_resource_directory_cache(payload['paths'], entries=payload['entries'])
         ResourceAccessRule.objects.create(path='/课程.2026', mode='admin')
         for keyword in ('试卷', 'readme'):
-            response = ResourceSearchView.as_view()(self.factory.get('/api/resources/search/', {'q': keyword}))
+            response = ResourceSearchView.as_view()(
+                self.factory.get('/api/resources/search/', {'q': keyword})
+            )
             self.assertEqual(response.data['contents']['total_count'], 0)
-        self.assertEqual(ResourceSearchView.as_view()(self.factory.get('/api/resources/search/', {'q': '试卷', 'path': '/课程.2026'})).status_code, 404)
-        for query in ({'q': ''}, {'q': '试卷', 'page': 0}, {'q': '试卷', 'path': '/../秘密'}, {'q': '试卷', 'type': 'invalid'}):
-            self.assertEqual(ResourceSearchView.as_view()(self.factory.get('/api/resources/search/', query)).status_code, 400)
+        self.assertEqual(
+            ResourceSearchView.as_view()(
+                self.factory.get('/api/resources/search/', {'q': '试卷', 'path': '/课程.2026'})
+            ).status_code,
+            404,
+        )
+        for query in (
+            {'q': ''},
+            {'q': '试卷', 'page': 0},
+            {'q': '试卷', 'path': '/../秘密'},
+            {'q': '试卷', 'type': 'invalid'},
+        ):
+            self.assertEqual(
+                ResourceSearchView.as_view()(
+                    self.factory.get('/api/resources/search/', query)
+                ).status_code,
+                400,
+            )
 
     def setUp(self):
         self.temp = TemporaryDirectory()
@@ -156,7 +212,9 @@ class ResourceBrowserTests(TestCase):
 
     def download(self, path='/课程.2026/试卷 #1%.pdf', **headers):
         query = {'path': path, 'inline': headers.pop('inline', '0')}
-        response = ResourceFileView.as_view()(self.factory.get('/api/resources/file/', query, **headers))
+        response = ResourceFileView.as_view()(
+            self.factory.get('/api/resources/file/', query, **headers)
+        )
         self.addCleanup(self.close_response, response)
         return response
 
@@ -177,24 +235,34 @@ class ResourceBrowserTests(TestCase):
 
     def test_enabled_download_gate_issues_bound_reusable_range_ticket(self):
         config = deepcopy(settings.API_RATE_LIMITS)
-        config['resource_download'].update({
-            'enabled': True,
-            'anonymous': '1/hour',
-            'ticket_ttl': 600,
-            'dedupe_ttl': 300,
-        })
+        config['resource_download'].update(
+            {
+                'enabled': True,
+                'anonymous': '1/hour',
+                'ticket_ttl': 600,
+                'dedupe_ttl': 300,
+            }
+        )
         path = '/课程.2026/试卷 #1%.pdf'
         with override_settings(API_RATE_LIMITS=config):
-            authorize = ResourceFileAuthorizeView.as_view()(self.factory.post(
-                '/api/resources/file/authorize/', {'path': path}, format='json',
-            ))
+            authorize = ResourceFileAuthorizeView.as_view()(
+                self.factory.post(
+                    '/api/resources/file/authorize/',
+                    {'path': path},
+                    format='json',
+                )
+            )
             self.assertEqual(authorize.status_code, 200)
             parsed = urlparse(authorize.data['contents']['url'])
             query = {key: values[0] for key, values in parse_qs(parsed.query).items()}
 
-            response = ResourceFileView.as_view()(self.factory.get(
-                parsed.path, query, HTTP_RANGE='bytes=2-5',
-            ))
+            response = ResourceFileView.as_view()(
+                self.factory.get(
+                    parsed.path,
+                    query,
+                    HTTP_RANGE='bytes=2-5',
+                )
+            )
             self.addCleanup(self.close_response, response)
             self.assertEqual(response.status_code, 206)
             self.assertEqual(b''.join(response.streaming_content), b'2345')
@@ -204,41 +272,57 @@ class ResourceBrowserTests(TestCase):
             self.assertEqual(rejected.status_code, 429)
             self.assertEqual(rejected.data['contents']['captcha_scope'], 'resource_download')
 
-            repeated = ResourceFileAuthorizeView.as_view()(self.factory.post(
-                '/api/resources/file/authorize/', {'path': path, 'inline': True}, format='json',
-            ))
+            repeated = ResourceFileAuthorizeView.as_view()(
+                self.factory.post(
+                    '/api/resources/file/authorize/',
+                    {'path': path, 'inline': True},
+                    format='json',
+                )
+            )
             self.assertEqual(repeated.status_code, 200)
 
     def test_enabled_download_gate_requires_captcha_for_extra_allowance(self):
         (self.root / '第二份资料.txt').write_text('second', encoding='utf-8')
         config = deepcopy(settings.API_RATE_LIMITS)
-        config['resource_download'].update({
-            'enabled': True,
-            'anonymous': '1/hour',
-            'ticket_ttl': 600,
-            'dedupe_ttl': 300,
-        })
+        config['resource_download'].update(
+            {
+                'enabled': True,
+                'anonymous': '1/hour',
+                'ticket_ttl': 600,
+                'dedupe_ttl': 300,
+            }
+        )
         with override_settings(API_RATE_LIMITS=config):
             cache.clear()
-            first = ResourceFileAuthorizeView.as_view()(self.factory.post(
-                '/api/resources/file/authorize/', {'path': '/课程.2026/试卷 #1%.pdf'}, format='json',
-            ))
+            first = ResourceFileAuthorizeView.as_view()(
+                self.factory.post(
+                    '/api/resources/file/authorize/',
+                    {'path': '/课程.2026/试卷 #1%.pdf'},
+                    format='json',
+                )
+            )
             self.assertEqual(first.status_code, 200)
-            blocked = ResourceFileAuthorizeView.as_view()(self.factory.post(
-                '/api/resources/file/authorize/', {'path': '/第二份资料.txt'}, format='json',
-            ))
+            blocked = ResourceFileAuthorizeView.as_view()(
+                self.factory.post(
+                    '/api/resources/file/authorize/',
+                    {'path': '/第二份资料.txt'},
+                    format='json',
+                )
+            )
             self.assertEqual(blocked.status_code, 429)
             self.assertEqual(blocked.data['contents']['captcha_scope'], 'resource_download')
 
             proof_request = self.factory.post('/api/captcha/')
             proof_request.user = AnonymousUser()
             proof, _ = issue_captcha_proof(proof_request, 'resource_download')
-            allowed = ResourceFileAuthorizeView.as_view()(self.factory.post(
-                '/api/resources/file/authorize/',
-                {'path': '/第二份资料.txt'},
-                format='json',
-                HTTP_X_CAPTCHA_PROOF=proof,
-            ))
+            allowed = ResourceFileAuthorizeView.as_view()(
+                self.factory.post(
+                    '/api/resources/file/authorize/',
+                    {'path': '/第二份资料.txt'},
+                    format='json',
+                    HTTP_X_CAPTCHA_PROOF=proof,
+                )
+            )
             self.assertEqual(allowed.status_code, 200)
         cache.clear()
 
@@ -258,9 +342,18 @@ class ResourceBrowserTests(TestCase):
                 self.assertEqual(self.download(path).status_code, 404)
 
     def test_path_traversal_windows_drive_and_invalid_paths_are_rejected(self):
-        for path in ['/../secret', '/课程.2026/../readme.md', '/C:/Windows',
-                     '//server/share', '/课程.2026\\..\\readme.md', '/file:stream',
-                     '/readme.md.', '/readme.md ', '/bad\x00name', 'relative']:
+        for path in [
+            '/../secret',
+            '/课程.2026/../readme.md',
+            '/C:/Windows',
+            '//server/share',
+            '/课程.2026\\..\\readme.md',
+            '/file:stream',
+            '/readme.md.',
+            '/readme.md ',
+            '/bad\x00name',
+            'relative',
+        ]:
             with self.subTest(path=path):
                 self.assertEqual(self.browse(path).status_code, 400)
                 self.assertEqual(self.download(path).status_code, 400)
@@ -347,11 +440,14 @@ class ResourceBrowserTests(TestCase):
         self.assertIn('sandbox', response['Content-Security-Policy'])
 
     def test_search_uses_local_index_hides_readme_and_rejects_inconsistent_entries(self):
-        write_resource_directory_cache(['/', '/课程.2026'], entries=[
-            {'name': 'readme.md', 'path': '/readme.md', 'type': 'file'},
-            {'name': '试卷 #1%.pdf', 'path': '/课程.2026/试卷 #1%.pdf', 'type': 'file'},
-            {'name': '试卷旧.pdf', 'path': '/missing.pdf', 'type': 'file'},
-        ])
+        write_resource_directory_cache(
+            ['/', '/课程.2026'],
+            entries=[
+                {'name': 'readme.md', 'path': '/readme.md', 'type': 'file'},
+                {'name': '试卷 #1%.pdf', 'path': '/课程.2026/试卷 #1%.pdf', 'type': 'file'},
+                {'name': '试卷旧.pdf', 'path': '/missing.pdf', 'type': 'file'},
+            ],
+        )
         pagination, results = search_resources('试卷', 1, 10)
         self.assertEqual(pagination['total_count'], 1)
         self.assertEqual(results[0]['path'], '/课程.2026')

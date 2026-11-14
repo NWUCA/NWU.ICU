@@ -66,8 +66,10 @@ class RegistryComposeTests(unittest.TestCase):
         self.assertEqual(services['web']['environment']['RESOURCE_DOWNLOAD_X_ACCEL'], 'true')
         resources = next(m for m in services['gateway']['volumes'] if m['target'] == '/srv/resources')
         self.assertTrue(resources['read_only'])
-        self.assertEqual(resources['source'], next(m['source'] for m in services['web']['volumes']
-                                                  if m['target'] == '/resource-storage'))
+        self.assertEqual(
+            resources['source'],
+            next(m['source'] for m in services['web']['volumes'] if m['target'] == '/resource-storage'),
+        )
 
     def test_custom_project_network_uid_and_volume_are_read_from_configuration(self):
         env_file = ROOT / '.env.production.example'

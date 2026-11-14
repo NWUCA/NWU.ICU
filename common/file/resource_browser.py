@@ -15,14 +15,19 @@ from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
 
 from utils.utils import return_response
+
+from .resource_access import ResourceAccess
 from .resource_directories import (
     ResourceDirectoryCacheError,
     normalize_directory_path,
     read_resource_directory_cache,
 )
-from .resource_access import ResourceAccess
+from .resource_limits import (
+    authorize_resource,
+    download_gate_enabled,
+    require_resource_ticket,
+)
 from .resource_statistics import record_download
-from .resource_limits import authorize_resource, download_gate_enabled, require_resource_ticket
 
 
 class ResourceUnavailable(APIException):
@@ -55,8 +60,11 @@ def normalize_resource_path(raw_path, *, allow_readme=False):
     parts = raw.split('/')
     if any(':' in part or part.endswith((' ', '.')) for part in parts if part):
         raise ValidationError({'path': '资料路径不合法。'})
-    if any(part.startswith('.') or (not allow_readme and part.casefold() == 'readme.md')
-           for part in parts if part):
+    if any(
+        part.startswith('.') or (not allow_readme and part.casefold() == 'readme.md')
+        for part in parts
+        if part
+    ):
         raise Http404
     return '/' + '/'.join(part for part in parts if part)
 
@@ -98,8 +106,10 @@ def entry_metadata(target, path):
 
 
 def read_directory_readme(directory):
-    candidates = sorted((p for p in directory.iterdir() if p.name.casefold() == 'readme.md'),
-                        key=lambda p: (p.name != 'readme.md', p.name))
+    candidates = sorted(
+        (p for p in directory.iterdir() if p.name.casefold() == 'readme.md'),
+        key=lambda p: (p.name != 'readme.md', p.name),
+    )
     for candidate in candidates:
         if candidate.is_symlink() or not candidate.is_file():
             continue
@@ -144,8 +154,10 @@ def browse_resource(raw_path, user=None):
                         entries.append(entry_metadata(resolved, child_path))
                 except (Http404, ValidationError, OSError):
                     continue
-            contents['entries'] = sorted(entries, key=lambda item: (
-                item['type'] != 'directory', item['name'].casefold(), item['name']))
+            contents['entries'] = sorted(
+                entries,
+                key=lambda item: (item['type'] != 'directory', item['name'].casefold(), item['name']),
+            )
         elif not target.is_file():
             raise Http404
     except OSError as error:
@@ -157,7 +169,9 @@ class ResourceBrowseView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        response = return_response(contents=browse_resource(request.query_params.get('path', '/'), request.user))
+        response = return_response(
+            contents=browse_resource(request.query_params.get('path', '/'), request.user)
+        )
         response['Cache-Control'] = 'no-store'
         return response
 
@@ -179,7 +193,12 @@ def matching_resources(keyword, user=None, *, entries=None, access=None):
     for entry in entries:
         name = entry.get('name', '')
         path = entry.get('path', '')
-        if entry.get('type') not in {'file', 'directory'} or path == '/' or not visible_name(name) or keyword not in name.casefold():
+        if (
+            entry.get('type') not in {'file', 'directory'}
+            or path == '/'
+            or not visible_name(name)
+            or keyword not in name.casefold()
+        ):
             continue
         try:
             path = normalize_resource_path(path)
@@ -187,27 +206,38 @@ def matching_resources(keyword, user=None, *, entries=None, access=None):
                 continue
         except (Http404, ValidationError):
             continue
-        matches.append({
-            'name': name, 'path': path, 'type': entry['type'],
-            'size': entry.get('size'), 'modified_at': entry.get('modified_at'),
-        })
+        matches.append(
+            {
+                'name': name,
+                'path': path,
+                'type': entry['type'],
+                'size': entry.get('size'),
+                'modified_at': entry.get('modified_at'),
+            }
+        )
     return matches
 
 
 def search_resources(keyword, page, page_size, user=None):
-    matches = [{
-            'name': metadata['name'], 'size': metadata['size'] or 0,
+    matches = [
+        {
+            'name': metadata['name'],
+            'size': metadata['size'] or 0,
             'path': posixpath.dirname(metadata['path']),
             'type': 'dir' if metadata['type'] == 'directory' else 'file',
             'url': '/disk',
-        } for metadata in matching_resources(keyword, user)]
+        }
+        for metadata in matching_resources(keyword, user)
+    ]
     matches.sort(key=lambda item: (item['type'] != 'dir', item['path'], item['name'].casefold()))
     total = len(matches)
     return {
         'total_pages': (total + page_size - 1) // page_size,
-        'current_page': page, 'has_next': total > page * page_size,
-        'has_previous': page > 1, 'total_count': total,
-    }, matches[(page - 1) * page_size:page * page_size]
+        'current_page': page,
+        'has_next': total > page * page_size,
+        'has_previous': page > 1,
+        'total_count': total,
+    }, matches[(page - 1) * page_size : page * page_size]
 
 
 class ResourceSearchSerializer(serializers.Serializer):
@@ -236,11 +266,13 @@ class ResourceFileAuthorizeView(APIView):
         if not target.is_file():
             raise Http404
         url, expires_in = authorize_resource(request, path, serializer.validated_data['inline'])
-        return return_response(contents={
-            'url': url,
-            'expires_in': expires_in,
-            'gate_enabled': download_gate_enabled(),
-        })
+        return return_response(
+            contents={
+                'url': url,
+                'expires_in': expires_in,
+                'gate_enabled': download_gate_enabled(),
+            }
+        )
 
 
 class ResourceSearchView(APIView):
@@ -273,22 +305,33 @@ class ResourceSearchView(APIView):
             matches.sort(key=lambda item: item['size'] or 0, reverse=descending)
         elif descending:
             matches.reverse()
-        matches.sort(key=lambda item: (posixpath.dirname(item['path']) != path, item['type'] != 'directory'))
+        matches.sort(
+            key=lambda item: (posixpath.dirname(item['path']) != path, item['type'] != 'directory')
+        )
         page_size = 100
         page = query['page']
-        response = return_response(contents={
-            'entries': matches[(page - 1) * page_size:page * page_size],
-            'total_count': len(matches), 'page': page, 'page_size': page_size,
-        })
+        response = return_response(
+            contents={
+                'entries': matches[(page - 1) * page_size : page * page_size],
+                'total_count': len(matches),
+                'page': page,
+                'page_size': page_size,
+            }
+        )
         response['Cache-Control'] = 'private, no-store'
         return response
 
 
 # Never serve uploaded HTML/SVG as a same-origin active document.
 INLINE_TYPES = {
-    '.pdf': 'application/pdf', '.png': 'image/png', '.jpg': 'image/jpeg',
-    '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp',
-    '.avif': 'image/avif', '.txt': 'text/plain; charset=utf-8',
+    '.pdf': 'application/pdf',
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.gif': 'image/gif',
+    '.webp': 'image/webp',
+    '.avif': 'image/avif',
+    '.txt': 'text/plain; charset=utf-8',
 }
 
 
@@ -323,8 +366,11 @@ class ResourceFileView(APIView):
         except OSError as error:
             raise Http404 from error
         size = stat.st_size
-        content_type = INLINE_TYPES[target.suffix.lower()] if inline else (
-            mimetypes.guess_type(target.name)[0] or 'application/octet-stream')
+        content_type = (
+            INLINE_TYPES[target.suffix.lower()]
+            if inline
+            else (mimetypes.guess_type(target.name)[0] or 'application/octet-stream')
+        )
         modified = http_date(stat.st_mtime)
         etag = f'"{stat.st_mtime_ns:x}-{size:x}"'
         range_header = request.headers.get('Range', '')
@@ -354,8 +400,9 @@ class ResourceFileView(APIView):
             except OSError as error:
                 raise Http404 from error
             if range_header:
-                response = StreamingHttpResponse(stream_range(source, start, end - start + 1),
-                                                 status=206, content_type=content_type)
+                response = StreamingHttpResponse(
+                    stream_range(source, start, end - start + 1), status=206, content_type=content_type
+                )
                 response['Content-Length'] = str(end - start + 1)
                 response['Content-Range'] = f'bytes {start}-{end}/{size}'
                 # The iterator may be closed before its first read.
