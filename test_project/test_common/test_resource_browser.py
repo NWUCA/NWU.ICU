@@ -3,7 +3,7 @@ from tempfile import TemporaryDirectory
 from unittest.mock import patch
 from io import StringIO
 from copy import deepcopy
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, quote, urlparse
 
 from django.conf import settings
 from django.contrib.auth.models import AnonymousUser
@@ -321,6 +321,23 @@ class ResourceBrowserTests(TestCase):
 
     def test_changed_if_range_falls_back_to_full_file(self):
         self.assertEqual(self.download(HTTP_RANGE='bytes=1-2', HTTP_IF_RANGE='"old"').status_code, 200)
+
+    @override_settings(RESOURCE_DOWNLOAD_X_ACCEL=True)
+    def test_gateway_handoff_checks_permissions_and_validates_ranges_before_sending(self):
+        path = '/课程.2026/试卷 #1%.pdf'
+        with patch.object(Path, 'open', side_effect=AssertionError('Django opened the file')):
+            response = self.download(path, inline='1', HTTP_RANGE='bytes=2-5')
+        self.assertFalse(response.streaming)
+        self.assertEqual(response.content, b'')
+        self.assertEqual(response['X-Accel-Redirect'], '/_protected/resources' + quote(path))
+        self.assertTrue(response['Content-Disposition'].startswith('inline'))
+        invalid = self.download(path, HTTP_RANGE='bytes=10-')
+        self.assertEqual(invalid.status_code, 416)
+        self.assertNotIn('X-Accel-Redirect', invalid)
+        ResourceAccessRule.objects.create(path='/课程.2026', mode='admin')
+        denied = self.download(path)
+        self.assertEqual(denied.status_code, 404)
+        self.assertNotIn('X-Accel-Redirect', denied)
 
     def test_preview_is_allowlisted(self):
         self.assertTrue(self.download(inline='1')['Content-Disposition'].startswith('inline'))

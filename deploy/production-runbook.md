@@ -16,7 +16,8 @@ Internet
   -> pgsql / nwuicu_pgdata（PostgreSQL 17）
 ```
 
-兼容域名 `api.nwu.icu` 暂时由 OpenResty 直接代理到 `127.0.0.1:8000`。
+首次启用资料下载网关后，两个域名的资料下载都经 `127.0.0.1:18080` 的同一 gateway。兼容域名
+`api.nwu.icu` 的其他 API 由 OpenResty 直接代理到 `127.0.0.1:8000`。
 
 生产服务：
 
@@ -56,7 +57,7 @@ GHCR，服务器主动拉取。配置及固定提交发布步骤见 [镜像发�
 2. `dist/` 被复制到 gateway 镜像的 `/usr/share/nginx/html`；
 3. gateway 内的 Nginx 提供 SPA，并把 `/api/` 转给 `web:8000`；
 4. `/srv/nwuicu/static` 只读挂载到 `/srv/django-static`；
-5. `/media/` 在 gateway 层固定返回 404。
+5. gateway 通过只读挂载 `/srv/resources` 发送 Django 已授权的普通资料，`/media/` 固定返回 404。
 
 因此前端更新需要在 GitHub 重建 gateway 镜像，服务器不运行 build；不要把 `dist/` 手工复制到 1Panel 站点目录。
 gateway 构建时必须注入本次前后端完整提交号，页脚据此显示实际构建版本。
@@ -165,11 +166,11 @@ server override；不要临时关闭 `SECURE_SSL_REDIRECT`。
 ```bash
 cd "$RELEASE/NWU.ICU"
 export ENV_FILE=/etc/nwuicu/production.env
-docker compose \
-  --env-file /etc/nwuicu/production.env \
-  -f docker-compose.production.yaml \
-  -f ../docker-compose.server.yaml \
-  config --quiet
+dc() {
+  docker compose --env-file /etc/nwuicu/production.env \
+    -f docker-compose.production.yaml -f ../docker-compose.server.yaml "$@"
+}
+dc config --quiet
 ```
 
 解析后的项目名必须是 `nwuicu`，数据库卷名必须是 `nwuicu_pgdata`。如果出现新的数据库卷，
@@ -335,7 +336,7 @@ docker compose --env-file /etc/nwuicu/production.env \
 首次初始化前检查管理员参数、默认头像文件、数据库缓存配置和预期学院/学期列表，
 逐项执行并验收，不把初始化串放回 web 启动命令。
 
-仅启动核心服务，不让 Compose 触碰 PostgreSQL：
+首次启用资料下载网关，请按[首次切换步骤](#首次启用资料下载网关)准备入口并切换核心服务。入口已配置的日常发布使用以下命令。
 
 ```bash
 CUTOVER_STARTED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
@@ -414,13 +415,13 @@ location / {
 | `/api/upload/` | `26m` | 发送/读取超时 300 秒 |
 | `/api/upload/request/` | `1025m` | 关闭请求缓冲，超时 300 秒 |
 | `/api/management/resources/upload/` | `2g` | 关闭请求缓冲，超时 300 秒 |
-| `/api/resources/file/` | 不放宽请求体 | `proxy_cache off`、`proxy_buffering off`，读取超时 300 秒 |
+| `/api/resources/file/` 及 `/api/resources/archives/<uuid>/download/` | 不放宽请求体 | 两域名共用 gateway，关闭代理缓存和响应缓冲，读取超时 300 秒 |
 
 文件代理必须显式关闭继承的全局 `proxy_cache`，即使应用响应包含 `private, no-store`。
 否则外层缓存逻辑可能不向上游发送 `Range`，导致后端和 gateway 返回 206，而公网入口变成整文件 200。
 `nwu.icu` 与 `api.nwu.icu` 都要检查；验收时用 GET + Range 比对字节，不能只测 HEAD 或首页状态。
 
-`api.nwu.icu/proxy/root.conf` 保持相同规则，但上游为 `127.0.0.1:8000`，并额外拒绝：
+`api.nwu.icu/proxy/root.conf` 的其他 API 保持上游 `127.0.0.1:8000`，并额外拒绝：
 
 ```nginx
 location ^~ /media/ {
@@ -431,7 +432,7 @@ location ^~ /media/ {
 `/etc/nwuicu/production.env` 的 `ALLOWED_HOSTS` 必须包含 `api.nwu.icu`；修改前将该文件以
 `0600` 权限复制到本次备份目录。环境文件内容变化后要重建 `web` 容器才能生效。
 
-修改前先备份四个文件。每次必须先检查、后重载：
+修改前将涉及的宿主机配置备份到本次备份目录，记录新增文件路径。每次先检查配置，再平滑重载。
 
 ```bash
 docker exec 1Panel-openresty-lzym openresty -t
@@ -448,6 +449,33 @@ curl -I https://api.nwu.icu/api/user/csrf/
 ```
 
 预期分别为 200、200、404、200。
+
+### 首次启用资料下载网关
+
+完成第 7 节双库备份和第 8 节的一次性准备后，使用同一发布目录的前后端配置。生产 Compose 已为 web 启用 `RESOURCE_DOWNLOAD_X_ACCEL=true`。普通文件通过 gateway 的内部路径发送，归档 ZIP 由 Django 传输并持有文件锁。
+
+1. 用 `docker exec 1Panel-openresty-lzym openresty -T` 核对宿主机挂载源、`http` 的 include 目录及两个站点的 `server`。把 `$RELEASE/new_nwu_icu_frontend/nginx/zip-download-limit.conf` 作为一份独立配置装入 `http` 上下文，只加载一次。两个站点共用其中的 `zip_downloads`。
+2. 在两个站点的代理配置中，用[下载路由配置](openresty-downloads.locations.conf)替换原文件下载 location，保留其他路由。确认普通文件、旧版文件入口和两个归档下载入口均转发至 `127.0.0.1:18080`，检查是否有更早的正则或 `^~` 前缀抢先匹配。按上面的步骤检查并重载外层配置。在线切换时，先通过两个域名确认旧 web 仍能提供已知文件的 206 响应。
+
+旧 web 仍在线时，执行下面的分步切换。先把 `RESOURCE_TEST_PATH` 设为已有测试资料的逻辑路径，以 `/` 开头。使用第 5 节的 `dc` 和已加载的镜像摘要。
+
+```bash
+export CUTOVER_STARTED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+dc up -d --no-deps --no-build --pull never --wait --wait-timeout 180 gateway
+docker inspect nwuicu-gateway-1 --format '{{range .Mounts}}{{if eq .Destination "/srv/resources"}}{{.Source}} rw={{.RW}}{{end}}{{end}}'
+dc exec -T --user resource-reader gateway test -r "/srv/resources${RESOURCE_TEST_PATH:?请设置测试资料路径}"
+```
+
+确认上面的挂载来源等于 web 使用的 `RESOURCE_STORAGE_HOST_PATH`、输出含 `rw=false` 且读取检查成功，再切换 web。gateway 使用固定名称 `web:8000`。替换 web 后平滑重载内层 Nginx，让它重新解析容器地址。
+
+```bash
+dc up -d --no-deps --no-build --pull never --wait --wait-timeout 180 web
+dc exec -T gateway nginx -t && dc exec -T gateway nginx -s reload
+```
+
+若处于第 7 节的停写维护窗口，保持两个公网入口返回 503，按第 8 节的联合启动命令恢复 web 和 gateway，再检查同一挂载与本机 gateway 下载。按第 10 节恢复后台服务和公网入口。两种流程都按[资料下载验收](release-validation.md#资料下载验收)检查字节、权限和两个域名的路由。
+
+回滚到旧应用前按第 12 节确认数据库兼容性。新 web 已接管时，先从旧发布恢复 web，再恢复旧 gateway。撤销外层规则时，一起还原两个站点的下载 location 和全局限额配置，执行 `openresty -t` 并平滑重载，重新验证两个域名的下载。
 
 ## 10. 分阶段启动后台服务
 

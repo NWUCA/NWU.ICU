@@ -112,7 +112,7 @@ print("Fixed images and existing database volume verified.")
 继续执行 [日常更新速查](quick-update.md) 的双库全量备份、迁移及静态文件收集。
 一次性容器使用 `dc run --rm --no-deps web <command>`。服务器 Compose 2.27 的 `run`
 不支持 `--no-build` 或 `--pull`；合并配置通过移除 `build` 并设置 `pull_policy: never`
-限制为事先校验的本地镜像。核心切换的 `dc up` 使用：
+限制为事先校验的本地镜像。首次启用资料下载网关时，按[首次切换步骤](production-runbook.md#首次启用资料下载网关)配置两个公网入口并分步切换。路由已就绪的日常发布使用以下命令。
 
 ```bash
 CUTOVER_STARTED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
@@ -141,4 +141,5 @@ archive-worker、archive-cleaner。日常发布不运行首次初始化命令。
 
 构建自己的镜像时，后端 CI 从 `.env.production.example` 读取 `UPLOAD_UID` 和
 `UPLOAD_GID`；前端 CI 从其仓库的同名文件读取 `BACKEND_IMAGE_REPOSITORY` 和
-`BACKEND_GITHUB_URL`。这些模板仅保存公开构建配置，不填入真实密码。
+`BACKEND_GITHUB_URL`。前端 CI 从配套后端镜像读取实际 UID/GID，用于 gateway 的
+`resource-reader` 用户，确保已发布的受限模式文件可以通过只读挂载发送。这些模板仅保存公开构建配置，不填入真实密码。

@@ -65,8 +65,10 @@ Compose 将该目录挂载为容器内 `/resource-storage`，因此前后端代�
 接口：`GET /api/resources/browse/?path=/目录`、
 `GET /api/resources/file/?path=/目录/文件`；安全类型添加 `inline=1` 可预览。
 
-若后续大文件并发量增加，可再配置 Nginx `X-Accel-Redirect` 接管文件传输，
-保留 Django 的路径校验，减少 Gunicorn 工作进程在下载期间的占用。
+生产 Compose 启用 `RESOURCE_DOWNLOAD_X_ACCEL`。Django 校验资料目录权限、路径和下载凭证，
+处理下载统计，然后由 gateway 通过内部路径发送文件。gateway 以资料读取用户的 UID/GID
+读取只读挂载，支持中文文件名、预览和断点续传。本地直接访问 Django 时默认由应用发送。
+ZIP 由 Django 持有文件锁直至响应关闭，两个域名共用 gateway 的 2 个 ZIP 下载名额，满额返回 429。
 
 ## 管理文件
 

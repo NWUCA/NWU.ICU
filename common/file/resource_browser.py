@@ -4,6 +4,7 @@ import posixpath
 import re
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import quote
 
 from django.conf import settings
 from django.http import FileResponse, Http404, HttpResponse, StreamingHttpResponse
@@ -318,7 +319,6 @@ class ResourceFileView(APIView):
         inline = request.query_params.get('inline') == '1' and target.suffix.lower() in INLINE_TYPES
         self.check_download_access(request, path, inline)
         try:
-            source = target.open('rb')
             stat = target.stat()
         except OSError as error:
             raise Http404 from error
@@ -330,6 +330,7 @@ class ResourceFileView(APIView):
         range_header = request.headers.get('Range', '')
         if request.headers.get('If-Range', etag) not in {etag, modified}:
             range_header = ''
+        start = 0
         if range_header:
             match = re.fullmatch(r'bytes=(\d*)-(\d*)', range_header)
             try:
@@ -341,18 +342,26 @@ class ResourceFileView(APIView):
                 if start > end or start >= size or (not first and int(last) == 0):
                     raise ValueError
             except ValueError:
-                source.close()
                 response = HttpResponse(status=416)
                 response['Content-Range'] = f'bytes */{size}'
                 return response
-            response = StreamingHttpResponse(stream_range(source, start, end - start + 1),
-                                             status=206, content_type=content_type)
-            response['Content-Length'] = str(end - start + 1)
-            response['Content-Range'] = f'bytes {start}-{end}/{size}'
-            # Register close on the response even if its iterator is never consumed.
-            response._resource_closers.append(source.close)
+        if settings.RESOURCE_DOWNLOAD_X_ACCEL:
+            response = HttpResponse(content_type=content_type)
+            response['X-Accel-Redirect'] = '/_protected/resources' + quote(path, safe='/')
         else:
-            response = FileResponse(source, content_type=content_type)
+            try:
+                source = target.open('rb')
+            except OSError as error:
+                raise Http404 from error
+            if range_header:
+                response = StreamingHttpResponse(stream_range(source, start, end - start + 1),
+                                                 status=206, content_type=content_type)
+                response['Content-Length'] = str(end - start + 1)
+                response['Content-Range'] = f'bytes {start}-{end}/{size}'
+                # The iterator may be closed before its first read.
+                response._resource_closers.append(source.close)
+            else:
+                response = FileResponse(source, content_type=content_type)
         response['Content-Disposition'] = content_disposition_header(not inline, target.name)
         response['Accept-Ranges'] = 'bytes'
         response['Last-Modified'] = modified
@@ -360,6 +369,6 @@ class ResourceFileView(APIView):
         response['X-Content-Type-Options'] = 'nosniff'
         response['Content-Security-Policy'] = "sandbox; default-src 'none'"
         response['Cache-Control'] = 'private, no-store'
-        if request.method == 'GET' and request.query_params.get('inline') != '1' and (not range_header or start == 0):
+        if request.method == 'GET' and request.query_params.get('inline') != '1' and start == 0:
             record_download(request, path)
         return response

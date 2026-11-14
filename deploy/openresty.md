@@ -73,6 +73,8 @@ docker network connect web-proxy <openresty-container-name>
 终止，只保留对应的监听方式即可。若另设直连 Django 的 API 域名，也要在它的公网 `server` 中
 加入相同的 `/admin` 规则。主站日常管理使用 `/manage` 和 `/api/management/`。
 
+将配套前端的 `nginx/zip-download-limit.conf` 挂载到 OpenResty 容器内可读的位置，在 `http` 上下文加载一次。每个提供下载的 HTTPS 域名都使用下面的下载 location 并指向同一个 gateway。这样各域名和两种 ZIP 下载 URL 共用两个并发名额。
+
 ```nginx
 server {
     listen 80;
@@ -108,6 +110,21 @@ server {
 
     # 使用 Docker 内置 DNS，gateway 重建并更换 IP 后无需重启 OpenResty。
     resolver 127.0.0.11 valid=30s ipv6=off;
+
+    location ~ ^/api/resources/(file/|archives/[^/]+/download/$) {
+        limit_conn zip_downloads 2;
+        limit_conn_status 429;
+        set $nwuicu_upstream http://nwuicu-gateway:80;
+        proxy_pass $nwuicu_upstream;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache off;
+        proxy_buffering off;
+        proxy_read_timeout 300s;
+    }
 
     location = /api/upload/ {
         client_max_body_size 26m;
@@ -178,8 +195,7 @@ server {
 }
 ```
 
-除三个需要放宽请求体限制的上传入口外，OpenResty 只需整体代理到 gateway；内部 gateway
-仍负责 `/api/`、`/static/`、前端路由以及拒绝直接访问 `/media/` 中的待审核文件。
+OpenResty 在下载入口限制 ZIP 并发，在上传入口设置请求体大小。普通资料由 gateway 发送，目录权限由 Django 校验。其他请求继续转发到 gateway，`/media/` 中的待审核文件保持私有。
 
 ## 4. 检查与重载
 

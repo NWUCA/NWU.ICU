@@ -467,6 +467,7 @@ RESOURCE_DIRECTORY_CACHE_FILE = Path(
 )
 _resource_storage_root = env('RESOURCE_STORAGE_ROOT', default='').strip()
 RESOURCE_STORAGE_ROOT = Path(_resource_storage_root) if _resource_storage_root else None
+RESOURCE_DOWNLOAD_X_ACCEL = env.bool('RESOURCE_DOWNLOAD_X_ACCEL', default=False)
 
 # ZIP cache: queue capacity excludes running tasks; size values are bytes.
 RESOURCE_ARCHIVE = {
