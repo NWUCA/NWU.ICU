@@ -1,8 +1,17 @@
 from datetime import datetime
+from unittest.mock import patch
 
 import pytest
 
 from user.models import User
+
+
+@pytest.fixture(scope='session', autouse=True)
+def mock_telegram_send_message():
+    # Cover all notification paths, including background threads and tests that
+    # override the otherwise-empty Telegram credentials with dummy values.
+    with patch('telebot.TeleBot.send_message', autospec=True) as send_message:
+        yield send_message
 
 
 @pytest.fixture(autouse=True)

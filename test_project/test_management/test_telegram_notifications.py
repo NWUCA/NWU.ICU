@@ -1,6 +1,7 @@
 import time
-from unittest.mock import Mock, patch
+from unittest.mock import ANY, Mock, patch
 
+from django.conf import settings
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 from rest_framework import status
@@ -19,9 +20,31 @@ from management_panel.security import (
 from management_panel.telegram_notifications import (
     EVENT_SETTING_FIELDS,
     _enqueue,
+    _send_message,
     send_mail_with_telegram_alert,
+    telegram_notification_executor,
 )
 from test_project.common import create_user
+
+
+def test_telegram_credentials_are_empty_by_default():
+    assert settings.TELEGRAM_BOT_API_TOKEN == ''
+    assert settings.TELEGRAM_CHAT_ID == ''
+
+
+@override_settings(TELEGRAM_BOT_API_TOKEN='123456:test-token', TELEGRAM_CHAT_ID='test-chat')
+def test_background_notification_uses_mocked_telegram_transport(mock_telegram_send_message):
+    with patch('telebot.apihelper._make_request') as api_request:
+        future = telegram_notification_executor.submit(_send_message, 'Test Telegram notification')
+        future.result(timeout=5)
+
+    api_request.assert_not_called()
+    mock_telegram_send_message.assert_any_call(
+        ANY,
+        'test-chat',
+        'Test Telegram notification',
+        timeout=10,
+    )
 
 
 class TelegramNotificationSettingsApiTests(APITestCase):
@@ -51,12 +74,15 @@ class TelegramNotificationSettingsApiTests(APITestCase):
     def test_get_creates_enabled_defaults_and_post_updates_each_switch(self):
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['contents'], {
-            'user_registration_enabled': True,
-            'guestbook_entry_enabled': True,
-            'course_review_enabled': True,
-            'reply_enabled': True,
-        })
+        self.assertEqual(
+            response.data['contents'],
+            {
+                'user_registration_enabled': True,
+                'guestbook_entry_enabled': True,
+                'course_review_enabled': True,
+                'reply_enabled': True,
+            },
+        )
 
         updated = {
             'user_registration_enabled': False,
@@ -81,7 +107,9 @@ class TelegramNotificationDispatchTests(TestCase):
             course_review_enabled=False,
             reply_enabled=False,
         )
-        with patch('management_panel.telegram_notifications.telegram_notification_executor.submit') as submit:
+        with patch(
+            'management_panel.telegram_notifications.telegram_notification_executor.submit'
+        ) as submit:
             for event, field in EVENT_SETTING_FIELDS.items():
                 setattr(switches, field, True)
                 switches.save()

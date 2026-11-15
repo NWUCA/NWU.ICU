@@ -15,6 +15,8 @@ pnpm check
 
 ## 后端
 
+Pytest 默认使用 `settings.test`，其中 Telegram token 和 chat ID 固定为空，不继承本地 `.env` 或 CI 中的真实凭据。`conftest.py` 为整个测试会话模拟 `telebot.TeleBot.send_message`，覆盖后台线程；通知测试即使显式设置虚拟凭据，也不会向 Telegram 发送请求。通知内容、开关和失败重试仍在本地验证。
+
 ### 强制隔离规则
 
 1. 后端测试只能在提供 Docker CLI 的 WSL 环境中运行，不使用 Windows 原生 Python 启动 Django。当前开发机的 Docker 位于 `Debian1`。
