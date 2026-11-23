@@ -14,7 +14,7 @@ class Command(BaseCommand):
         ).prefetch_related('files')
         deleted_requests = 0
         deleted_files = 0
-        for upload_request in upload_requests.iterator():
+        for upload_request in upload_requests.iterator(chunk_size=100):
             all_deleted = True
             for upload_file in upload_request.files.all():
                 try:
@@ -34,6 +34,7 @@ class Command(BaseCommand):
                 deleted_requests += 1
         self.stdout.write(
             self.style.SUCCESS(
-                f'Deleted {deleted_files} files from {deleted_requests} approved resource upload requests'
+                f'Deleted {deleted_files} files from {deleted_requests} '
+                'approved resource upload requests'
             )
         )

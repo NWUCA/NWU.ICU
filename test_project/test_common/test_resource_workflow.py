@@ -4,6 +4,7 @@ from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
@@ -101,6 +102,24 @@ class ResourceUploadWorkflowTests(TestCase):
             f'资料投稿 #{request.pk} 发布失败，请在后台处理。\n错误：目标文件已存在',
         )
         self.assertNotIn('审核链接', notification.body)
+
+    def test_cleanup_removes_only_leftover_approved_uploads(self):
+        approved = self.create_request()
+        pending = self.create_request()
+        approved.status = ResourceUploadRequest.STATUS_APPROVED
+        approved.save(update_fields=['status'])
+        staged_file = Path(approved.files.get().file.path)
+        self.assertTrue(staged_file.is_file())
+
+        call_command('clean_approved_resource_uploads')
+
+        approved.refresh_from_db()
+        self.assertIsNotNone(approved.files_deleted_at)
+        self.assertFalse(staged_file.exists())
+        self.assertFalse(approved.files.get().file)
+        pending.refresh_from_db()
+        self.assertIsNone(pending.files_deleted_at)
+        self.assertTrue(Path(pending.files.get().file.path).is_file())
 
     def test_approval_queues_and_worker_publishes_then_removes_staging_file(self):
         request = self.create_request()
