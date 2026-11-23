@@ -148,6 +148,8 @@ dc up -d --no-deps --no-build --pull never resource-worker cron archive-worker a
 首页引用的 JS/CSS 和只读业务接口；还须核对下载 Range、队列进展与浏览器功能。
 后台切换并通过即时验收后，持续观察至少 15 分钟；读取过去日志不能代替持续观察。
 
+涉及公网入口配置时，按[公网 HSTS 验收](release-validation.md#公网-hsts)检查两域名的 HTTPS 成功页、错误页和明文 HTTP 跳转。
+
 ```bash
 python3 deploy/verify-release-http.py
 

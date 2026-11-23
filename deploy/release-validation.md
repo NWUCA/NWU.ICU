@@ -36,6 +36,38 @@ python3 deploy/verify-release-http.py \
 
 后台恢复检查通过后解除维护，再执行默认公网检查。不要为了让公网检查通过而提前解除维护。
 
+### 公网 HSTS
+
+从能直接访问两个公网域名的机器运行。检查使用 GET，保留重复响应头并停在首个响应，
+以便分别验证 HTTPS 的单个策略值、HTTP 跳转以及入口直接返回的 404。
+
+```bash
+python3 - <<'PY'
+from http.client import HTTPConnection, HTTPSConnection
+
+def check(host, path, tls, status):
+    conn = (HTTPSConnection if tls else HTTPConnection)(host, timeout=15)
+    try:
+        conn.request("GET", path)
+        res = conn.getresponse()
+        values = res.headers.get_all("Strict-Transport-Security", [])
+        expected = ["max-age=31536000"] if tls else []
+        if res.status != status or values != expected:
+            raise SystemExit(f"{host} {path} TLS={tls}: HTTP {res.status}, HSTS={values}")
+    finally:
+        conn.close()
+
+for host in ("nwu.icu", "api.nwu.icu"):
+    check(host, "/api/user/csrf/", True, 200)
+    check(host, "/admin/", True, 404)
+    check(host, "/api/user/csrf/", False, 301)
+    check(host, "/admin/", False, 404)
+for path, status in (("/", 200), ("/disk", 200), ("/assets/nwuicu-hsts-check-missing.css", 404)):
+    check("nwu.icu", path, True, status)
+print("HSTS checks passed")
+PY
+```
+
 ### 公网管理入口
 
 从公网执行以下检查。两个域名在 HTTP 和 HTTPS 下都应直接返回 404，包含不带末尾斜杠的 `/admin` 和登录页：

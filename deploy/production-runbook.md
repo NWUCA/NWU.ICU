@@ -372,6 +372,32 @@ curl -H 'Host: nwu.icu' -H 'X-Forwarded-Proto: https' \
 
 日常前后端更新保持端口不变时，不需要修改 OpenResty，只需重建并替换 Docker 服务。
 
+### 公网 HSTS
+
+自 2026-11-23 起，外层 OpenResty 统一为 `nwu.icu` 和 `api.nwu.icu` 发送 HSTS。
+两个站点的同一个 `server` 块同时监听 80 和 443。宿主机
+`/opt/1panel/apps/openresty/openresty/conf/conf.d/00-nwuicu-hsts-map.conf`
+在 `http` 层根据 TLS 状态选择响应头的值：
+
+```nginx
+map $https $nwuicu_edge_hsts {
+    default "";
+    on      "max-age=31536000";
+}
+```
+
+同目录的 `nwu.icu.conf` 和 `api.nwu.icu.conf` 均在 `server` 层使用以下两行：
+
+```nginx
+proxy_hide_header Strict-Transport-Security;
+add_header Strict-Transport-Security $nwuicu_edge_hsts always;
+```
+
+`proxy_hide_header` 去掉上游 Django 返回的同名头，`always` 使 HTTPS 错误页也带有策略。
+明文 HTTP 对应空值，OpenResty 会省略该头。当前策略仅作用于各自域名，有效期一年。
+在 1Panel 重建站点、恢复配置或为某个 `location` 单独添加 `add_header` 后，按
+[公网 HSTS 验收](release-validation.md#公网-hsts) 检查实际响应。
+
 ### 公网管理入口
 
 日常管理从主站 `/manage` 进入，Passkey 和业务请求使用 `/api/management/`。
