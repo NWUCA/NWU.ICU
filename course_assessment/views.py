@@ -651,7 +651,7 @@ class TeacherView(GenericAPIView):
                 {
                     "id": teacher.id,
                     "name": teacher.name,
-                    "school": teacher.school.get_name(),
+                    "school": teacher.school.get_name() if teacher.school else None,
                 }
             )
         return self.get_paginated_response(teacher_list)

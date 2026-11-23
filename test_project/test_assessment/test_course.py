@@ -58,6 +58,14 @@ class CourseTests(APITestCase):
         teacher_id = teacher_response.data['contents']['teacher_id']
         self.assertEqual(Teacher.objects.get(id=teacher_id).name, teacher_name)
 
+    def test_teacher_directory_includes_teachers_without_a_school(self):
+        assigned = Teacher.objects.create(name='有学院', school_id=1)
+        unassigned = Teacher.objects.create(name='无学院')
+        response = self.client.get(self.add_teacher_url)
+        self.assertEqual(response.status_code, 200)
+        schools = {item['id']: item['school'] for item in response.data['contents']['results']}
+        self.assertEqual(schools, {assigned.id: assigned.school.get_name(), unassigned.id: None})
+
     def test_teacher_responses_do_not_expose_avatar(self):
         teacher_response = self.client.post(
             self.add_teacher_url,
